@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
     @Volatile private var socket: Socket? = null
     @Volatile private var connected = false
     @Volatile private var lastRaw = ""
-    private var currentScreen = "HOME"
+    @Volatile private var currentScreen = "HOME"
     private var faults: MutableList<String> = mutableListOf()
     private var selectedFault = ""
     private val logs = mutableListOf<String>()
@@ -52,7 +52,9 @@ class MainActivity : ComponentActivity() {
     private var coolant = -999
     private var mapKpa = -1
     private var voltage = -1.0
-    private var liveLoop = false
+    @Volatile private var liveLoop = false
+    private var liveValues: MutableMap<String, Double> = mutableMapOf()
+    private var supportedPidSet: MutableSet<Int> = mutableSetOf()
     private var simulationMode = false
     private var simulationTick = 0
     private val simulationHandler = Handler(Looper.getMainLooper())
@@ -108,14 +110,15 @@ class MainActivity : ComponentActivity() {
             setBackgroundColor(bg)
             layoutParams = ViewGroup.LayoutParams(-1, -1)
         }
-        val body = FrameLayout(this).apply { layoutParams = LinearLayout.LayoutParams(-1, 0, 1f) }
+        val body = FrameLayout(this)
         val scroll = ScrollView(this).apply {
             isFillViewport = true
             overScrollMode = View.OVER_SCROLL_NEVER
-            addView(body)
+            clipToPadding = false
+            addView(body, FrameLayout.LayoutParams(-1, -2))
         }
-        root.addView(scroll)
-        if (showNav) root.addView(bottomNav(title), LinearLayout.LayoutParams(-1, dp(70)))
+        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        if (showNav) root.addView(bottomNav(title), LinearLayout.LayoutParams(-1, dp(86)))
         setContentView(root)
         return bodyContainer(body)
     }
@@ -128,7 +131,7 @@ class MainActivity : ComponentActivity() {
             layoutParams = FrameLayout.LayoutParams(-1, -2)
         }
         frame.addView(NeonBackdrop(this), FrameLayout.LayoutParams(-1, -1))
-        frame.addView(column)
+        frame.addView(column, FrameLayout.LayoutParams(-1, -2))
         return column
     }
 
@@ -141,17 +144,29 @@ class MainActivity : ComponentActivity() {
         }
         val entries = listOf(
             Triple("HOME", "⌂", "Ana Sayfa"),
-            Triple("LIVE", "⌁", "Canlı Veri"),
+            Triple("LIVE", "◉", "Canlı Veri"),
             Triple("TESTS", "⚒", "Test"),
             Triple("LOGS", "▤", "Hata Dökümü")
         )
+        val activeKey = when (active) {
+            "LIVE" -> "LIVE"
+            "TESTS" -> "TESTS"
+            "LOGS" -> "LOGS"
+            else -> "HOME"
+        }
         entries.forEach { (key, symbol, label) ->
+            val selected = activeKey == key
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(3), dp(4), dp(3), dp(3))
-                background = rounded(if (active == key) Color.rgb(0, 36, 88) else Color.TRANSPARENT,
-                    if (active == key) cyan else Color.rgb(18, 52, 94), 10)
+                setPadding(dp(3), dp(5), dp(3), dp(4))
+                background = rounded(
+                    if (selected) Color.rgb(0, 40, 100) else Color.rgb(3, 16, 37),
+                    if (selected) cyan else Color.rgb(20, 75, 135), 11
+                )
+                elevation = if (selected) dp(7).toFloat() else dp(2).toFloat()
+                isClickable = true
+                isFocusable = true
                 setOnClickListener {
                     when (key) {
                         "HOME" -> showHome()
@@ -161,11 +176,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            val icon = text(symbol, 25, if (active == key) cyan else muted, true).apply { gravity = Gravity.CENTER }
-            val caption = text(label, 10, if (active == key) cyan else muted, true).apply { gravity = Gravity.CENTER }
+            val icon = text(symbol, 30, if (selected) cyan else muted, true).apply { gravity = Gravity.CENTER }
+            val caption = text(label, 11, if (selected) cyan else white, true).apply { gravity = Gravity.CENTER }
             item.addView(icon)
             item.addView(caption)
-            bar.addView(item, LinearLayout.LayoutParams(0, -1, 1f).apply { setMargins(dp(2), 0, dp(2), 0) })
+            bar.addView(item, LinearLayout.LayoutParams(0, -1, 1f).apply {
+                setMargins(dp(3), 0, dp(3), 0)
+            })
         }
         return bar
     }
@@ -223,9 +240,9 @@ class MainActivity : ComponentActivity() {
         return card
     }
 
-    private fun actionButton(label: String, color: Int, onClick: () -> Unit): TextView = text(label, 17, white, true).apply {
+    private fun actionButton(label: String, color: Int, onClick: () -> Unit): TextView = text(label, 18, white, true).apply {
         gravity = Gravity.CENTER
-        minimumHeight = dp(57)
+        minimumHeight = dp(68)
         setPadding(dp(12), dp(8), dp(12), dp(8))
         background = rounded(Color.rgb(0, 28, 78), color, 14)
         elevation = dp(5).toFloat()
@@ -263,10 +280,10 @@ class MainActivity : ComponentActivity() {
         artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
         root.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        val simButton = actionButton("◉  SİMÜLASYON MODU  •  GERÇEK ECU'YA BAĞLANMAZ", yellow) {
+        val simButton = actionButton("◉  SİMÜLASYON MODU", yellow) {
             startSimulation()
         }
-        root.addView(simButton, LinearLayout.LayoutParams(-1, dp(58)).apply {
+        root.addView(simButton, LinearLayout.LayoutParams(-1, dp(68)).apply {
             setMargins(dp(12), dp(5), dp(12), dp(8))
         })
 
@@ -455,12 +472,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         addGap(c, 10)
-        c.addView(actionButton("▤  TÜMÜNÜ SİL  (UZUN BASIŞ)", red) {
+        c.addView(actionButton("▤  TÜM ARIZALARI SİL", red) {
             confirmClearFaults()
         })
-        c.getChildAt(c.childCount - 1).setOnLongClickListener {
-            confirmClearFaults(); true
-        }
         addGap(c, 5)
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
@@ -522,7 +536,7 @@ class MainActivity : ComponentActivity() {
 
     private fun confirmClearFaults() {
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
-            .setMessage("Kontak açık, motor kapalı olmalı. ECU destekliyorsa standart OBD silme komutu gönderilecek ve ardından kodlar yeniden okunarak doğrulanacak. Devam edilsin mi?")
+            .setMessage("Kontak açık, motor kapalı olmalı. Önce standart silme komutu uzatılmış yanıt süresiyle en fazla 3 kez denenir. Yanıt alınamazsa orijinal Python testindeki KWP2000 14 komutu alternatif olarak denenir. Sonra arıza hafızası tekrar okunarak doğrulanır. Devam edilsin mi?")
             .setNegativeButton("VAZGEÇ", null)
             .setPositiveButton("SİL VE DOĞRULA") { _, _ -> clearFaults() }.show()
     }
@@ -537,72 +551,155 @@ class MainActivity : ComponentActivity() {
         }
         if (!busy.compareAndSet(false, true)) return
         io.execute {
+            val attempts = mutableListOf<String>()
             try {
                 ensureConnected()
-                val response = elm("04", 4000)
-                log("Standart OBD arıza silme komutu gönderildi • yanıt: ${response.ifBlank { "(boş)" }}")
-                Thread.sleep(1200)
-                val verify = elm("03", 4000)
-                if (!verify.filter { it in "0123456789ABCDEF" }.contains("43")) {
-                    throw IllegalStateException("Silme komutu gönderildi ancak yeniden okumada geçerli 43 yanıtı alınamadı. Silme doğrulanamadı. Yanıt: ${verify.ifBlank { "(boş)" }}")
+                var standardAccepted = false
+                // Tested Python flow: repeat the standard clear request with a pause for slow ECUs.
+                for (i in 1..3) {
+                    mainHandler.post { statusLine?.text = "● STANDART ARIZA SİLME $i/3 • YANIT BEKLENİYOR" }
+                    val response = elm("04", 8000)
+                    val compact = response.filter { it in "0123456789ABCDEF" }
+                    val accepted = compact.contains("44")
+                    attempts.add("Standart silme $i/3 • 04 → ${response.ifBlank { "YANIT YOK" }}")
+                    if (accepted) {
+                        standardAccepted = true
+                        break
+                    }
+                    if (i < 3) Thread.sleep(2000)
+                }
+
+                var kwpAccepted = false
+                if (!standardAccepted) {
+                    // The user's confirmed Python workflow used KWP2000 service 14 as a fallback.
+                    mainHandler.post { statusLine?.text = "● KWP2000 ALTERNATİF SİLME • YANIT BEKLENİYOR" }
+                    val response = elm("14", 8000)
+                    val compact = response.filter { it in "0123456789ABCDEF" }
+                    kwpAccepted = compact.contains("54")
+                    attempts.add("KWP2000 alternatif • 14 → ${response.ifBlank { "YANIT YOK" }}")
+                }
+
+                mainHandler.post { statusLine?.text = "● SİLME SONRASI DOĞRULAMA OKUMASI" }
+                Thread.sleep(2500)
+                val verify = elm("03", 8000)
+                val compactVerify = verify.filter { it in "0123456789ABCDEF" }
+                if (!compactVerify.contains("43")) {
+                    throw IllegalStateException(
+                        "Silme denemeleri tamamlandı ancak ECU'dan doğrulama için geçerli 43 yanıtı alınamadı.\n" +
+                            attempts.joinToString("\n") + "\nYeniden okuma: ${verify.ifBlank { "YANIT YOK" }}"
+                    )
                 }
                 val remaining = decodeDtcs(verify)
                 mainHandler.post {
                     if (remaining.isEmpty()) {
                         faults.clear()
-                        log("Arıza silme komutu onaylandı ve tekrar okumada kod bulunmadı")
-                        AlertDialog.Builder(this).setTitle("✓  İŞLEM DOĞRULANDI")
-                            .setMessage("ECU arıza silme komutunu onayladı. Yeniden okumada kayıtlı standart OBD arıza kodu bulunmadı.")
+                        log("Arıza silme doğrulandı • ${if (standardAccepted) "Mode 04" else if (kwpAccepted) "KWP2000 14" else "ECU temiz hafıza yanıtı"} • yeniden okumada kod yok")
+                        AlertDialog.Builder(this).setTitle("✓  SİLME DOĞRULANDI")
+                            .setMessage("ECU yeniden sorgulandı ve kayıtlı arıza kodu bulunmadı.\n\n" + attempts.joinToString("\n"))
                             .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
                     } else {
                         faults = remaining.toMutableList()
                         log("Silme sonrası kalan arızalar: ${remaining.joinToString()}")
                         AlertDialog.Builder(this).setTitle("BAZI ARIZALAR KALDI")
-                            .setMessage("ECU tekrar okundu. Kalan kodlar: ${remaining.joinToString()}")
+                            .setMessage("ECU tekrar okundu. Kalan kodlar: ${remaining.joinToString()}\n\n" + attempts.joinToString("\n"))
                             .setPositiveButton("GÖRÜNTÜLE") { _, _ -> showFaults() }.show()
                     }
                 }
             } catch (e: Exception) {
                 mainHandler.post {
                     log("Arıza silme başarısız: ${e.message}")
-                    AlertDialog.Builder(this).setTitle("SİLME BAŞARISIZ")
-                        .setMessage(e.message ?: "Bilinmeyen hata")
+                    AlertDialog.Builder(this).setTitle("SİLME DOĞRULANAMADI")
+                        .setMessage((e.message ?: "Bilinmeyen hata") + if (attempts.isNotEmpty()) "\n\n" + attempts.joinToString("\n") else "")
                         .setPositiveButton("TAMAM", null).show()
                 }
             } finally { busy.set(false) }
         }
     }
 
+    private data class LiveMetricDef(val key: String, val label: String, val unit: String, val color: Int)
+
+    private fun liveMetricDefinitions(): List<LiveMetricDef> = listOf(
+        LiveMetricDef("rpm", "DEVİR", "RPM", cyan),
+        LiveMetricDef("speed", "HIZ", "km/h", yellow),
+        LiveMetricDef("tps", "GAZ KELEBEĞİ", "%", green),
+        LiveMetricDef("coolant", "MOTOR SICAKLIĞI", "°C", red),
+        LiveMetricDef("map", "EMME BASINCI", "kPa", cyan),
+        LiveMetricDef("iat", "EMME HAVA SICAKLIĞI", "°C", yellow),
+        LiveMetricDef("voltage", "AKÜ VOLTAJI", "V", green),
+        LiveMetricDef("load", "MOTOR YÜKÜ", "%", blue),
+        LiveMetricDef("stft", "KISA DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor()),
+        LiveMetricDef("ltft", "UZUN DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor()),
+        LiveMetricDef("fuelPressure", "YAKIT BASINCI", "kPa", red),
+        LiveMetricDef("timing", "ATEŞLEME AVANSI", "°", yellow),
+        LiveMetricDef("maf", "HAVA AKIŞI (MAF)", "g/s", cyan),
+        LiveMetricDef("o2", "OKSİJEN SENSÖRÜ", "V", green),
+        LiveMetricDef("pedal", "GAZ PEDALI", "%", blue),
+        LiveMetricDef("runTime", "MOTOR ÇALIŞMA SÜRESİ", "sn", muted),
+        LiveMetricDef("ambient", "DIŞ HAVA SICAKLIĞI", "°C", yellow)
+    )
+
+    private fun purpleColor(): Int = Color.rgb(195, 85, 255)
+
+    private fun formatLiveValue(key: String, value: Double?): String {
+        if (value == null || !value.isFinite()) return "—"
+        return when (key) {
+            "rpm", "speed", "coolant", "map", "fuelPressure", "runTime", "ambient" -> value.toInt().toString()
+            "voltage" -> "%.2f".format(Locale.US, value)
+            else -> "%.1f".format(Locale.US, value)
+        }
+    }
+
     private fun showLiveData() {
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
-        val gaugeCard = neonCard(null, cyan)
-        val gauge = RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }
-        liveGauge = gauge
-        liveMetricViews.clear()
-        gaugeCard.addView(gauge, LinearLayout.LayoutParams(-1, dp(245)))
-        liveView = gaugeCard
+        val gaugeCard = neonCard("ANLIK MOTOR DEVİR GÖSTERGESİ", cyan)
+        liveGauge = RpmGaugeView(this).apply { value = rpm }
+        gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(250)))
         c.addView(gaugeCard)
+
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = true }
-        fun metric(label: String, value: String, color: Int): LinearLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(11), dp(10), dp(11))
-            background = rounded(panel2, color, 12)
-            addView(text(label, 12, muted, true))
-            addView(text(value, 20, white, true).apply { tag = label; liveMetricViews[label] = this })
+        liveMetricViews.clear()
+        liveMetricDefinitions().forEachIndexed { index, def ->
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(11), dp(11), dp(9), dp(11))
+                minimumHeight = dp(82)
+                background = rounded(panel2, def.color, 13)
+                elevation = dp(3).toFloat()
+                addView(text(def.label, 11, muted, true).apply { maxLines = 2 })
+                val valueView = text("— ${def.unit}", 20, white, true)
+                liveMetricViews[def.key] = valueView
+                addView(valueView)
+            }
+            grid.addView(card, GridLayout.LayoutParams().apply {
+                width = 0
+                columnSpec = GridLayout.spec(index % 2, 1f)
+                setMargins(dp(4), dp(4), dp(4), dp(4))
+            })
         }
-        grid.addView(metric("GAZ KELEBEĞİ", if (tps >= 0) "%.1f %%".format(Locale.US, tps) else "—", green), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(0, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
-        grid.addView(metric("MOTOR SICAKLIĞI", if (coolant > -100) "$coolant °C" else "—", red), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(1, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
-        grid.addView(metric("EMME BASINCI", if (mapKpa >= 0) "$mapKpa kPa" else "—", cyan), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(0, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
-        grid.addView(metric("AKÜ VOLTAJI", if (voltage >= 0) "%.2f V".format(Locale.US, voltage) else "—", green), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(1, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
         c.addView(grid)
-        addGap(c, 9)
-        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ GÜNCELLE" else "↻  CANLI VERİYİ BAŞLAT / YENİLE", blue) {
+        addGap(c, 8)
+        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ YENİLE" else "↻  CANLI VERİ AKIŞINI BAŞLAT", blue) {
             if (simulationMode) startSimulationLiveLoop() else startLiveRead()
         })
-        addGap(c, 6)
-        c.addView(text(if (simulationMode) "Gösterilen değerler örnektir; gerçek ECU verisi değildir." else "Yalnızca ECU'dan yanıt alınan PID değerleri gösterilir. Desteklenmeyen veriler — olarak kalır.", 11, if (simulationMode) yellow else muted))
+        addGap(c, 5)
+        c.addView(text(
+            if (simulationMode) "SİMÜLASYON: Değerler örnektir; gerçek ECU'dan gelmez."
+            else "ECU'nun desteklediği PID'ler gerçek zamanlı sorgulanır. Desteklenmeyen değerler — gösterilir. Enjektör süresi ve AFR gibi üreticiye özel veriler standart PID olmadığı için uydurulmaz.",
+            11, if (simulationMode) yellow else muted
+        ))
         if (simulationMode) startSimulationLiveLoop() else startLiveRead()
+    }
+
+    private fun updateLiveDisplay(values: Map<String, Double>) {
+        liveValues.putAll(values)
+        rpm = values["rpm"]?.toInt() ?: -1
+        liveGauge?.value = rpm
+        liveGauge?.invalidate()
+        liveMetricDefinitions().forEach { def ->
+            liveMetricViews[def.key]?.text = "${formatLiveValue(def.key, values[def.key])} ${def.unit}"
+        }
     }
 
     private fun startLiveRead() {
@@ -610,83 +707,62 @@ class MainActivity : ComponentActivity() {
             startSimulationLiveLoop()
             return
         }
-        if (!busy.compareAndSet(false, true)) return
+        if (liveLoop) return
+        liveLoop = true
+        if (!busy.compareAndSet(false, true)) {
+            liveLoop = false
+            Toast.makeText(this, "Başka bir ECU işlemi sürüyor.", Toast.LENGTH_SHORT).show()
+            return
+        }
         io.execute {
             try {
                 ensureConnected()
-                val values = readLivePids()
-                mainHandler.post {
-                    rpm = values["rpm"]?.toInt() ?: -1
-                    tps = values["tps"] ?: -1.0
-                    coolant = values["coolant"]?.toInt() ?: -999
-                    mapKpa = values["map"]?.toInt() ?: -1
-                    voltage = values["voltage"] ?: -1.0
-                    log("Canlı ECU verileri yenilendi")
-                    if (currentScreen == "LIVE") showLiveDataNoRestart()
+                while (liveLoop && currentScreen == "LIVE") {
+                    val values = readLivePids(stopIfNotLive = true)
+                    mainHandler.post {
+                        if (currentScreen == "LIVE") updateLiveDisplay(values)
+                    }
+                    Thread.sleep(1100)
                 }
             } catch (e: Exception) {
                 mainHandler.post {
+                    if (currentScreen == "LIVE") Toast.makeText(this, "Canlı veri okunamadı: ${e.message}", Toast.LENGTH_LONG).show()
                     log("Canlı veri okunamadı: ${e.message}")
-                    Toast.makeText(this, "Canlı veri okunamadı: ${e.message}", Toast.LENGTH_LONG).show()
                 }
-            } finally { busy.set(false) }
-        }
-    }
-
-    private fun showLiveDataNoRestart() {
-        // Redraw values without starting a second polling request.
-        val wasLive = liveLoop
-        showLiveDataContentsOnly()
-        liveLoop = wasLive
-    }
-
-    private fun showLiveDataContentsOnly() {
-        val c = baseScreen("LIVE")
-        c.addView(header("CANLI MOTOR VERİLERİ"))
-        val gaugeCard = neonCard(null, cyan)
-        liveGauge = RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }
-        liveMetricViews.clear()
-        gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(245)))
-        c.addView(gaugeCard)
-        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = true }
-        val items = listOf(
-            Triple("GAZ KELEBEĞİ", if (tps >= 0) "%.1f %%".format(Locale.US, tps) else "—", green),
-            Triple("MOTOR SICAKLIĞI", if (coolant > -100) "$coolant °C" else "—", red),
-            Triple("EMME BASINCI", if (mapKpa >= 0) "$mapKpa kPa" else "—", cyan),
-            Triple("AKÜ VOLTAJI", if (voltage >= 0) "%.2f V".format(Locale.US, voltage) else "—", green)
-        )
-        items.forEachIndexed { index, item ->
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(11), dp(10), dp(11)); background = rounded(panel2, item.third, 12)
-                addView(text(item.first, 12, muted, true)); addView(text(item.second, 20, white, true).apply { liveMetricViews[item.first] = this })
+            } finally {
+                liveLoop = false
+                busy.set(false)
             }
-            grid.addView(card, GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(index % 2, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
         }
-        c.addView(grid)
-        addGap(c, 8)
-        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ GÜNCELLE" else "↻  CANLI VERİYİ YENİLE", blue) {
-            if (simulationMode) startSimulationLiveLoop() else startLiveRead()
-        })
-        c.addView(text(if (simulationMode) "Gösterilen değerler örnektir; gerçek ECU verisi değildir." else "ECU yanıtı olmayan değerler gösterilmez.", 11, if (simulationMode) yellow else muted))
     }
 
     private fun startSimulationLiveLoop() {
         stopSimulationLoop()
+        liveLoop = true
         val task = object : Runnable {
             override fun run() {
                 if (!simulationMode || currentScreen != "LIVE") return
                 simulationTick++
-                rpm = 1600 + ((simulationTick * 317) % 5200)
-                tps = (8 + (simulationTick * 7) % 72).toDouble()
-                coolant = 82 + (simulationTick % 14)
-                mapKpa = 28 + (simulationTick * 3 % 48)
-                voltage = 13.7 + ((simulationTick % 7) * 0.05)
-                liveGauge?.value = rpm
-                liveGauge?.invalidate()
-                liveMetricViews["GAZ KELEBEĞİ"]?.text = "%.1f %%".format(Locale.US, tps)
-                liveMetricViews["MOTOR SICAKLIĞI"]?.text = "$coolant °C"
-                liveMetricViews["EMME BASINCI"]?.text = "$mapKpa kPa"
-                liveMetricViews["AKÜ VOLTAJI"]?.text = "%.2f V".format(Locale.US, voltage)
+                val sample = mutableMapOf(
+                    "rpm" to (1600 + ((simulationTick * 317) % 5200)).toDouble(),
+                    "speed" to (simulationTick * 7 % 145).toDouble(),
+                    "tps" to (8 + (simulationTick * 7) % 72).toDouble(),
+                    "coolant" to (82 + (simulationTick % 14)).toDouble(),
+                    "map" to (28 + (simulationTick * 3 % 48)).toDouble(),
+                    "iat" to (22 + (simulationTick % 17)).toDouble(),
+                    "voltage" to (13.7 + ((simulationTick % 7) * 0.05)),
+                    "load" to (18 + (simulationTick * 5 % 72)).toDouble(),
+                    "stft" to (-4 + (simulationTick % 9)).toDouble(),
+                    "ltft" to (-2 + (simulationTick % 6)).toDouble(),
+                    "fuelPressure" to (280 + (simulationTick % 35)).toDouble(),
+                    "timing" to (12 + (simulationTick % 18)).toDouble(),
+                    "maf" to (3.2 + (simulationTick % 20) / 3.0),
+                    "o2" to (0.15 + (simulationTick % 7) * 0.1),
+                    "pedal" to (6 + (simulationTick * 4 % 80)).toDouble(),
+                    "runTime" to (1200 + simulationTick * 2).toDouble(),
+                    "ambient" to (24 + (simulationTick % 8)).toDouble()
+                )
+                updateLiveDisplay(sample)
                 simulationRunnable = this
                 simulationHandler.postDelayed(this, 900)
             }
@@ -695,13 +771,52 @@ class MainActivity : ComponentActivity() {
         task.run()
     }
 
-    private fun readLivePids(): Map<String, Double> {
+    private fun readSupportedPids(): MutableSet<Int> {
+        val supported = mutableSetOf<Int>()
+        var base = 0x00
+        for (rangeIndex in 0 until 4) {
+            val bytes = pidBytes("%02X".format(Locale.US, base)) ?: break
+            if (bytes.size < 4) break
+            for (bit in 0 until 32) {
+                val byteIndex = bit / 8
+                val mask = 1 shl (7 - (bit % 8))
+                if ((bytes[byteIndex] and mask) != 0) supported.add(base + bit + 1)
+            }
+            val nextRangeSupported = (bytes[3] and 0x01) != 0
+            if (!nextRangeSupported) break
+            base += 0x20
+        }
+        return supported
+    }
+
+    private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
         val out = mutableMapOf<String, Double>()
-        pidBytes("0C")?.let { if (it.size >= 2) out["rpm"] = ((it[0] * 256 + it[1]) / 4.0) }
-        pidBytes("11")?.firstOrNull()?.let { out["tps"] = it * 100.0 / 255.0 }
-        pidBytes("05")?.firstOrNull()?.let { out["coolant"] = (it - 40).toDouble() }
-        pidBytes("0B")?.firstOrNull()?.let { out["map"] = it.toDouble() }
-        pidBytes("42")?.takeIf { it.size >= 2 }?.let { out["voltage"] = (it[0] * 256 + it[1]) / 1000.0 }
+        if (supportedPidSet.isEmpty()) supportedPidSet = readSupportedPids()
+        val fallback = setOf(0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10, 0x11, 0x14, 0x1F, 0x42, 0x46, 0x49)
+        val available = if (supportedPidSet.isNotEmpty()) supportedPidSet else fallback
+        fun bytes(pid: Int): List<Int>? {
+            if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
+            if (pid !in available) return null
+            return pidBytes("%02X".format(Locale.US, pid))
+        }
+        bytes(0x0C)?.takeIf { it.size >= 2 }?.let { out["rpm"] = (it[0] * 256 + it[1]) / 4.0 }
+        bytes(0x0D)?.firstOrNull()?.let { out["speed"] = it.toDouble() }
+        bytes(0x11)?.firstOrNull()?.let { out["tps"] = it * 100.0 / 255.0 }
+        bytes(0x05)?.firstOrNull()?.let { out["coolant"] = (it - 40).toDouble() }
+        bytes(0x0B)?.firstOrNull()?.let { out["map"] = it.toDouble() }
+        bytes(0x0F)?.firstOrNull()?.let { out["iat"] = (it - 40).toDouble() }
+        bytes(0x42)?.takeIf { it.size >= 2 }?.let { out["voltage"] = (it[0] * 256 + it[1]) / 1000.0 }
+        bytes(0x04)?.firstOrNull()?.let { out["load"] = it * 100.0 / 255.0 }
+        bytes(0x06)?.firstOrNull()?.let { out["stft"] = (it - 128) * 100.0 / 128.0 }
+        bytes(0x07)?.firstOrNull()?.let { out["ltft"] = (it - 128) * 100.0 / 128.0 }
+        bytes(0x0A)?.firstOrNull()?.let { out["fuelPressure"] = it * 3.0 }
+        bytes(0x0E)?.firstOrNull()?.let { out["timing"] = it / 2.0 - 64.0 }
+        bytes(0x10)?.takeIf { it.size >= 2 }?.let { out["maf"] = (it[0] * 256 + it[1]) / 100.0 }
+        bytes(0x14)?.firstOrNull()?.let { out["o2"] = it * 0.005 }
+        bytes(0x49)?.firstOrNull()?.let { out["pedal"] = it * 100.0 / 255.0 }
+        bytes(0x1F)?.takeIf { it.size >= 2 }?.let { out["runTime"] = (it[0] * 256 + it[1]).toDouble() }
+        bytes(0x46)?.firstOrNull()?.let { out["ambient"] = (it - 40).toDouble() }
         return out
     }
 
@@ -849,10 +964,22 @@ class MainActivity : ComponentActivity() {
                 }
                 val pids = listOf(
                     Triple("Motor devri", "010C", "410C"),
+                    Triple("Hız", "010D", "410D"),
                     Triple("Gaz kelebeği", "0111", "4111"),
                     Triple("Motor sıcaklığı", "0105", "4105"),
                     Triple("Emme basıncı", "010B", "410B"),
-                    Triple("Akü voltajı", "0142", "4142")
+                    Triple("Emme hava sıcaklığı", "010F", "410F"),
+                    Triple("Akü voltajı", "0142", "4142"),
+                    Triple("Motor yükü", "0104", "4104"),
+                    Triple("Kısa dönem yakıt düzeltmesi", "0106", "4106"),
+                    Triple("Uzun dönem yakıt düzeltmesi", "0107", "4107"),
+                    Triple("Yakıt basıncı", "010A", "410A"),
+                    Triple("Ateşleme avansı", "010E", "410E"),
+                    Triple("Hava akış sensörü", "0110", "4110"),
+                    Triple("Oksijen sensörü", "0114", "4114"),
+                    Triple("Gaz pedalı", "0149", "4149"),
+                    Triple("Motor çalışma süresi", "011F", "411F"),
+                    Triple("Dış hava sıcaklığı", "0146", "4146")
                 )
                 for ((label, command, marker) in pids) {
                     try {
@@ -938,6 +1065,7 @@ class MainActivity : ComponentActivity() {
         if (simulationMode) throw IllegalStateException("Simülasyon açık. Gerçek ECU komutu için ana sayfadan EVET ile gerçek teşhisi başlatın.")
         if (connected && socket?.isConnected == true && socket?.isClosed == false) return
         closeAdapter()
+        supportedPidSet.clear()
         val s = Socket()
         s.tcpNoDelay = true
         s.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
@@ -980,6 +1108,10 @@ class MainActivity : ComponentActivity() {
         val out = s.getOutputStream()
         val input = s.getInputStream()
         s.soTimeout = timeoutMs
+        // Discard only stale bytes left by a previous timed-out ELM response.
+        try {
+            while (input.available() > 0) input.read()
+        } catch (_: Exception) { }
         out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
         out.flush()
         val result = ByteArrayOutputStream()
@@ -1142,29 +1274,97 @@ class MainActivity : ComponentActivity() {
     }
 
     private inner class RpmGaugeView(context: android.content.Context) : View(context) {
-        var value = 0
+        var value = -1
         private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            val cx = width / 2f; val cy = height * .69f; val r = min(width * .43f, height * .62f)
-            val rect = RectF(cx-r, cy-r, cx+r, cy+r)
-            p.style = Paint.Style.STROKE; p.strokeWidth = dp(14).toFloat(); p.strokeCap = Paint.Cap.ROUND
-            p.color = Color.rgb(10, 35, 70); canvas.drawArc(rect, 135f, 270f, false, p)
-            p.color = cyan; p.setShadowLayer(dp(10).toFloat(), 0f, 0f, blue); canvas.drawArc(rect, 135f, 270f * (value.coerceIn(0, 12000) / 12000f), false, p); p.clearShadowLayer()
-            p.strokeWidth = dp(2).toFloat(); p.color = white
+            val w = width.toFloat()
+            val h = height.toFloat()
+            val cx = w / 2f
+            val cy = h * 0.79f
+            val r = min(w * 0.43f, h * 0.70f)
+            val arc = RectF(cx - r, cy - r, cx + r, cy + r)
+
+            // Deep blue instrument face and outer neon rim.
+            p.style = Paint.Style.FILL
+            p.shader = RadialGradient(cx, cy - r * 0.45f, r * 1.35f,
+                intArrayOf(Color.rgb(10, 42, 92), Color.rgb(1, 9, 25), Color.BLACK),
+                floatArrayOf(0f, 0.72f, 1f), Shader.TileMode.CLAMP)
+            canvas.drawRoundRect(RectF(dp(5).toFloat(), dp(4).toFloat(), w - dp(5), h - dp(2).toFloat()), dp(13).toFloat(), dp(13).toFloat(), p)
+            p.shader = null
+
+            p.style = Paint.Style.STROKE
+            p.strokeCap = Paint.Cap.ROUND
+            p.strokeWidth = dp(13).toFloat()
+            p.color = Color.rgb(13, 45, 84)
+            canvas.drawArc(arc, 180f, 180f, false, p)
+            p.color = cyan
+            p.setShadowLayer(dp(12).toFloat(), 0f, 0f, blue)
+            canvas.drawArc(arc, 180f, 180f, false, p)
+            p.clearShadowLayer()
+            p.color = red
+            p.strokeWidth = dp(13).toFloat()
+            p.setShadowLayer(dp(10).toFloat(), 0f, 0f, red)
+            canvas.drawArc(arc, 330f, 30f, false, p)
+            p.clearShadowLayer()
+
+            // Major and minor scale marks, 0–12 x 1000 RPM.
             for (i in 0..24) {
-                val angle = Math.toRadians((135 + i * 11.25).toDouble())
-                val inner = r * if (i % 3 == 0) .80f else .86f
-                val outer = r * .95f
-                canvas.drawLine(cx + cos(angle).toFloat()*inner, cy + sin(angle).toFloat()*inner,
-                    cx + cos(angle).toFloat()*outer, cy + sin(angle).toFloat()*outer, p)
+                val angle = Math.toRadians(180.0 + i * 7.5)
+                val major = i % 2 == 0
+                val inner = r * if (major) 0.78f else 0.84f
+                val outer = r * 0.94f
+                p.strokeWidth = dp(if (major) 2 else 1).toFloat()
+                p.color = if (i >= 20) red else if (major) white else Color.rgb(70, 120, 175)
+                canvas.drawLine(
+                    cx + kotlin.math.cos(angle).toFloat() * inner,
+                    cy + kotlin.math.sin(angle).toFloat() * inner,
+                    cx + kotlin.math.cos(angle).toFloat() * outer,
+                    cy + kotlin.math.sin(angle).toFloat() * outer,
+                    p
+                )
             }
-            p.style = Paint.Style.FILL; p.color = white; p.textAlign = Paint.Align.CENTER
+
+            p.style = Paint.Style.FILL
+            p.textAlign = Paint.Align.CENTER
             p.typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
-            p.textSize = dp(36).toFloat(); canvas.drawText(if (value >= 0) value.toString() else "—", cx, cy + dp(8), p)
-            p.textSize = dp(16).toFloat(); canvas.drawText("RPM", cx, cy + dp(32), p)
-            p.textSize = dp(10).toFloat(); p.color = muted
-            canvas.drawText("0                 4                 8                 12", cx, height - dp(10).toFloat(), p)
+            p.textSize = dp(13).toFloat()
+            for (i in 0..6) {
+                val angle = Math.toRadians(180.0 + i * 30.0)
+                val labelRadius = r * 0.66f
+                val x = cx + kotlin.math.cos(angle).toFloat() * labelRadius
+                val y = cy + kotlin.math.sin(angle).toFloat() * labelRadius + dp(5)
+                p.color = if (i == 6) red else white
+                canvas.drawText((i * 2).toString(), x, y, p)
+            }
+
+            // Needle.
+            val safeValue = value.coerceIn(0, 12000)
+            val needleAngle = Math.toRadians(180.0 + (safeValue / 12000.0) * 180.0)
+            val needleLength = r * 0.72f
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = dp(4).toFloat()
+            p.strokeCap = Paint.Cap.ROUND
+            p.color = Color.WHITE
+            p.setShadowLayer(dp(8).toFloat(), 0f, 0f, cyan)
+            canvas.drawLine(cx, cy, cx + kotlin.math.cos(needleAngle).toFloat() * needleLength,
+                cy + kotlin.math.sin(needleAngle).toFloat() * needleLength, p)
+            p.clearShadowLayer()
+            p.style = Paint.Style.FILL
+            p.color = cyan
+            canvas.drawCircle(cx, cy, dp(8).toFloat(), p)
+            p.color = Color.WHITE
+            canvas.drawCircle(cx, cy, dp(3).toFloat(), p)
+
+            p.textAlign = Paint.Align.CENTER
+            p.typeface = Typeface.create("sans-serif-condensed", Typeface.BOLD)
+            p.color = white
+            p.textSize = dp(35).toFloat()
+            canvas.drawText(if (value >= 0) value.toString() else "—", cx, cy - dp(17), p)
+            p.textSize = dp(16).toFloat()
+            p.color = cyan
+            canvas.drawText("RPM", cx, cy + dp(22), p)
         }
     }
 }
