@@ -5,13 +5,13 @@ import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
 import android.view.Gravity
-import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 class MainActivity : Activity() {
 
@@ -88,6 +88,10 @@ class MainActivity : Activity() {
             readLiveData()
         }
 
+        addButton("YAMAHA ARIZA KOD KATALOĞU") {
+            showFaultCatalog()
+        }
+
         resultText = TextView(this).apply {
             text = "İşlem sonuçları burada görüntülenecek."
             textSize = 15f
@@ -141,11 +145,11 @@ class MainActivity : Activity() {
         lifecycleScope.launch {
             val result = diagnosticManager.connect()
 
-            setBusy(false, if (result.success) {
-                "ADAPTÖR BAĞLANDI"
-            } else {
-                "BAĞLANTI BAŞARISIZ"
-            })
+            setBusy(
+                false,
+                if (result.success) "ADAPTÖR BAĞLANDI"
+                else "BAĞLANTI BAŞARISIZ"
+            )
 
             resultText.text =
                 result.message + "\n\n" + result.response
@@ -171,9 +175,41 @@ class MainActivity : Activity() {
 
             setBusy(false, "ARIZA OKUMA TAMAMLANDI")
 
-            resultText.text =
-                result.message + "\n\nECU YANITI:\n" +
-                (result.response.ifBlank { "Yanıt alınamadı." })
+            val output = StringBuilder()
+            output.appendLine(result.message)
+            output.appendLine()
+
+            if (result.faults.isEmpty()) {
+                output.appendLine("Ayrıştırılmış arıza kodu bulunamadı.")
+            }
+
+            result.faults.forEach { fault ->
+                output.appendLine("KOD: ${fault.code}")
+                output.appendLine("ARIZA: ${fault.title}")
+                output.appendLine(fault.description)
+                output.appendLine()
+                output.appendLine("OLASI NEDENLER:")
+
+                fault.possibleCauses.forEach {
+                    output.appendLine("• $it")
+                }
+
+                output.appendLine()
+                output.appendLine("KONTROL ÖNERİLERİ:")
+
+                fault.checks.forEach {
+                    output.appendLine("• $it")
+                }
+
+                output.appendLine()
+                output.appendLine("--------------------------")
+                output.appendLine()
+            }
+
+            output.appendLine("HAM ECU YANITI:")
+            output.appendLine(result.rawResponse)
+
+            resultText.text = output.toString()
         }
     }
 
@@ -183,15 +219,15 @@ class MainActivity : Activity() {
         lifecycleScope.launch {
             val result = diagnosticManager.clearFaultCodes()
 
-            setBusy(false, if (result.success) {
-                "KONTROL TAMAMLANDI"
-            } else {
-                "SONUÇ DOĞRULANAMADI"
-            })
+            setBusy(
+                false,
+                if (result.success) "İŞLEM TAMAMLANDI"
+                else "SONUÇ DOĞRULANAMADI"
+            )
 
             resultText.text =
                 result.message + "\n\nECU YANITI:\n" +
-                (result.response.ifBlank { "Yanıt alınamadı." })
+                result.response
         }
     }
 
@@ -211,18 +247,39 @@ class MainActivity : Activity() {
                 """
                 ${result.message}
 
-                DEVİR: ${data.rpm?.let { "$it RPM" } ?: "Desteklenmiyor"}
+                DEVİR:
+                ${data.rpm?.let { "$it RPM" } ?: "Desteklenmiyor"}
 
-                GAZ KELEBEĞİ: ${data.throttle?.let { "%.1f %%".format(it) } ?: "Desteklenmiyor"}
+                GAZ KELEBEĞİ:
+                ${data.throttle?.let { String.format(Locale.US, "%.1f %%", it) } ?: "Desteklenmiyor"}
 
-                MOTOR SICAKLIĞI: ${data.coolantTemperature?.let { "$it °C" } ?: "Desteklenmiyor"}
+                MOTOR SICAKLIĞI:
+                ${data.coolantTemperature?.let { "$it °C" } ?: "Desteklenmiyor"}
 
-                EMME BASINCI: ${data.intakePressure?.let { "$it kPa" } ?: "Desteklenmiyor"}
+                EMME BASINCI:
+                ${data.intakePressure?.let { "$it kPa" } ?: "Desteklenmiyor"}
 
-                AKÜ VOLTAJI: ${data.batteryVoltage?.let { "$it V" } ?: "Desteklenmiyor"}
+                AKÜ VOLTAJI:
+                ${data.batteryVoltage?.let { "$it V" } ?: "Desteklenmiyor"}
                 """.trimIndent()
             }
         }
+    }
+
+    private fun showFaultCatalog() {
+        val output = StringBuilder()
+
+        output.appendLine("YAMAHA ARIZA KOD KATALOĞU")
+        output.appendLine()
+
+        YamahaFaultCodes.all().forEach { fault ->
+            output.appendLine("${fault.code} - ${fault.title}")
+            output.appendLine(fault.description)
+            output.appendLine()
+        }
+
+        resultText.text = output.toString()
+        statusText.text = "ARIZA KATALOĞU"
     }
 
     override fun onDestroy() {
