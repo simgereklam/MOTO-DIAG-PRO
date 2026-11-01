@@ -5,14 +5,23 @@ import android.app.Activity
 import android.os.Bundle
 import android.graphics.Color
 import android.view.Gravity
-import android.widget.LinearLayout
-import android.widget.TextView
+import android.view.View
 import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : Activity() {
 
     private lateinit var statusText: TextView
+    private lateinit var resultText: TextView
     private lateinit var mainLayout: LinearLayout
+
+    private val diagnosticManager = DiagnosticManager()
+
+    private var busy = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,15 +36,16 @@ class MainActivity : Activity() {
 
         mainLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 35, 24, 24)
+            setPadding(24, 30, 24, 24)
             setBackgroundColor(Color.rgb(15, 20, 28))
         }
 
         val title = TextView(this).apply {
             text = "MOTO DIAG PRO"
-            textSize = 27f
+            textSize = 28f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
+            setPadding(0, 10, 0, 5)
         }
 
         val subtitle = TextView(this).apply {
@@ -43,6 +53,7 @@ class MainActivity : Activity() {
             textSize = 13f
             setTextColor(Color.rgb(0, 200, 150))
             gravity = Gravity.CENTER
+            setPadding(0, 0, 0, 25)
         }
 
         statusText = TextView(this).apply {
@@ -50,39 +61,47 @@ class MainActivity : Activity() {
             textSize = 16f
             setTextColor(Color.YELLOW)
             gravity = Gravity.CENTER
-            setPadding(10, 35, 10, 35)
+            setPadding(10, 20, 10, 20)
         }
 
         mainLayout.addView(title)
         mainLayout.addView(subtitle)
         mainLayout.addView(statusText)
 
-        addButton("VIECAR BAĞLANTISI") {
-            statusText.text =
-                "Bağlantı modülü hazırlanıyor..."
+        addButton("VIECAR WI-FI BAĞLANTISI") {
+            connectAdapter()
+        }
+
+        addButton("BAĞLANTIYI KES") {
+            disconnectAdapter()
         }
 
         addButton("ARIZA KODLARINI OKU") {
-            statusText.text =
-                "Önce ECU bağlantısı gerekli."
+            readFaultCodes()
         }
 
         addButton("ARIZA KODLARINI SİL") {
-            statusText.text =
-                "Önce ECU bağlantısı gerekli."
+            clearFaultCodes()
         }
 
         addButton("CANLI MOTOR VERİLERİ") {
-            statusText.text =
-                "Canlı veri ekranı hazırlanıyor."
+            readLiveData()
         }
 
-        addButton("YAMAHA ARIZA KODLARI") {
-            statusText.text =
-                "Yamaha kod kataloğu hazırlanıyor."
+        resultText = TextView(this).apply {
+            text = "İşlem sonuçları burada görüntülenecek."
+            textSize = 15f
+            setTextColor(Color.WHITE)
+            setPadding(12, 25, 12, 25)
         }
 
-        setContentView(mainLayout)
+        mainLayout.addView(resultText)
+
+        val scrollView = ScrollView(this).apply {
+            addView(mainLayout)
+        }
+
+        setContentView(scrollView)
     }
 
     private fun addButton(
@@ -92,8 +111,10 @@ class MainActivity : Activity() {
         val button = Button(this).apply {
             text = label
             textSize = 14f
+            isAllCaps = false
+
             setOnClickListener {
-                action()
+                if (!busy) action()
             }
         }
 
@@ -101,10 +122,111 @@ class MainActivity : Activity() {
             button,
             LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                65
+                62
             ).apply {
-                bottomMargin = 12
+                bottomMargin = 10
             }
         )
+    }
+
+    private fun setBusy(value: Boolean, message: String) {
+        busy = value
+        statusText.text = message
+    }
+
+    private fun connectAdapter() {
+        setBusy(true, "VIECAR BAĞLANIYOR...")
+        resultText.text = "192.168.0.10:35000 adresi deneniyor."
+
+        lifecycleScope.launch {
+            val result = diagnosticManager.connect()
+
+            setBusy(false, if (result.success) {
+                "ADAPTÖR BAĞLANDI"
+            } else {
+                "BAĞLANTI BAŞARISIZ"
+            })
+
+            resultText.text =
+                result.message + "\n\n" + result.response
+        }
+    }
+
+    private fun disconnectAdapter() {
+        setBusy(true, "BAĞLANTI KAPATILIYOR...")
+
+        lifecycleScope.launch {
+            val result = diagnosticManager.disconnect()
+
+            setBusy(false, "ADAPTÖR BEKLENİYOR")
+            resultText.text = result.message
+        }
+    }
+
+    private fun readFaultCodes() {
+        setBusy(true, "ARIZA KODLARI OKUNUYOR...")
+
+        lifecycleScope.launch {
+            val result = diagnosticManager.readFaultCodes()
+
+            setBusy(false, "ARIZA OKUMA TAMAMLANDI")
+
+            resultText.text =
+                result.message + "\n\nECU YANITI:\n" +
+                (result.response.ifBlank { "Yanıt alınamadı." })
+        }
+    }
+
+    private fun clearFaultCodes() {
+        setBusy(true, "ARIZA SİLME İŞLEMİ...")
+
+        lifecycleScope.launch {
+            val result = diagnosticManager.clearFaultCodes()
+
+            setBusy(false, if (result.success) {
+                "KONTROL TAMAMLANDI"
+            } else {
+                "SONUÇ DOĞRULANAMADI"
+            })
+
+            resultText.text =
+                result.message + "\n\nECU YANITI:\n" +
+                (result.response.ifBlank { "Yanıt alınamadı." })
+        }
+    }
+
+    private fun readLiveData() {
+        setBusy(true, "MOTOR VERİLERİ OKUNUYOR...")
+
+        lifecycleScope.launch {
+            val result = diagnosticManager.readLiveData()
+
+            setBusy(false, "CANLI VERİ OKUMA TAMAMLANDI")
+
+            val data = result.data
+
+            resultText.text = if (data == null) {
+                result.message
+            } else {
+                """
+                ${result.message}
+
+                DEVİR: ${data.rpm?.let { "$it RPM" } ?: "Desteklenmiyor"}
+
+                GAZ KELEBEĞİ: ${data.throttle?.let { "%.1f %%".format(it) } ?: "Desteklenmiyor"}
+
+                MOTOR SICAKLIĞI: ${data.coolantTemperature?.let { "$it °C" } ?: "Desteklenmiyor"}
+
+                EMME BASINCI: ${data.intakePressure?.let { "$it kPa" } ?: "Desteklenmiyor"}
+
+                AKÜ VOLTAJI: ${data.batteryVoltage?.let { "$it V" } ?: "Desteklenmiyor"}
+                """.trimIndent()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        diagnosticManager.close()
+        super.onDestroy()
     }
 }
