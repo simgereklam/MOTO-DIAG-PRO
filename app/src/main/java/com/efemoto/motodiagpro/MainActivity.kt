@@ -53,6 +53,12 @@ class MainActivity : ComponentActivity() {
     private var mapKpa = -1
     private var voltage = -1.0
     private var liveLoop = false
+    private var simulationMode = false
+    private var simulationTick = 0
+    private val simulationHandler = Handler(Looper.getMainLooper())
+    private var simulationRunnable: Runnable? = null
+    private var liveGauge: RpmGaugeView? = null
+    private val liveMetricViews = mutableMapOf<String, TextView>()
     private var liveView: LinearLayout? = null
     private var statusLine: TextView? = null
     private var progressLine: TextView? = null
@@ -80,6 +86,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         liveLoop = false
+        stopSimulationLoop()
         closeAdapter()
         io.shutdownNow()
         super.onDestroy()
@@ -174,8 +181,13 @@ class MainActivity : ComponentActivity() {
         line.addView(text(" EFE MOTO", 25, white, true))
         box.addView(line)
         if (!subtitle.isNullOrBlank()) box.addView(text(subtitle, 12, cyan, true).apply { gravity = Gravity.CENTER })
-        val status = text(if (connected) "● VIECAR BAĞLI" else "● ADAPTÖR BEKLENİYOR", 11,
-            if (connected) green else muted, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(5), 0, 0) }
+        val statusText = when {
+            simulationMode -> "● SİMÜLASYON MODU  •  GERÇEK ECU KOMUTU YOK"
+            connected -> "● VIECAR / ECU BAĞLI"
+            else -> "● ADAPTÖR BEKLENİYOR"
+        }
+        val statusColor = when { simulationMode -> yellow; connected -> green; else -> muted }
+        val status = text(statusText, 11, statusColor, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(5), 0, 0) }
         statusLine = status
         box.addView(status)
         return box
@@ -234,7 +246,12 @@ class MainActivity : ComponentActivity() {
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
 
-        val root = FrameLayout(this).apply {
+        // The supplied reference artwork remains intact; simulation is a separate real button below it.
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        val artworkFrame = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
             isClickable = true
         }
@@ -243,11 +260,17 @@ class MainActivity : ComponentActivity() {
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
         }
-        root.addView(artwork, FrameLayout.LayoutParams(-1, -1))
+        artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
+        root.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        // The visual artwork already contains the exact glowing buttons.
-        // These transparent touch zones make the pictured buttons functional.
-        root.setOnTouchListener { view, event ->
+        val simButton = actionButton("◉  SİMÜLASYON MODU  •  GERÇEK ECU'YA BAĞLANMAZ", yellow) {
+            startSimulation()
+        }
+        root.addView(simButton, LinearLayout.LayoutParams(-1, dp(58)).apply {
+            setMargins(dp(12), dp(5), dp(12), dp(8))
+        })
+
+        artworkFrame.setOnTouchListener { view, event ->
             if (event.action == android.view.MotionEvent.ACTION_UP) {
                 val vw = view.width.toFloat().coerceAtLeast(1f)
                 val vh = view.height.toFloat().coerceAtLeast(1f)
@@ -281,12 +304,69 @@ class MainActivity : ComponentActivity() {
         setContentView(root)
     }
 
+    private fun stopSimulationLoop() {
+        simulationRunnable?.let { simulationHandler.removeCallbacks(it) }
+        simulationRunnable = null
+    }
+
+    private fun stopSimulationMode() {
+        stopSimulationLoop()
+        simulationMode = false
+    }
+
+    private fun startSimulation() {
+        closeAdapter()
+        stopSimulationLoop()
+        simulationMode = true
+        simulationTick = 0
+        connected = false
+        faults = mutableListOf("P0335")
+        selectedFault = "P0335"
+        log("SIMÜLASYON başladı • Gerçek ECU'ya komut gönderilmiyor")
+
+        val c = baseScreen("SCAN", false)
+        c.addView(header("SİMÜLASYONLU ECU TARAMASI"))
+        val card = neonCard("DEMO / SİMÜLASYON", yellow)
+        val progress = CircularProgressView(this)
+        card.addView(progress, LinearLayout.LayoutParams(-1, dp(220)))
+        val message = text("Örnek ECU verileri hazırlanıyor…  •  %0", 17, white, true).apply { gravity = Gravity.CENTER }
+        card.addView(message)
+        addGap(card, 10)
+        listOf("Bağlantı ekranı örnekleniyor", "Sensör verileri hazırlanıyor", "Örnek arıza kodları yükleniyor").forEach {
+            card.addView(text("✓  $it", 14, cyan, true).apply { setPadding(0, dp(5), 0, dp(5)) })
+        }
+        c.addView(card)
+        c.addView(text("Bu mod yalnızca ekranı ve butonları denemek içindir. Hiçbir gerçek adaptöre veya ECU'ya komut göndermez.", 12, yellow))
+        val steps = listOf(25, 55, 80, 100)
+        var step = 0
+        val task = object : Runnable {
+            override fun run() {
+                if (!simulationMode || currentScreen != "SCAN") return
+                val value = steps[step.coerceAtMost(steps.lastIndex)]
+                progress.progress = value
+                progress.invalidate()
+                message.text = "Örnek tarama tamamlanıyor…  •  %$value"
+                step++
+                if (step >= steps.size) {
+                    stopSimulationLoop()
+                    showFaults()
+                } else {
+                    simulationRunnable = this
+                    simulationHandler.postDelayed(this, 450)
+                }
+            }
+        }
+        simulationRunnable = task
+        simulationHandler.post(task)
+    }
+
     private fun showExitMessage() {
         AlertDialog.Builder(this).setTitle("EFE MOTO").setMessage("Teşhis başlatılmadı.")
             .setPositiveButton("TAMAM", null).show()
     }
 
     private fun startDiagnosis() {
+        stopSimulationMode()
         val c = baseScreen("SCAN", false)
         c.addView(header("ECU AKILLI TARAMA"))
         val card = neonCard(null, cyan)
@@ -309,9 +389,10 @@ class MainActivity : ComponentActivity() {
                 updateScan(8, "Viecar adaptörüne bağlanılıyor…")
                 ensureConnected()
                 updateScan(35, "ECU yanıtı kontrol ediliyor…")
-                val support = elm("0100")
-                if (support.contains("NO DATA") || support.contains("UNABLE") || support.contains("ERROR") || support.contains("?")) {
-                    throw IllegalStateException("ECU yanıt vermedi: $support")
+                val support = elm("0100", 5000)
+                val supportHex = support.filter { it in "0123456789ABCDEF" }
+                if (!supportHex.contains("4100")) {
+                    throw IllegalStateException("Adaptöre ulaşıldı ancak ECU'dan geçerli 41 00 yanıtı alınamadı. Yanıt: ${support.ifBlank { "(boş)" }}")
                 }
                 updateScan(68, "Arıza kodları okunuyor…")
                 val raw = elm("03")
@@ -348,7 +429,12 @@ class MainActivity : ComponentActivity() {
 
     private fun showFaults() {
         val c = baseScreen("FAULTS")
-        c.addView(header("TÜM ARIZALAR  (${faults.size})"))
+        c.addView(header(if (simulationMode) "SİMÜLASYON • TÜM ARIZALAR (${faults.size})" else "TÜM ARIZALAR  (${faults.size})"))
+        if (simulationMode) {
+            val demo = neonCard("DEMO VERİSİ", yellow)
+            demo.addView(text("Aşağıdaki arıza örnek amaçlıdır. Gerçek motosikletten okunmamıştır.", 13, white))
+            c.addView(demo)
+        }
         if (faults.isEmpty()) {
             val ok = neonCard("✓  ARIZA BULUNAMADI", green)
             ok.addView(text("ECU, standart OBD arıza sorgusuna kayıtlı kod döndürmedi.", 15, white))
@@ -442,14 +528,24 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun clearFaults() {
+        if (simulationMode) {
+            faults.clear()
+            log("Simülasyondaki örnek arıza listesi temizlendi • ECU'ya komut gönderilmedi")
+            Toast.makeText(this, "Simülasyon arızası temizlendi (gerçek ECU'ya komut gönderilmedi).", Toast.LENGTH_LONG).show()
+            showFaults()
+            return
+        }
         if (!busy.compareAndSet(false, true)) return
         io.execute {
             try {
                 ensureConnected()
-                val response = elm("04")
-                if (!response.contains("44")) throw IllegalStateException("ECU silme komutunu onaylamadı: $response")
-                Thread.sleep(800)
-                val verify = elm("03")
+                val response = elm("04", 4000)
+                log("Standart OBD arıza silme komutu gönderildi • yanıt: ${response.ifBlank { "(boş)" }}")
+                Thread.sleep(1200)
+                val verify = elm("03", 4000)
+                if (!verify.filter { it in "0123456789ABCDEF" }.contains("43")) {
+                    throw IllegalStateException("Silme komutu gönderildi ancak yeniden okumada geçerli 43 yanıtı alınamadı. Silme doğrulanamadı. Yanıt: ${verify.ifBlank { "(boş)" }}")
+                }
                 val remaining = decodeDtcs(verify)
                 mainHandler.post {
                     if (remaining.isEmpty()) {
@@ -482,6 +578,8 @@ class MainActivity : ComponentActivity() {
         c.addView(header("CANLI MOTOR VERİLERİ"))
         val gaugeCard = neonCard(null, cyan)
         val gauge = RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }
+        liveGauge = gauge
+        liveMetricViews.clear()
         gaugeCard.addView(gauge, LinearLayout.LayoutParams(-1, dp(245)))
         liveView = gaugeCard
         c.addView(gaugeCard)
@@ -491,7 +589,7 @@ class MainActivity : ComponentActivity() {
             setPadding(dp(10), dp(11), dp(10), dp(11))
             background = rounded(panel2, color, 12)
             addView(text(label, 12, muted, true))
-            addView(text(value, 20, white, true).apply { tag = label })
+            addView(text(value, 20, white, true).apply { tag = label; liveMetricViews[label] = this })
         }
         grid.addView(metric("GAZ KELEBEĞİ", if (tps >= 0) "%.1f %%".format(Locale.US, tps) else "—", green), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(0, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
         grid.addView(metric("MOTOR SICAKLIĞI", if (coolant > -100) "$coolant °C" else "—", red), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(1, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
@@ -499,13 +597,19 @@ class MainActivity : ComponentActivity() {
         grid.addView(metric("AKÜ VOLTAJI", if (voltage >= 0) "%.2f V".format(Locale.US, voltage) else "—", green), GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(1, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
         c.addView(grid)
         addGap(c, 9)
-        c.addView(actionButton("↻  CANLI VERİYİ BAŞLAT / YENİLE", blue) { startLiveRead() })
+        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ GÜNCELLE" else "↻  CANLI VERİYİ BAŞLAT / YENİLE", blue) {
+            if (simulationMode) startSimulationLiveLoop() else startLiveRead()
+        })
         addGap(c, 6)
-        c.addView(text("Yalnızca ECU'dan yanıt alınan PID değerleri gösterilir. Desteklenmeyen veriler — olarak kalır.", 11, muted))
-        startLiveRead()
+        c.addView(text(if (simulationMode) "Gösterilen değerler örnektir; gerçek ECU verisi değildir." else "Yalnızca ECU'dan yanıt alınan PID değerleri gösterilir. Desteklenmeyen veriler — olarak kalır.", 11, if (simulationMode) yellow else muted))
+        if (simulationMode) startSimulationLiveLoop() else startLiveRead()
     }
 
     private fun startLiveRead() {
+        if (simulationMode) {
+            startSimulationLiveLoop()
+            return
+        }
         if (!busy.compareAndSet(false, true)) return
         io.execute {
             try {
@@ -540,7 +644,9 @@ class MainActivity : ComponentActivity() {
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
         val gaugeCard = neonCard(null, cyan)
-        gaugeCard.addView(RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }, LinearLayout.LayoutParams(-1, dp(245)))
+        liveGauge = RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }
+        liveMetricViews.clear()
+        gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(245)))
         c.addView(gaugeCard)
         val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = true }
         val items = listOf(
@@ -552,14 +658,41 @@ class MainActivity : ComponentActivity() {
         items.forEachIndexed { index, item ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL; setPadding(dp(10), dp(11), dp(10), dp(11)); background = rounded(panel2, item.third, 12)
-                addView(text(item.first, 12, muted, true)); addView(text(item.second, 20, white, true))
+                addView(text(item.first, 12, muted, true)); addView(text(item.second, 20, white, true).apply { liveMetricViews[item.first] = this })
             }
             grid.addView(card, GridLayout.LayoutParams().apply { width = 0; columnSpec = GridLayout.spec(index % 2, 1f); setMargins(dp(3), dp(3), dp(3), dp(3)) })
         }
         c.addView(grid)
         addGap(c, 8)
-        c.addView(actionButton("↻  CANLI VERİYİ YENİLE", blue) { startLiveRead() })
-        c.addView(text("ECU yanıtı olmayan değerler gösterilmez.", 11, muted))
+        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ GÜNCELLE" else "↻  CANLI VERİYİ YENİLE", blue) {
+            if (simulationMode) startSimulationLiveLoop() else startLiveRead()
+        })
+        c.addView(text(if (simulationMode) "Gösterilen değerler örnektir; gerçek ECU verisi değildir." else "ECU yanıtı olmayan değerler gösterilmez.", 11, if (simulationMode) yellow else muted))
+    }
+
+    private fun startSimulationLiveLoop() {
+        stopSimulationLoop()
+        val task = object : Runnable {
+            override fun run() {
+                if (!simulationMode || currentScreen != "LIVE") return
+                simulationTick++
+                rpm = 1600 + ((simulationTick * 317) % 5200)
+                tps = (8 + (simulationTick * 7) % 72).toDouble()
+                coolant = 82 + (simulationTick % 14)
+                mapKpa = 28 + (simulationTick * 3 % 48)
+                voltage = 13.7 + ((simulationTick % 7) * 0.05)
+                liveGauge?.value = rpm
+                liveGauge?.invalidate()
+                liveMetricViews["GAZ KELEBEĞİ"]?.text = "%.1f %%".format(Locale.US, tps)
+                liveMetricViews["MOTOR SICAKLIĞI"]?.text = "$coolant °C"
+                liveMetricViews["EMME BASINCI"]?.text = "$mapKpa kPa"
+                liveMetricViews["AKÜ VOLTAJI"]?.text = "%.2f V".format(Locale.US, voltage)
+                simulationRunnable = this
+                simulationHandler.postDelayed(this, 900)
+            }
+        }
+        simulationRunnable = task
+        task.run()
     }
 
     private fun readLivePids(): Map<String, Double> {
@@ -582,7 +715,7 @@ class MainActivity : ComponentActivity() {
             "Viecar adaptör bağlantısı" to "Wi‑Fi soket bağlantısı ve ELM yanıtı",
             "ECU iletişim testi" to "0100 desteklenen PID sorgusu",
             "Sensör yanıt testi" to "RPM / TPS / sıcaklık / MAP / voltaj",
-            "Arıza hafızası testi" to "DTC okuma ve silme komutu yanıtı"
+            "Arıza hafızası testi" to "DTC okuma ve silme sonrası doğrulama akışı"
         )
         tests.forEach { (name, desc) ->
             val card = neonCard(null, blue)
@@ -590,12 +723,180 @@ class MainActivity : ComponentActivity() {
             card.addView(text(desc, 12, muted))
             c.addView(card)
         }
-        c.addView(actionButton("▶  BAĞLANTI VE ECU TESTİNİ ÇALIŞTIR", green) { runSystemCheck() })
+        val commCard = neonCard("KOMUT / YANIT DOĞRULAMA", cyan)
+        commCard.addView(text("ELM327 komutlarının gönderilip yanıtlarının alındığını adım adım gösterir. Simülasyon testi örnek yanıt üretir; gerçek ECU'ya hiçbir komut göndermez.", 13, white))
+        c.addView(commCard)
+        c.addView(actionButton("◉  SİMÜLASYON KOMUT TESTİ", yellow) { runCommunicationCheck(useSimulation = true) })
+        addGap(c, 5)
+        c.addView(actionButton("⚡  GERÇEK VIECAR / ECU TESTİ", green) { runCommunicationCheck(useSimulation = false) })
         addGap(c, 8)
-        c.addView(actionButton("ARIZA KODLARINI OKU", blue) { startDiagnosis() })
+        c.addView(actionButton("▶  ARIZA KODLARINI OKU", blue) { startDiagnosis() })
+    }
+
+    private fun appendCommunicationLine(
+        output: TextView,
+        label: String,
+        command: String,
+        response: String,
+        result: Boolean?,
+        note: String = ""
+    ) {
+        val mark = when (result) { true -> "✓ BAŞARILI"; false -> "✗ BAŞARISIZ"; null -> "● BİLGİ" }
+        val line = buildString {
+            append(mark).append("  ").append(label).append('\n')
+            append("GÖNDERİLEN: ").append(command).append('\n')
+            append("ALINAN: ").append(response.ifBlank { "(yanıt alınmadı)" }).append('\n')
+            if (note.isNotBlank()) append(note).append('\n')
+            append("\n")
+        }
+        mainHandler.post { output.append(line) }
+    }
+
+    private fun runCommunicationCheck(useSimulation: Boolean) {
+        if (!useSimulation && simulationMode) {
+            AlertDialog.Builder(this).setTitle("SİMÜLASYON AÇIK")
+                .setMessage("Gerçek ECU testi için simülasyonu durdurup ana sayfadan EVET ile gerçek teşhisi başlatın.")
+                .setPositiveButton("TAMAM", null).show()
+            return
+        }
+
+        val body = baseScreen("TESTS")
+        body.addView(header(if (useSimulation) "SİMÜLASYON KOMUT / YANIT TESTİ" else "GERÇEK VIECAR / ECU İLETİŞİM TESTİ"))
+        val card = neonCard(if (useSimulation) "ÖRNEK ELM327 HABERLEŞMESİ" else "CANLI ADAPTÖR HABERLEŞMESİ", if (useSimulation) yellow else cyan)
+        val warning = if (useSimulation)
+            "SİMÜLASYON: Aşağıdaki gönderilen/alınan değerler örnektir. Wi‑Fi adaptörüne ve gerçek ECU'ya bağlantı yapılmaz."
+        else
+            "GERÇEK TEST: Adaptöre bağlanılır ve salt-okunur OBD sorguları gönderilir. Arıza silme (04) komutu bu testte gönderilmez."
+        card.addView(text(warning, 12, if (useSimulation) yellow else white))
+        addGap(card, 8)
+        val scroll = ScrollView(this).apply { isFillViewport = false }
+        val output = text("Test hazırlanıyor…\n\n", 12, white).apply {
+            typeface = Typeface.MONOSPACE
+            gravity = Gravity.TOP
+            setTextIsSelectable(true)
+        }
+        scroll.addView(output)
+        card.addView(scroll, LinearLayout.LayoutParams(-1, dp(360)))
+        body.addView(card)
+        body.addView(actionButton("↻  TESTİ TEKRARLA", blue) { runCommunicationCheck(useSimulation) })
+        addGap(body, 6)
+        body.addView(actionButton("←  SİSTEM TESTLERİNE DÖN", blue) { showTests() })
+
+        if (useSimulation) {
+            val steps = listOf(
+                Triple("ELM327 başlatma", "ATZ", "ELM327 v1.5"),
+                Triple("Komut yankısını kapatma", "ATE0", "OK"),
+                Triple("Satır sonu kontrolü", "ATL0", "OK"),
+                Triple("Boşluk ayarı", "ATS0", "OK"),
+                Triple("Başlık ayarı", "ATH0", "OK"),
+                Triple("Protokol otomatik seçimi", "ATSP0", "OK"),
+                Triple("ECU desteklenen PID kontrolü", "0100", "4100BE3EA813"),
+                Triple("Motor devri sorgusu", "010C", "410C1AF8  •  1726 RPM"),
+                Triple("Gaz kelebeği sorgusu", "0111", "411140  •  %25,1"),
+                Triple("Motor sıcaklığı sorgusu", "0105", "41055A  •  50 °C"),
+                Triple("Emme basıncı sorgusu", "010B", "410B32  •  50 kPa"),
+                Triple("Akü voltajı sorgusu", "0142", "4142342A  •  13,35 V"),
+                Triple("Arıza kodu okuma", "03", "4303350000  •  P0335"),
+                Triple("Arıza silme komutu (yalnız simülasyon)", "04", "44  •  Örnek olumlu yanıt"),
+                Triple("Silme sonrası yeniden okuma", "03", "430000000000  •  Örnek: kayıtlı kod yok")
+            )
+            var index = 0
+            val task = object : Runnable {
+                override fun run() {
+                    if (currentScreen != "TESTS") return
+                    if (index < steps.size) {
+                        val (label, command, response) = steps[index]
+                        appendCommunicationLine(output, label, command, response, true,
+                            if (command == "04") {
+                                faults.clear()
+                                selectedFault = ""
+                                "UYARI: Bu yanıt yalnızca sanaldır; yalnızca örnek arıza listesi temizlendi. Gerçek ECU'ya komut gönderilmedi."
+                            } else "")
+                        index++
+                        simulationHandler.postDelayed(this, 380)
+                    } else {
+                        appendCommunicationLine(output, "TEST SONUCU", "—", "15 / 15 örnek adım tamamlandı", true,
+                            "Simülasyon başarılı. Bu sonuç gerçek adaptör veya ECU bağlantısını doğrulamaz.")
+                        log("Simülasyon komut/yanıt testi tamamlandı • 15 örnek adım • fiziksel ECU komutu yok")
+                    }
+                }
+            }
+            simulationHandler.post(task)
+            return
+        }
+
+        if (!busy.compareAndSet(false, true)) return
+        appendCommunicationLine(output, "TEST BAŞLADI", "TCP 192.168.0.10:35000", "Bağlantı deneniyor…", null)
+        io.execute {
+            var passed = 0
+            var failed = 0
+            var info = 0
+            fun record(label: String, command: String, response: String, result: Boolean?, note: String = "") {
+                appendCommunicationLine(output, label, command, response, result, note)
+                when (result) { true -> passed++; false -> failed++; null -> info++ }
+            }
+            try {
+                closeAdapter()
+                ensureConnected { command, response ->
+                    val compact = response.filter { it in "0123456789ABCDEF" }
+                    val ok = when {
+                        command == "ATZ" -> response.isNotBlank() && !response.contains("ERROR")
+                        command.startsWith("AT") -> response.contains("OK")
+                        command == "0100" -> compact.contains("4100")
+                        else -> response.isNotBlank()
+                    }
+                    record("Adaptör / ELM yanıtı", command, response, ok)
+                }
+                val pids = listOf(
+                    Triple("Motor devri", "010C", "410C"),
+                    Triple("Gaz kelebeği", "0111", "4111"),
+                    Triple("Motor sıcaklığı", "0105", "4105"),
+                    Triple("Emme basıncı", "010B", "410B"),
+                    Triple("Akü voltajı", "0142", "4142")
+                )
+                for ((label, command, marker) in pids) {
+                    try {
+                        val response = elm(command, 3000)
+                        val compact = response.filter { it in "0123456789ABCDEF" }
+                        val supported = compact.contains(marker)
+                        record(label, command, response, if (supported) true else null,
+                            if (supported) "ECU olumlu PID yanıtı verdi." else "Bu PID desteklenmiyor olabilir veya ECU yanıt vermedi; tek başına bağlantı hatası değildir.")
+                    } catch (e: Exception) {
+                        record(label, command, "ERROR: ${e.message}", null, "PID sorgusu başarısız; bağlantı testi devam ediyor.")
+                    }
+                }
+                val dtcResponse = elm("03", 4000)
+                val compactDtc = dtcResponse.filter { it in "0123456789ABCDEF" }
+                if (compactDtc.contains("43")) {
+                    val decoded = try { decodeDtcs(dtcResponse).joinToString().ifBlank { "Kayıtlı kod bulunmadı" } }
+                    catch (_: Exception) { "43 olumlu yanıtı alındı; kod ayrıştırılamadı." }
+                    record("Arıza hafızası okuma", "03", dtcResponse, true, decoded)
+                } else {
+                    record("Arıza hafızası okuma", "03", dtcResponse, false, "ECU'dan geçerli 43 yanıtı alınamadı.")
+                }
+                record("Arıza silme güvenlik kontrolü", "04", "GÖNDERİLMEDİ", null,
+                    "Gerçek silme komutu bu tanılama testinde çalıştırılmaz. Arıza ekranındaki onaylı Sil ve Doğrula işlemi kullanılır.")
+                record("TEST ÖZETİ", "—", "$passed başarılı • $failed başarısız • $info bilgi/desteklenmeyen", failed == 0,
+                    "Adaptör ve ECU komut alışverişi test edildi. Desteklenmeyen PID'ler ayrıca belirtilmiştir.")
+                log("Gerçek iletişim testi tamamlandı • $passed başarılı • $failed başarısız • $info bilgi")
+            } catch (e: Exception) {
+                record("BAĞLANTI / ECU TEST HATASI", "TCP / ELM / 0100", "ERROR: ${e.message}", false,
+                    "Telefonun Viecar Wi‑Fi ağına bağlı olduğunu ve adaptör IP/port bilgisini kontrol edin.")
+                log("Gerçek iletişim testi başarısız: ${e.message}")
+            } finally {
+                busy.set(false)
+            }
+        }
     }
 
     private fun runSystemCheck() {
+        if (simulationMode) {
+            log("Simülasyon sistem kontrolü çalıştırıldı • Gerçek ECU komutu gönderilmedi")
+            AlertDialog.Builder(this).setTitle("SİMÜLASYON TESTİ")
+                .setMessage("Arayüz testi başarılı. Bu modda adaptöre bağlanılmaz ve gerçek ECU komutu gönderilmez.")
+                .setPositiveButton("TAMAM", null).show()
+            return
+        }
         if (!busy.compareAndSet(false, true)) return
         Toast.makeText(this, "ECU kontrolü başlatıldı…", Toast.LENGTH_SHORT).show()
         io.execute {
@@ -633,25 +934,39 @@ class MainActivity : ComponentActivity() {
 
     // ---------------- Viecar / ELM327 Wi-Fi ----------------
 
-    private fun ensureConnected() {
+    private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
+        if (simulationMode) throw IllegalStateException("Simülasyon açık. Gerçek ECU komutu için ana sayfadan EVET ile gerçek teşhisi başlatın.")
         if (connected && socket?.isConnected == true && socket?.isClosed == false) return
         closeAdapter()
         val s = Socket()
         s.tcpNoDelay = true
-        s.connect(InetSocketAddress("192.168.0.10", 35000), 5000)
-        s.soTimeout = 1300
+        s.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
+        s.soTimeout = 3500
         socket = s
-        // Reset and configure the ELM327. No ECU actuator or programming commands are sent.
-        elm("ATZ", 3500)
-        elm("ATE0")
-        elm("ATL0")
-        elm("ATS0")
-        elm("ATH0")
-        elm("ATSP0")
-        val test = elm("0100")
-        if (test.contains("UNABLE") || test.contains("ERROR") || test.contains("?")) {
+
+        fun exchange(command: String, timeoutMs: Int = 3000): String {
+            return try {
+                val response = elm(command, timeoutMs)
+                onExchange?.invoke(command, response)
+                response
+            } catch (e: Exception) {
+                onExchange?.invoke(command, "ERROR: ${e.message}")
+                throw e
+            }
+        }
+
+        // ELM327 initialization. Commands are reported to the communication test when requested.
+        exchange("ATZ", 5000)
+        exchange("ATE0")
+        exchange("ATL0")
+        exchange("ATS0")
+        exchange("ATH0")
+        exchange("ATSP0")
+        val test = exchange("0100", 7000)
+        val testHex = test.filter { it in "0123456789ABCDEF" }
+        if (!testHex.contains("4100")) {
             closeAdapter()
-            throw IllegalStateException("Viecar adaptörü yanıt verdi ancak ECU protokolü kurulamadı: $test")
+            throw IllegalStateException("Viecar TCP bağlantısı açıldı ancak ECU'dan geçerli 41 00 yanıtı alınamadı: ${test.ifBlank { "(boş yanıt)" }}")
         }
         connected = true
         mainHandler.post { statusLine?.apply { text = "● VIECAR / ECU BAĞLI"; setTextColor(green) } }
@@ -659,7 +974,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Synchronized
-    private fun elm(command: String, timeoutMs: Int = 1800): String {
+    private fun elm(command: String, timeoutMs: Int = 3000): String {
         val s = socket ?: throw IllegalStateException("Adaptör bağlı değil")
         if (s.isClosed || !s.isConnected) throw IllegalStateException("Adaptör bağlantısı kapalı")
         val out = s.getOutputStream()
@@ -696,7 +1011,7 @@ class MainActivity : ComponentActivity() {
     private fun decodeDtcs(raw: String): List<String> {
         val compact = raw.replace(Regex("[^0-9A-F]"), "")
         val index = compact.indexOf("43")
-        if (index < 0) return emptyList()
+        if (index < 0) throw IllegalStateException("ECU geçerli Mode 03 (43) arıza yanıtı göndermedi: ${raw.ifBlank { "(boş)" }}")
         val bytes = compact.substring(index + 2).chunked(2).filter { it.length == 2 }.mapNotNull { it.toIntOrNull(16) }
         val found = mutableListOf<String>()
         var i = 0
