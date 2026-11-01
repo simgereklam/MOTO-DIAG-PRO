@@ -1,7 +1,7 @@
 
 package com.efemoto.motodiagpro
 
-import android.app.Activity
+import androidx.activity.ComponentActivity
 import android.os.Bundle
 import android.graphics.Color
 import android.view.Gravity
@@ -13,7 +13,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import java.util.Locale
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var resultText: TextView
