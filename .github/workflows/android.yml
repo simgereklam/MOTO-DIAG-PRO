@@ -1,31 +1,49 @@
-name: Build Android APK
+
+name: MOTO DIAG PRO APK
+
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Kaynak kodu indir
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Java 17 kur
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - name: Setup Gradle
+      - name: XML Manifest kontrolü
+        run: |
+          python3 -c "import xml.etree.ElementTree as ET; ET.parse('app/src/main/AndroidManifest.xml'); print('MANIFEST XML GECERLI')"
+
+      - name: Gradle 8.13 kur
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
 
-      - name: Build APK
-        run: gradle assembleDebug
+      - name: Gradle sürümünü doğrula
+        run: gradle --version
 
-      - name: Upload APK
+      - name: APK oluştur
+        run: gradle :app:assembleDebug --stacktrace
+
+      - name: APK dosyasını yükle
         uses: actions/upload-artifact@v4
         with:
-          name: MotoDiagPro-APK
-          path: "**/*.apk"
+          name: MOTO-DIAG-PRO-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 14
