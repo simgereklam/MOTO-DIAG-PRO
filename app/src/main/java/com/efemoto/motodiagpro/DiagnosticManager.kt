@@ -3,7 +3,6 @@ package com.efemoto.motodiagpro
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.IOException
 
 class DiagnosticManager {
 
@@ -14,6 +13,21 @@ class DiagnosticManager {
         val success: Boolean,
         val message: String,
         val response: String = ""
+    )
+
+    data class FaultDetail(
+        val code: String,
+        val title: String,
+        val description: String,
+        val possibleCauses: List<String>,
+        val checks: List<String>
+    )
+
+    data class FaultReadResult(
+        val success: Boolean,
+        val faults: List<FaultDetail>,
+        val rawResponse: String,
+        val message: String
     )
 
     data class LiveDataResult(
@@ -40,7 +54,7 @@ class DiagnosticManager {
                 } else {
                     OperationResult(
                         true,
-                        "Viecar adaptörüne TCP bağlantısı kuruldu.",
+                        "Viecar adaptörüne bağlantı kuruldu.",
                         initialization.response
                     )
                 }
@@ -70,30 +84,60 @@ class DiagnosticManager {
             connection.isConnected()
         }
 
-    suspend fun readFaultCodes(): OperationResult =
+    suspend fun readFaultCodes(): FaultReadResult =
         withContext(Dispatchers.IO) {
+
             if (!connection.isConnected()) {
-                return@withContext OperationResult(
+                return@withContext FaultReadResult(
                     false,
+                    emptyList(),
+                    "",
                     "Önce adaptöre bağlanın."
                 )
             }
 
             val result = obd.readDiagnosticTroubleCodes()
 
-            OperationResult(
-                result.success,
-                if (result.success) {
-                    "ECU arıza kodu yanıtı alındı."
-                } else {
+            if (!result.success) {
+                return@withContext FaultReadResult(
+                    false,
+                    emptyList(),
+                    result.response,
                     result.message
-                },
-                result.response
+                )
+            }
+
+            val details = result.dtcCodes.map { code ->
+
+                val catalog = YamahaFaultCodes.find(code)
+
+                FaultDetail(
+                    code = code,
+                    title = catalog?.title ?: "Tanımlanmamış arıza kodu",
+                    description = catalog?.description
+                        ?: "Bu kod için Yamaha kataloğunda açıklama bulunamadı.",
+                    possibleCauses = catalog?.possibleCauses
+                        ?: listOf("Model ve ECU servis dokümanı kontrol edilmeli."),
+                    checks = catalog?.checks
+                        ?: listOf("Üretici teşhis prosedürü uygulanmalı.")
+                )
+            }
+
+            FaultReadResult(
+                true,
+                details,
+                result.response,
+                if (details.isEmpty()) {
+                    "ECU yanıtı alındı. Ayrıştırılabilir arıza kodu bulunamadı. Bu sonuç tek başına arıza olmadığı anlamına gelmez."
+                } else {
+                    "${details.size} arıza kodu bulundu."
+                }
             )
         }
 
     suspend fun clearFaultCodes(): OperationResult =
         withContext(Dispatchers.IO) {
+
             if (!connection.isConnected()) {
                 return@withContext OperationResult(
                     false,
@@ -111,7 +155,6 @@ class DiagnosticManager {
                 )
             }
 
-            // Silme komutundan sonra ECU yanıtını kontrol et.
             val verifyResult = obd.readDiagnosticTroubleCodes()
 
             if (!verifyResult.success) {
@@ -122,26 +165,18 @@ class DiagnosticManager {
                 )
             }
 
-            val response = verifyResult.response
-                .uppercase()
-                .replace(" ", "")
-                .replace("\r", "")
-                .replace("\n", "")
+            val codes = verifyResult.dtcCodes
 
-            val noFaults =
-                response.contains("4300") ||
-                response == "4300"
-
-            if (noFaults) {
+            if (codes.isEmpty()) {
                 OperationResult(
                     true,
-                    "ECU yanıtında kayıtlı arıza kodu görünmüyor.",
+                    "ECU yanıtında ayrıştırılabilir arıza kodu bulunamadı. Silme sonucu kesin doğrulanamadı.",
                     verifyResult.response
                 )
             } else {
                 OperationResult(
                     false,
-                    "Arıza kodları hâlâ görünüyor veya ECU yanıtı yorumlanamadı.",
+                    "Arıza kodları hâlâ mevcut: ${codes.joinToString(", ")}",
                     verifyResult.response
                 )
             }
@@ -149,6 +184,7 @@ class DiagnosticManager {
 
     suspend fun readLiveData(): LiveDataResult =
         withContext(Dispatchers.IO) {
+
             if (!connection.isConnected()) {
                 return@withContext LiveDataResult(
                     false,
@@ -157,33 +193,24 @@ class DiagnosticManager {
                 )
             }
 
-            try {
-                val data = obd.readLiveData()
+            val data = obd.readLiveData()
 
-                val hasData =
-                    data.rpm != null ||
-                    data.throttle != null ||
-                    data.coolantTemperature != null ||
-                    data.intakePressure != null ||
-                    data.batteryVoltage != null
+            val hasData =
+                data.rpm != null ||
+                data.throttle != null ||
+                data.coolantTemperature != null ||
+                data.intakePressure != null ||
+                data.batteryVoltage != null
 
-                LiveDataResult(
-                    hasData,
-                    data,
-                    if (hasData) {
-                        "Canlı veri yanıtları alındı."
-                    } else {
-                        "ECU desteklenen PID'lere yanıt vermedi."
-                    }
-                )
-
-            } catch (e: Exception) {
-                LiveDataResult(
-                    false,
-                    null,
-                    e.message ?: "Canlı veri okunamadı."
-                )
-            }
+            LiveDataResult(
+                hasData,
+                data,
+                if (hasData) {
+                    "ECU canlı veri yanıtları alındı."
+                } else {
+                    "ECU desteklenen PID'lere yanıt vermedi."
+                }
+            )
         }
 
     fun close() {
