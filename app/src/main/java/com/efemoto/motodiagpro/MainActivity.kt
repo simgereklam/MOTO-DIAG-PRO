@@ -2,6 +2,10 @@ package com.efemoto.motodiagpro
 
 import android.app.AlertDialog
 import android.graphics.*
+import android.content.Context
+import android.content.res.Configuration
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -82,8 +86,42 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         window.statusBarColor = bg
         window.navigationBarColor = bg
-        window.decorView.systemUiVisibility = 0
+        applyImmersiveMode()
         showHome()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) applyImmersiveMode()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        applyImmersiveMode()
+        when (currentScreen) {
+            "HOME" -> showHome()
+            "LIVE" -> showLiveData()
+            "TESTS" -> showTests()
+            "LOGS" -> showLogs()
+            "FAULTS" -> showFaults()
+            "DETAIL" -> showFaultDetail()
+            "SCAN" -> showScanProgressShell()
+            else -> showHome()
+        }
+    }
+
+    private fun showScanProgressShell() {
+        val c = baseScreen("SCAN", false)
+        c.addView(header("ECU AKILLI TARAMA"))
+        val card = neonCard("TARAMA DEVAM EDİYOR", cyan)
+        val progress = CircularProgressView(this).apply { this.progress = scanPercent }
+        card.addView(progress, LinearLayout.LayoutParams(-1, dp(220)))
+        progressLine = text("ECU taraması sürüyor…  •  %$scanPercent", 18, white, true).apply { gravity = Gravity.CENTER }
+        card.addView(progressLine)
+        addGap(card, 10)
+        card.addView(text("Ekran yönü değişti. Devam eden bağlantı ve tarama işlemi korunuyor.", 13, muted))
+        c.addView(card)
+        c.addView(actionButton("TARAMAYI İPTAL ET", red) { closeAdapter(); showHome() })
     }
 
     override fun onDestroy() {
@@ -95,6 +133,28 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun screenWidthDp(): Int = resources.configuration.screenWidthDp.takeIf { it > 0 }
+        ?: (resources.displayMetrics.widthPixels / resources.displayMetrics.density).toInt()
+    private fun screenHeightDp(): Int = resources.configuration.screenHeightDp.takeIf { it > 0 }
+        ?: (resources.displayMetrics.heightPixels / resources.displayMetrics.density).toInt()
+    private fun isWideLandscape(): Boolean = screenWidthDp() >= 600 && screenWidthDp() > screenHeightDp() * 1.15
+    private fun liveColumns(): Int = when {
+        screenWidthDp() >= 1200 -> 5
+        screenWidthDp() >= 840 -> 4
+        screenWidthDp() >= 600 -> 3
+        else -> 2
+    }
+    private fun applyImmersiveMode() {
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        )
+    }
     private fun log(message: String) {
         val time = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR")).format(Date())
         logs.add(0, "$time  $message")
@@ -102,9 +162,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun baseScreen(title: String, showNav: Boolean = true): LinearLayout {
-        window.decorView.systemUiVisibility = 0
+        applyImmersiveMode()
+        val keepCurrentLiveLoop = title == "LIVE" && currentScreen == "LIVE" && liveLoop
         currentScreen = title
-        liveLoop = false
+        if (!keepCurrentLiveLoop) liveLoop = false
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(bg)
@@ -118,29 +179,50 @@ class MainActivity : ComponentActivity() {
             addView(body, FrameLayout.LayoutParams(-1, -2))
         }
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        if (showNav) root.addView(bottomNav(title), LinearLayout.LayoutParams(-1, dp(86)))
+        if (showNav) {
+            val navHeight = when {
+                screenHeightDp() < 480 -> 66
+                screenWidthDp() >= 840 -> 98
+                else -> 88
+            }
+            root.addView(bottomNav(title), LinearLayout.LayoutParams(-1, dp(navHeight)))
+        }
         setContentView(root)
         return bodyContainer(body)
     }
 
     // Returns a vertical content column mounted inside the supplied frame.
     private fun bodyContainer(frame: FrameLayout): LinearLayout {
+        val width = screenWidthDp()
+        val maxWidth = if (width >= 1600) 1500 else width
+        val horizontalPadding = when {
+            width >= 1200 -> 28
+            width >= 840 -> 22
+            width >= 600 -> 18
+            else -> 14
+        }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(10), dp(14), dp(18))
-            layoutParams = FrameLayout.LayoutParams(-1, -2)
+            setPadding(dp(horizontalPadding), dp(10), dp(horizontalPadding), dp(20))
+            layoutParams = FrameLayout.LayoutParams(
+                if (width > maxWidth) dp(maxWidth) else -1,
+                -2,
+                Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            )
         }
         frame.addView(NeonBackdrop(this), FrameLayout.LayoutParams(-1, -1))
-        frame.addView(column, FrameLayout.LayoutParams(-1, -2))
+        frame.addView(column)
         return column
     }
 
     private fun bottomNav(active: String): LinearLayout {
+        val short = screenHeightDp() < 480
+        val wide = screenWidthDp() >= 840
         val bar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setBackgroundColor(Color.rgb(0, 8, 22))
-            setPadding(dp(5), dp(5), dp(5), dp(5))
+            setPadding(dp(if (wide) 12 else 6), dp(5), dp(if (wide) 12 else 6), dp(5))
         }
         val entries = listOf(
             Triple("HOME", "⌂", "Ana Sayfa"),
@@ -148,21 +230,16 @@ class MainActivity : ComponentActivity() {
             Triple("TESTS", "⚒", "Test"),
             Triple("LOGS", "▤", "Hata Dökümü")
         )
-        val activeKey = when (active) {
-            "LIVE" -> "LIVE"
-            "TESTS" -> "TESTS"
-            "LOGS" -> "LOGS"
-            else -> "HOME"
-        }
         entries.forEach { (key, symbol, label) ->
-            val selected = activeKey == key
+            val selected = active == key || (key == "HOME" && active in listOf("FAULTS", "DETAIL", "SCAN"))
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dp(3), dp(5), dp(3), dp(4))
+                minimumHeight = dp(if (short) 58 else if (wide) 86 else 76)
+                setPadding(dp(5), dp(4), dp(5), dp(4))
                 background = rounded(
                     if (selected) Color.rgb(0, 40, 100) else Color.rgb(3, 16, 37),
-                    if (selected) cyan else Color.rgb(20, 75, 135), 11
+                    if (selected) cyan else Color.rgb(20, 75, 135), 12
                 )
                 elevation = if (selected) dp(7).toFloat() else dp(2).toFloat()
                 isClickable = true
@@ -176,12 +253,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            val icon = text(symbol, 30, if (selected) cyan else muted, true).apply { gravity = Gravity.CENTER }
-            val caption = text(label, 11, if (selected) cyan else white, true).apply { gravity = Gravity.CENTER }
-            item.addView(icon)
-            item.addView(caption)
+            val iconSize = if (short) 24 else if (wide) 34 else 30
+            val labelSize = if (short) 10 else if (wide) 14 else 12
+            item.addView(text(symbol, iconSize, if (selected) cyan else muted, true).apply { gravity = Gravity.CENTER })
+            item.addView(text(label, labelSize, if (selected) cyan else white, true).apply { gravity = Gravity.CENTER; maxLines = 1 })
             bar.addView(item, LinearLayout.LayoutParams(0, -1, 1f).apply {
-                setMargins(dp(3), 0, dp(3), 0)
+                setMargins(dp(if (wide) 6 else 3), 0, dp(if (wide) 6 else 3), 0)
             })
         }
         return bar
@@ -258,34 +335,19 @@ class MainActivity : ComponentActivity() {
     private fun showHome() {
         liveLoop = false
         currentScreen = "HOME"
-        window.decorView.systemUiVisibility =
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        applyImmersiveMode()
 
-        // The supplied reference artwork remains intact; simulation is a separate real button below it.
         val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+            orientation = if (isWideLandscape()) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
-        val artworkFrame = FrameLayout(this).apply {
-            setBackgroundColor(Color.BLACK)
-            isClickable = true
-        }
+        val artworkFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); isClickable = true }
         val artwork = ImageView(this).apply {
             setImageBitmap(homeScreenBitmap)
             scaleType = ImageView.ScaleType.FIT_CENTER
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
         }
         artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
-        root.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-
-        val simButton = actionButton("◉  SİMÜLASYON MODU", yellow) {
-            startSimulation()
-        }
-        root.addView(simButton, LinearLayout.LayoutParams(-1, dp(68)).apply {
-            setMargins(dp(12), dp(5), dp(12), dp(8))
-        })
 
         artworkFrame.setOnTouchListener { view, event ->
             if (event.action == android.view.MotionEvent.ACTION_UP) {
@@ -298,15 +360,11 @@ class MainActivity : ComponentActivity() {
                 val offX: Float
                 val offY: Float
                 if (viewRatio > imageRatio) {
-                    drawH = vh
-                    drawW = drawH * imageRatio
-                    offX = (vw - drawW) / 2f
-                    offY = 0f
+                    drawH = vh; drawW = drawH * imageRatio
+                    offX = (vw - drawW) / 2f; offY = 0f
                 } else {
-                    drawW = vw
-                    drawH = drawW / imageRatio
-                    offX = 0f
-                    offY = (vh - drawH) / 2f
+                    drawW = vw; drawH = drawW / imageRatio
+                    offX = 0f; offY = (vh - drawH) / 2f
                 }
                 val x = (event.x - offX) / drawW
                 val y = (event.y - offY) / drawH
@@ -318,7 +376,42 @@ class MainActivity : ComponentActivity() {
             }
             true
         }
+
+        if (isWideLandscape()) {
+            val artWidthDp = ((screenHeightDp() - 8) * 403f / 728f).toInt().coerceAtLeast(210)
+            root.addView(artworkFrame, LinearLayout.LayoutParams(dp(artWidthDp), -1))
+            val side = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(28), dp(22), dp(28), dp(22))
+                background = rounded(Color.rgb(2, 10, 27), cyan, 18)
+            }
+            side.addView(text("EFE MOTO", 34, white, true).apply { gravity = Gravity.CENTER })
+            side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 16, cyan, true).apply { gravity = Gravity.CENTER })
+            addGap(side, 18)
+            val state = when {
+                simulationMode -> "SİMÜLASYON MODU AKTİF"
+                connected -> "VIECAR / ECU BAĞLI"
+                else -> "ADAPTÖR BEKLENİYOR"
+            }
+            side.addView(text(state, 15, if (simulationMode) yellow else if (connected) green else muted, true).apply { gravity = Gravity.CENTER })
+            addGap(side, 22)
+            side.addView(actionButton("✓  GERÇEK ARIZA TEŞHİSİ BAŞLAT", green) { startDiagnosis() },
+                LinearLayout.LayoutParams(-1, dp(76)).apply { setMargins(0, dp(6), 0, dp(6)) })
+            side.addView(actionButton("◉  SİMÜLASYON MODU", yellow) { startSimulation() },
+                LinearLayout.LayoutParams(-1, dp(76)).apply { setMargins(0, dp(6), 0, dp(6)) })
+            side.addView(actionButton("CANLI VERİLERİ GÖRÜNTÜLE", blue) { showLiveData() },
+                LinearLayout.LayoutParams(-1, dp(76)).apply { setMargins(0, dp(6), 0, dp(6)) })
+            root.addView(side, LinearLayout.LayoutParams(0, -1, 1f))
+        } else {
+            root.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
+            val simButton = actionButton("◉  SİMÜLASYON MODU", yellow) { startSimulation() }
+            root.addView(simButton, LinearLayout.LayoutParams(-1, dp(if (screenHeightDp() < 480) 54 else 66)).apply {
+                setMargins(dp(12), dp(5), dp(12), dp(8))
+            })
+        }
         setContentView(root)
+        applyImmersiveMode()
     }
 
     private fun stopSimulationLoop() {
@@ -411,9 +504,30 @@ class MainActivity : ComponentActivity() {
                 if (!supportHex.contains("4100")) {
                     throw IllegalStateException("Adaptöre ulaşıldı ancak ECU'dan geçerli 41 00 yanıtı alınamadı. Yanıt: ${support.ifBlank { "(boş)" }}")
                 }
-                updateScan(68, "Arıza kodları okunuyor…")
-                val raw = elm("03")
-                val found = decodeDtcs(raw)
+                updateScan(68, "Kayıtlı, bekleyen ve kalıcı arızalar okunuyor…")
+                val found = mutableListOf<String>()
+                val dtcModes = listOf(
+                    Triple("03", "43", "KAYITLI"),
+                    Triple("07", "47", "BEKLEYEN"),
+                    Triple("0A", "4A", "KALICI")
+                )
+                var validDtcResponse = false
+                dtcModes.forEach { (request, positive, label) ->
+                    try {
+                        val response = elm(request, 3500)
+                        val compact = response.filter { it in "0123456789ABCDEF" }
+                        if (compact.contains(positive)) {
+                            validDtcResponse = true
+                            decodeDtcs(response, positive).forEach { code ->
+                                val item = "$code • $label"
+                                if (item !in found) found.add(item)
+                            }
+                        }
+                    } catch (modeError: Exception) {
+                        log("Mode $request okunamadı: ${modeError.message}")
+                    }
+                }
+                if (!validDtcResponse) throw IllegalStateException("ECU'dan Mode 03/07/0A için geçerli arıza yanıtı alınamadı.")
                 updateScan(100, "Tarama tamamlandı")
                 mainHandler.post {
                     faults = found.toMutableList()
@@ -485,7 +599,10 @@ class MainActivity : ComponentActivity() {
         val card = neonCard(null, red)
         card.addView(text("⚠  ARIZA BULUNDU", 22, red, true).apply { gravity = Gravity.CENTER })
         addGap(card, 8)
-        card.addView(text(selectedFault, 31, white, true).apply { gravity = Gravity.CENTER })
+        card.addView(text(baseDtcCode(selectedFault), 31, white, true).apply { gravity = Gravity.CENTER })
+        selectedFault.substringAfter(" •", "").takeIf { it.isNotBlank() }?.let {
+            card.addView(text("DURUM: $it", 12, yellow, true).apply { gravity = Gravity.CENTER })
+        }
         card.addView(text(faultTitle(selectedFault), 18, cyan, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(7)) })
         card.addView(text(faultDescription(selectedFault), 14, white))
         c.addView(card)
@@ -500,39 +617,15 @@ class MainActivity : ComponentActivity() {
         c.addView(actionButton("⌂  KAPAT", blue) { showHome() })
     }
 
-    private fun faultTitle(code: String): String = when (code) {
-        "P0335" -> "Krank Mili Pozisyon Sensörü Arızası"
-        "P0115" -> "Motor Soğutma Suyu Sıcaklık Devresi"
-        "P0120" -> "Gaz Kelebeği Konum Sensörü Devresi"
-        "P0105" -> "Manifold Mutlak Basınç Sensörü Devresi"
-        "P0130" -> "Oksijen Sensörü Devresi"
-        "P0171" -> "Yakıt Sistemi Çok Fakir"
-        "P0505" -> "Rölanti Kontrol Sistemi"
-        else -> "Standart OBD arıza kodu"
-    }
+    private fun baseDtcCode(value: String): String = value.substringBefore(" •").trim()
 
-    private fun faultDescription(code: String): String = when (code) {
-        "P0335" -> "ECU, krank mili konum sensöründen beklenen sinyali alamıyor veya sinyalde kesinti algılıyor."
-        "P0115" -> "Motor sıcaklık sensörü devresinde elektriksel aralık veya bağlantı sorunu algılandı."
-        "P0120" -> "Gaz kelebeği konum sensörü devresinde beklenmeyen sinyal algılandı."
-        "P0105" -> "Manifold basınç sensörü devresinde sinyal sorunu algılandı."
-        "P0130" -> "Oksijen sensörü sinyal devresinde arıza algılandı."
-        "P0171" -> "ECU, karışım düzeltmesinin fakir karışım yönünde sınırı aştığını algıladı."
-        "P0505" -> "Rölanti hava kontrol sisteminde beklenen kontrol davranışı alınamadı."
-        else -> "Kod, ECU tarafından standart OBD formatında döndürüldü. Kesin teşhis için motosikletin model/yıl servis dokümanı ve kablo ölçümü gerekir."
-    }
+    private fun faultTitle(code: String): String = DtcDatabase.title(baseDtcCode(code))
 
-    private fun faultCauses(code: String): List<String> = when (code) {
-        "P0335" -> listOf("Krank konum sensörü arızası", "Sensör kablosunda kopukluk veya kısa devre", "Sokette oksitlenme / gevşek bağlantı", "Sensör ile tetik çarkı aralığı")
-        "P0115" -> listOf("Sıcaklık sensörü arızası", "Soket veya kablo temassızlığı", "Şase / besleme sorunu")
-        "P0120" -> listOf("TPS sensörü veya gaz kelebeği gövdesi", "Soket pinlerinde temas sorunu", "Referans voltajı veya şase sorunu")
-        else -> listOf("Sensör veya ilgili devrede arıza", "Kablo / soket bağlantısı", "Besleme, şase veya mekanik sorun")
-    }
+    private fun faultDescription(code: String): String = DtcDatabase.description(baseDtcCode(code))
 
-    private fun faultChecks(code: String): List<String> = when (code) {
-        "P0335" -> listOf("Krank sensörü soketini ve kablo hattını inceleyin", "Sensör direncini servis değerleriyle karşılaştırın", "Tetik çarkı ve sensör aralığını kontrol edin", "Onarımdan sonra kodu tekrar okuyun")
-        else -> listOf("İlgili sensör soketini ve kabloları kontrol edin", "Besleme ve şaseyi ölçün", "Sensör sinyalini servis dokümanına göre doğrulayın", "Onarımdan sonra arıza kodunu tekrar okuyun")
-    }
+    private fun faultCauses(code: String): List<String> = DtcDatabase.causes(baseDtcCode(code))
+
+    private fun faultChecks(code: String): List<String> = DtcDatabase.checks(baseDtcCode(code))
 
     private fun confirmClearFaults() {
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
@@ -579,30 +672,54 @@ class MainActivity : ComponentActivity() {
                     attempts.add("KWP2000 alternatif • 14 → ${response.ifBlank { "YANIT YOK" }}")
                 }
 
-                mainHandler.post { statusLine?.text = "● SİLME SONRASI DOĞRULAMA OKUMASI" }
+                mainHandler.post { statusLine?.text = "● SİLME SONRASI DOĞRULAMA OKUMALARI" }
                 Thread.sleep(2500)
-                val verify = elm("03", 8000)
-                val compactVerify = verify.filter { it in "0123456789ABCDEF" }
-                if (!compactVerify.contains("43")) {
+                val storedRaw = elm("03", 8000)
+                val storedHex = storedRaw.filter { it in "0123456789ABCDEF" }
+                if (!storedHex.contains("43")) {
                     throw IllegalStateException(
-                        "Silme denemeleri tamamlandı ancak ECU'dan doğrulama için geçerli 43 yanıtı alınamadı.\n" +
-                            attempts.joinToString("\n") + "\nYeniden okuma: ${verify.ifBlank { "YANIT YOK" }}"
+                        "Silme denemeleri tamamlandı ancak ECU'dan doğrulama için geçerli Mode 03 / 43 yanıtı alınamadı.\n" +
+                            attempts.joinToString("\n") + "\nYeniden okuma: ${storedRaw.ifBlank { "YANIT YOK" }}"
                     )
                 }
-                val remaining = decodeDtcs(verify)
+                val afterClear = mutableListOf<String>()
+                val storedLeft = decodeDtcs(storedRaw, "43")
+                storedLeft.forEach { afterClear.add("$it • KAYITLI") }
+                try {
+                    val pendingRaw = elm("07", 3000)
+                    if (pendingRaw.filter { it in "0123456789ABCDEF" }.contains("47")) {
+                        decodeDtcs(pendingRaw, "47").forEach { afterClear.add("$it • BEKLEYEN") }
+                    }
+                } catch (_: Exception) { }
+                try {
+                    val permanentRaw = elm("0A", 3000)
+                    if (permanentRaw.filter { it in "0123456789ABCDEF" }.contains("4A")) {
+                        decodeDtcs(permanentRaw, "4A").forEach { afterClear.add("$it • KALICI") }
+                    }
+                } catch (_: Exception) { }
+                val activeRemaining = afterClear.filter { !it.endsWith("• KALICI") }
+                val permanentRemaining = afterClear.filter { it.endsWith("• KALICI") }
                 mainHandler.post {
-                    if (remaining.isEmpty()) {
-                        faults.clear()
-                        log("Arıza silme doğrulandı • ${if (standardAccepted) "Mode 04" else if (kwpAccepted) "KWP2000 14" else "ECU temiz hafıza yanıtı"} • yeniden okumada kod yok")
-                        AlertDialog.Builder(this).setTitle("✓  SİLME DOĞRULANDI")
-                            .setMessage("ECU yeniden sorgulandı ve kayıtlı arıza kodu bulunmadı.\n\n" + attempts.joinToString("\n"))
-                            .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
-                    } else {
-                        faults = remaining.toMutableList()
-                        log("Silme sonrası kalan arızalar: ${remaining.joinToString()}")
-                        AlertDialog.Builder(this).setTitle("BAZI ARIZALAR KALDI")
-                            .setMessage("ECU tekrar okundu. Kalan kodlar: ${remaining.joinToString()}\n\n" + attempts.joinToString("\n"))
-                            .setPositiveButton("GÖRÜNTÜLE") { _, _ -> showFaults() }.show()
+                    faults = afterClear.distinct().toMutableList()
+                    when {
+                        activeRemaining.isEmpty() && permanentRemaining.isEmpty() -> {
+                            log("Arıza silme doğrulandı • Mode 03/07/0A yeniden okundu • kod kalmadı")
+                            AlertDialog.Builder(this).setTitle("✓  SİLME DOĞRULANDI")
+                                .setMessage("ECU tekrar sorgulandı. Kayıtlı, bekleyen ve kalıcı arıza yanıtlarında kod bulunmadı.\n\n" + attempts.joinToString("\n"))
+                                .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
+                        }
+                        activeRemaining.isEmpty() -> {
+                            log("Kayıtlı/bekleyen DTC temizlendi; kalıcı kodlar ECU tarafından tutuluyor: ${permanentRemaining.joinToString()}")
+                            AlertDialog.Builder(this).setTitle("✓  AKTİF ARIZALAR TEMİZLENDİ")
+                                .setMessage("Kayıtlı ve bekleyen kodlar silinmiş görünüyor. ECU'nun kalıcı (Mode 0A) kodları normal Mode 04 komutuyla zorla silinemez; ECU kendi izleme koşulları tamamlandığında kaldırabilir.\n\nKalan kalıcı kodlar:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setPositiveButton("KALICI KODLARI GÖR") { _, _ -> showFaults() }.show()
+                        }
+                        else -> {
+                            log("Silme sonrası kalan arızalar: ${afterClear.joinToString()}")
+                            AlertDialog.Builder(this).setTitle("BAZI ARIZALAR KALDI")
+                                .setMessage("ECU tekrar okundu. Kalan kodlar:\n${afterClear.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setPositiveButton("GÖRÜNTÜLE") { _, _ -> showFaults() }.show()
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -634,8 +751,20 @@ class MainActivity : ComponentActivity() {
         LiveMetricDef("maf", "HAVA AKIŞI (MAF)", "g/s", cyan),
         LiveMetricDef("o2", "OKSİJEN SENSÖRÜ", "V", green),
         LiveMetricDef("pedal", "GAZ PEDALI", "%", blue),
-        LiveMetricDef("runTime", "MOTOR ÇALIŞMA SÜRESİ", "sn", muted),
-        LiveMetricDef("ambient", "DIŞ HAVA SICAKLIĞI", "°C", yellow)
+        LiveMetricDef("runTime", "MOTOR ÇALIŞMA SÜRESİ (BU ÇALIŞTIRMADA)", "sn", muted),
+        LiveMetricDef("ambient", "DIŞ HAVA SICAKLIĞI", "°C", yellow),
+        LiveMetricDef("fuelLevel", "YAKIT SEVİYESİ", "%", green),
+        LiveMetricDef("baro", "ATMOSFER BASINCI", "kPa", cyan),
+        LiveMetricDef("relativeThrottle", "GÖRECELİ GAZ KELEBEĞİ", "%", yellow),
+        LiveMetricDef("commandedThrottle", "KOMUTLANAN GAZ KELEBEĞİ", "%", blue),
+        LiveMetricDef("oilTemp", "MOTOR YAĞ SICAKLIĞI", "°C", red),
+        LiveMetricDef("fuelRate", "YAKIT TÜKETİM HIZI", "L/h", green),
+        LiveMetricDef("distMil", "MIL AKTİFKEN MESAFE", "km", muted),
+        LiveMetricDef("distClear", "ARIZA SİLİNDİKTEN SONRA MESAFE", "km", muted),
+        LiveMetricDef("odometer", "ECU ODOMETRE", "km", cyan),
+        LiveMetricDef("runMil", "MIL AKTİFKEN ÇALIŞMA SÜRESİ", "dk", muted),
+        LiveMetricDef("runClear", "ARIZA SİLİNDİKTEN SONRA ÇALIŞMA SÜRESİ", "dk", muted),
+        LiveMetricDef("warmups", "ISINMA DÖNGÜSÜ (SİLME SONRASI)", "adet", muted)
     )
 
     private fun purpleColor(): Int = Color.rgb(195, 85, 255)
@@ -643,7 +772,7 @@ class MainActivity : ComponentActivity() {
     private fun formatLiveValue(key: String, value: Double?): String {
         if (value == null || !value.isFinite()) return "—"
         return when (key) {
-            "rpm", "speed", "coolant", "map", "fuelPressure", "runTime", "ambient" -> value.toInt().toString()
+            "rpm", "speed", "coolant", "map", "fuelPressure", "runTime", "ambient", "fuelLevel", "baro", "distMil", "distClear", "runMil", "runClear", "warmups", "oilTemp" -> value.toLong().toString()
             "voltage" -> "%.2f".format(Locale.US, value)
             else -> "%.1f".format(Locale.US, value)
         }
@@ -653,28 +782,36 @@ class MainActivity : ComponentActivity() {
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
         val gaugeCard = neonCard("ANLIK MOTOR DEVİR GÖSTERGESİ", cyan)
-        liveGauge = RpmGaugeView(this).apply { value = rpm }
-        gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(250)))
+        liveGauge = RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }
+        val gaugeHeight = when {
+            screenHeightDp() < 480 -> 180
+            screenWidthDp() >= 1200 -> 320
+            screenWidthDp() >= 840 -> 290
+            screenWidthDp() >= 600 -> 270
+            else -> 245
+        }
+        gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(gaugeHeight)))
         c.addView(gaugeCard)
 
-        val grid = GridLayout(this).apply { columnCount = 2; useDefaultMargins = true }
+        val columns = liveColumns()
+        val grid = GridLayout(this).apply { columnCount = columns; useDefaultMargins = true }
         liveMetricViews.clear()
         liveMetricDefinitions().forEachIndexed { index, def ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(11), dp(9), dp(11))
-                minimumHeight = dp(82)
+                minimumHeight = dp(if (screenWidthDp() >= 840) 104 else 90)
                 background = rounded(panel2, def.color, 13)
                 elevation = dp(3).toFloat()
                 addView(text(def.label, 11, muted, true).apply { maxLines = 2 })
-                val valueView = text("— ${def.unit}", 20, white, true)
+                val valueView = text("— ${def.unit}", if (screenWidthDp() >= 840) 23 else 20, white, true)
                 liveMetricViews[def.key] = valueView
                 addView(valueView)
             }
             grid.addView(card, GridLayout.LayoutParams().apply {
                 width = 0
-                columnSpec = GridLayout.spec(index % 2, 1f)
+                columnSpec = GridLayout.spec(index % columns, 1f)
                 setMargins(dp(4), dp(4), dp(4), dp(4))
             })
         }
@@ -694,8 +831,8 @@ class MainActivity : ComponentActivity() {
 
     private fun updateLiveDisplay(values: Map<String, Double>) {
         liveValues.putAll(values)
-        rpm = values["rpm"]?.toInt() ?: -1
-        liveGauge?.value = rpm
+        rpm = values["rpm"]?.toInt() ?: rpm
+        liveGauge?.value = rpm.coerceAtLeast(0)
         liveGauge?.invalidate()
         liveMetricDefinitions().forEach { def ->
             liveMetricViews[def.key]?.text = "${formatLiveValue(def.key, values[def.key])} ${def.unit}"
@@ -760,7 +897,19 @@ class MainActivity : ComponentActivity() {
                     "o2" to (0.15 + (simulationTick % 7) * 0.1),
                     "pedal" to (6 + (simulationTick * 4 % 80)).toDouble(),
                     "runTime" to (1200 + simulationTick * 2).toDouble(),
-                    "ambient" to (24 + (simulationTick % 8)).toDouble()
+                    "ambient" to (24 + (simulationTick % 8)).toDouble(),
+                    "fuelLevel" to (48 + (simulationTick % 25)).toDouble(),
+                    "baro" to (98 + (simulationTick % 5)).toDouble(),
+                    "relativeThrottle" to (12 + (simulationTick * 3 % 55)).toDouble(),
+                    "commandedThrottle" to (10 + (simulationTick * 4 % 70)).toDouble(),
+                    "oilTemp" to (78 + (simulationTick % 19)).toDouble(),
+                    "fuelRate" to (1.2 + (simulationTick % 12) * 0.13),
+                    "distMil" to (12 + (simulationTick % 20)).toDouble(),
+                    "distClear" to (230 + simulationTick).toDouble(),
+                    "odometer" to 18452.0,
+                    "runMil" to (3 + simulationTick % 7).toDouble(),
+                    "runClear" to (340 + simulationTick).toDouble(),
+                    "warmups" to (6 + simulationTick % 14).toDouble()
                 )
                 updateLiveDisplay(sample)
                 simulationRunnable = this
@@ -774,7 +923,7 @@ class MainActivity : ComponentActivity() {
     private fun readSupportedPids(): MutableSet<Int> {
         val supported = mutableSetOf<Int>()
         var base = 0x00
-        for (rangeIndex in 0 until 4) {
+        for (rangeIndex in 0 until 8) {
             val bytes = pidBytes("%02X".format(Locale.US, base)) ?: break
             if (bytes.size < 4) break
             for (bit in 0 until 32) {
@@ -793,7 +942,8 @@ class MainActivity : ComponentActivity() {
         val out = mutableMapOf<String, Double>()
         if (supportedPidSet.isEmpty()) supportedPidSet = readSupportedPids()
         val fallback = setOf(0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
-            0x0F, 0x10, 0x11, 0x14, 0x1F, 0x42, 0x46, 0x49)
+            0x0F, 0x10, 0x11, 0x14, 0x1F, 0x21, 0x2F, 0x31, 0x33, 0x42, 0x45, 0x46,
+            0x30, 0x4C, 0x4D, 0x4E, 0x49, 0x5C, 0x5E, 0xA6)
         val available = if (supportedPidSet.isNotEmpty()) supportedPidSet else fallback
         fun bytes(pid: Int): List<Int>? {
             if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
@@ -817,6 +967,21 @@ class MainActivity : ComponentActivity() {
         bytes(0x49)?.firstOrNull()?.let { out["pedal"] = it * 100.0 / 255.0 }
         bytes(0x1F)?.takeIf { it.size >= 2 }?.let { out["runTime"] = (it[0] * 256 + it[1]).toDouble() }
         bytes(0x46)?.firstOrNull()?.let { out["ambient"] = (it - 40).toDouble() }
+        bytes(0x2F)?.firstOrNull()?.let { out["fuelLevel"] = it * 100.0 / 255.0 }
+        bytes(0x21)?.takeIf { it.size >= 2 }?.let { out["distMil"] = (it[0] * 256 + it[1]).toDouble() }
+        bytes(0x31)?.takeIf { it.size >= 2 }?.let { out["distClear"] = (it[0] * 256 + it[1]).toDouble() }
+        bytes(0x33)?.firstOrNull()?.let { out["baro"] = it.toDouble() }
+        bytes(0x45)?.firstOrNull()?.let { out["relativeThrottle"] = it * 100.0 / 255.0 }
+        bytes(0x4C)?.firstOrNull()?.let { out["commandedThrottle"] = it * 100.0 / 255.0 }
+        bytes(0x4D)?.takeIf { it.size >= 2 }?.let { out["runMil"] = (it[0] * 256 + it[1]).toDouble() }
+        bytes(0x4E)?.takeIf { it.size >= 2 }?.let { out["runClear"] = (it[0] * 256 + it[1]).toDouble() }
+        bytes(0x30)?.firstOrNull()?.let { out["warmups"] = it.toDouble() }
+        bytes(0x5C)?.firstOrNull()?.let { out["oilTemp"] = (it - 40).toDouble() }
+        bytes(0x5E)?.takeIf { it.size >= 2 }?.let { out["fuelRate"] = (it[0] * 256 + it[1]) * 0.05 }
+        bytes(0xA6)?.takeIf { it.size >= 4 }?.let {
+            val rawOdo = (it[0].toLong() shl 24) or (it[1].toLong() shl 16) or (it[2].toLong() shl 8) or it[3].toLong()
+            out["odometer"] = rawOdo / 10.0
+        }
         return out
     }
 
@@ -824,13 +989,15 @@ class MainActivity : ComponentActivity() {
         val c = baseScreen("TESTS")
         c.addView(header("SİSTEM TESTLERİ"))
         val intro = neonCard("ECU / ADAPTÖR KONTROLÜ", cyan)
-        intro.addView(text("Bu ekrandaki kontroller standart OBD yanıtlarıyla sınırlıdır. Enjektör, yakıt pompası veya aktüatör tetikleme testleri motosikletin özel servis protokolü desteklenmeden çalıştırılmaz.", 13, white))
+        intro.addView(text("Bu sürüm standart OBD / EOBD motor ECU verilerini okur. ABS, fren hava alma, enjektör/pompa aktüatör testi, fan testi, TPS adaptasyonu ve gösterge kilometresi için marka-model-yıl-ECU profili ile uygun K-Line/CAN adaptör desteği gerekir. Destek doğrulanmadan hiçbir aktüatör komutu gönderilmez.", 13, white))
         c.addView(intro)
         val tests = listOf(
             "Viecar adaptör bağlantısı" to "Wi‑Fi soket bağlantısı ve ELM yanıtı",
             "ECU iletişim testi" to "0100 desteklenen PID sorgusu",
             "Sensör yanıt testi" to "RPM / TPS / sıcaklık / MAP / voltaj",
-            "Arıza hafızası testi" to "DTC okuma ve silme sonrası doğrulama akışı"
+            "Arıza hafızası testi" to "Kayıtlı (03), bekleyen (07), kalıcı (0A) DTC sorguları",
+            "Araç bilgisi" to "VIN / kalibrasyon / ECU kimliği (destekleniyorsa)",
+            "Sürüş ve servis sayaçları" to "Odometer A6, MIL mesafesi, arıza silme sonrası mesafe, motor çalışma zamanı"
         )
         tests.forEach { (name, desc) ->
             val card = neonCard(null, blue)
@@ -838,6 +1005,22 @@ class MainActivity : ComponentActivity() {
             card.addView(text(desc, 12, muted))
             c.addView(card)
         }
+        val future = neonCard("GELİŞMİŞ SERVİS FONKSİYONLARI", yellow)
+        future.addView(text("Bu modüller arayüzde planlandı. Gerçek işlem için ilgili motosikletin ECU kimliği, üretici servis protokolü, pin bağlantısı ve test edilmiş araç profili gerekir.", 12, white))
+        val futureItems = listOf(
+            "ABS arıza / canlı veri / fren hava alma" to "ARAÇ PROFİLİ GEREKLİ",
+            "Enjektör ve yakıt pompası aktif testi" to "ARAÇ PROFİLİ GEREKLİ",
+            "Radyatör fanı / soğutma sistemi testi" to "ARAÇ PROFİLİ GEREKLİ",
+            "TPS kontrolü / gaz kelebeği adaptasyonu" to "ARAÇ PROFİLİ GEREKLİ",
+            "Gösterge kilometresi / toplam motor saati" to "ECU DESTEĞİ GEREKLİ"
+        )
+        futureItems.forEach { (name, state) ->
+            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(7), 0, dp(7)) }
+            row.addView(text("◇  $name", 14, white, true))
+            row.addView(text(state, 10, yellow, true))
+            future.addView(row)
+        }
+        c.addView(future)
         val commCard = neonCard("KOMUT / YANIT DOĞRULAMA", cyan)
         commCard.addView(text("ELM327 komutlarının gönderilip yanıtlarının alındığını adım adım gösterir. Simülasyon testi örnek yanıt üretir; gerçek ECU'ya hiçbir komut göndermez.", 13, white))
         c.addView(commCard)
@@ -979,7 +1162,14 @@ class MainActivity : ComponentActivity() {
                     Triple("Oksijen sensörü", "0114", "4114"),
                     Triple("Gaz pedalı", "0149", "4149"),
                     Triple("Motor çalışma süresi", "011F", "411F"),
-                    Triple("Dış hava sıcaklığı", "0146", "4146")
+                    Triple("Dış hava sıcaklığı", "0146", "4146"),
+                    Triple("Yakıt seviyesi", "012F", "412F"),
+                    Triple("Atmosfer basıncı", "0133", "4133"),
+                    Triple("MIL açıkken mesafe", "0121", "4121"),
+                    Triple("Arıza hafızası temizlendikten sonra mesafe", "0131", "4131"),
+                    Triple("Motor yağı sıcaklığı", "015C", "415C"),
+                    Triple("Yakıt tüketim hızı", "015E", "415E"),
+                    Triple("ECU odometre", "01A6", "41A6")
                 )
                 for ((label, command, marker) in pids) {
                     try {
@@ -1061,12 +1251,26 @@ class MainActivity : ComponentActivity() {
 
     // ---------------- Viecar / ELM327 Wi-Fi ----------------
 
+    private fun createWifiBoundSocket(): Socket {
+        val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        @Suppress("DEPRECATION")
+        val candidates = (listOfNotNull(manager.activeNetwork) + manager.allNetworks.toList()).distinct()
+        val wifiNetwork = candidates.firstOrNull { network ->
+            manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        } ?: throw IllegalStateException(
+            "Wi‑Fi ağı bulunamadı. Önce telefonun Wi‑Fi ayarlarından Viecar adaptörünün ağına bağlanın."
+        )
+        return wifiNetwork.socketFactory.createSocket()
+    }
+
     private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
         if (simulationMode) throw IllegalStateException("Simülasyon açık. Gerçek ECU komutu için ana sayfadan EVET ile gerçek teşhisi başlatın.")
         if (connected && socket?.isConnected == true && socket?.isClosed == false) return
         closeAdapter()
         supportedPidSet.clear()
-        val s = Socket()
+        // Bind the TCP socket to the phone's Wi-Fi network so Android does not route
+        // the connection through mobile data when the Viecar hotspot has no internet.
+        val s = createWifiBoundSocket()
         s.tcpNoDelay = true
         s.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
         s.soTimeout = 3500
@@ -1140,10 +1344,10 @@ class MainActivity : ComponentActivity() {
         return tail.chunked(2).mapNotNull { it.takeIf { part -> part.length == 2 }?.toIntOrNull(16) }
     }
 
-    private fun decodeDtcs(raw: String): List<String> {
+    private fun decodeDtcs(raw: String, positiveResponse: String = "43"): List<String> {
         val compact = raw.replace(Regex("[^0-9A-F]"), "")
-        val index = compact.indexOf("43")
-        if (index < 0) throw IllegalStateException("ECU geçerli Mode 03 (43) arıza yanıtı göndermedi: ${raw.ifBlank { "(boş)" }}")
+        val index = compact.indexOf(positiveResponse)
+        if (index < 0) throw IllegalStateException("ECU geçerli $positiveResponse arıza yanıtı göndermedi: ${raw.ifBlank { "(boş)" }}")
         val bytes = compact.substring(index + 2).chunked(2).filter { it.length == 2 }.mapNotNull { it.toIntOrNull(16) }
         val found = mutableListOf<String>()
         var i = 0
