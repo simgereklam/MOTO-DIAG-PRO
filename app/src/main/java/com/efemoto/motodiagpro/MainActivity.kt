@@ -15,6 +15,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.ComponentActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -65,6 +68,10 @@ class MainActivity : ComponentActivity() {
     private var simulationRunnable: Runnable? = null
     private var liveGauge: RpmGaugeView? = null
     private val liveMetricViews = mutableMapOf<String, TextView>()
+    private val liveMetricCards = mutableMapOf<String, LinearLayout>()
+    private val liveSectionGrids = mutableMapOf<String, GridLayout>()
+    private val liveSectionHeaders = mutableMapOf<String, TextView>()
+    private var liveEmptyState: TextView? = null
     private var liveView: LinearLayout? = null
     private var statusLine: TextView? = null
     private var progressLine: TextView? = null
@@ -145,15 +152,13 @@ class MainActivity : ComponentActivity() {
         else -> 2
     }
     private fun applyImmersiveMode() {
-        @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_FULLSCREEN or
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-        )
+        // Android 15 / targetSdk 35 edge-to-edge: do not reserve an invisible
+        // status/navigation-bar strip above or below the app content.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.hide(WindowInsetsCompat.Type.systemBars())
     }
     private fun log(message: String) {
         val time = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR")).format(Date())
@@ -203,7 +208,7 @@ class MainActivity : ComponentActivity() {
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(horizontalPadding), dp(10), dp(horizontalPadding), dp(20))
+            setPadding(dp(horizontalPadding), dp(2), dp(horizontalPadding), dp(20))
             layoutParams = FrameLayout.LayoutParams(
                 if (width > maxWidth) dp(maxWidth) else -1,
                 -2,
@@ -344,7 +349,7 @@ class MainActivity : ComponentActivity() {
         val artworkFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); isClickable = true }
         val artwork = ImageView(this).apply {
             setImageBitmap(homeScreenBitmap)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
         }
         artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
@@ -353,19 +358,13 @@ class MainActivity : ComponentActivity() {
             if (event.action == android.view.MotionEvent.ACTION_UP) {
                 val vw = view.width.toFloat().coerceAtLeast(1f)
                 val vh = view.height.toFloat().coerceAtLeast(1f)
-                val imageRatio = 403f / 728f
-                val viewRatio = vw / vh
-                val drawW: Float
-                val drawH: Float
-                val offX: Float
-                val offY: Float
-                if (viewRatio > imageRatio) {
-                    drawH = vh; drawW = drawH * imageRatio
-                    offX = (vw - drawW) / 2f; offY = 0f
-                } else {
-                    drawW = vw; drawH = drawW / imageRatio
-                    offX = 0f; offY = (vh - drawH) / 2f
-                }
+                // Match ImageView.CENTER_CROP exactly; this removes black bands
+                // on tall phones without shifting the invisible YES/NO hit areas.
+                val scale = maxOf(vw / 403f, vh / 728f)
+                val drawW = 403f * scale
+                val drawH = 728f * scale
+                val offX = (vw - drawW) / 2f
+                val offY = (vh - drawH) / 2f
                 val x = (event.x - offX) / drawW
                 val y = (event.y - offY) / drawH
                 when {
@@ -733,97 +732,162 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private data class LiveMetricDef(val key: String, val label: String, val unit: String, val color: Int)
+    private data class LiveMetricDef(
+        val key: String,
+        val label: String,
+        val unit: String,
+        val color: Int,
+        val section: String
+    )
 
+    // Only meaningful live engine/sensor values are shown. Service counters,
+    // MIL distance, odometer and trip runtime are intentionally excluded.
     private fun liveMetricDefinitions(): List<LiveMetricDef> = listOf(
-        LiveMetricDef("rpm", "DEVİR", "RPM", cyan),
-        LiveMetricDef("speed", "HIZ", "km/h", yellow),
-        LiveMetricDef("tps", "GAZ KELEBEĞİ", "%", green),
-        LiveMetricDef("coolant", "MOTOR SICAKLIĞI", "°C", red),
-        LiveMetricDef("map", "EMME BASINCI", "kPa", cyan),
-        LiveMetricDef("iat", "EMME HAVA SICAKLIĞI", "°C", yellow),
-        LiveMetricDef("voltage", "AKÜ VOLTAJI", "V", green),
-        LiveMetricDef("load", "MOTOR YÜKÜ", "%", blue),
-        LiveMetricDef("stft", "KISA DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor()),
-        LiveMetricDef("ltft", "UZUN DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor()),
-        LiveMetricDef("fuelPressure", "YAKIT BASINCI", "kPa", red),
-        LiveMetricDef("timing", "ATEŞLEME AVANSI", "°", yellow),
-        LiveMetricDef("maf", "HAVA AKIŞI (MAF)", "g/s", cyan),
-        LiveMetricDef("o2", "OKSİJEN SENSÖRÜ", "V", green),
-        LiveMetricDef("pedal", "GAZ PEDALI", "%", blue),
-        LiveMetricDef("runTime", "MOTOR ÇALIŞMA SÜRESİ (BU ÇALIŞTIRMADA)", "sn", muted),
-        LiveMetricDef("ambient", "DIŞ HAVA SICAKLIĞI", "°C", yellow),
-        LiveMetricDef("fuelLevel", "YAKIT SEVİYESİ", "%", green),
-        LiveMetricDef("baro", "ATMOSFER BASINCI", "kPa", cyan),
-        LiveMetricDef("relativeThrottle", "GÖRECELİ GAZ KELEBEĞİ", "%", yellow),
-        LiveMetricDef("commandedThrottle", "KOMUTLANAN GAZ KELEBEĞİ", "%", blue),
-        LiveMetricDef("oilTemp", "MOTOR YAĞ SICAKLIĞI", "°C", red),
-        LiveMetricDef("fuelRate", "YAKIT TÜKETİM HIZI", "L/h", green),
-        LiveMetricDef("distMil", "MIL AKTİFKEN MESAFE", "km", muted),
-        LiveMetricDef("distClear", "ARIZA SİLİNDİKTEN SONRA MESAFE", "km", muted),
-        LiveMetricDef("odometer", "ECU ODOMETRE", "km", cyan),
-        LiveMetricDef("runMil", "MIL AKTİFKEN ÇALIŞMA SÜRESİ", "dk", muted),
-        LiveMetricDef("runClear", "ARIZA SİLİNDİKTEN SONRA ÇALIŞMA SÜRESİ", "dk", muted),
-        LiveMetricDef("warmups", "ISINMA DÖNGÜSÜ (SİLME SONRASI)", "adet", muted)
+        LiveMetricDef("speed", "ARAÇ HIZI", "km/h", yellow, "MOTOR / SÜRÜŞ"),
+        LiveMetricDef("tps", "GAZ KELEBEĞİ (TPS)", "%", green, "MOTOR / SÜRÜŞ"),
+        LiveMetricDef("coolant", "SOĞUTMA SUYU SICAKLIĞI", "°C", red, "MOTOR / SÜRÜŞ"),
+        LiveMetricDef("map", "EMME MANİFOLD BASINCI", "kPa", cyan, "MOTOR / SÜRÜŞ"),
+        LiveMetricDef("load", "MOTOR YÜKÜ", "%", blue, "MOTOR / SÜRÜŞ"),
+        LiveMetricDef("voltage", "ECU / AKÜ VOLTAJI", "V", green, "MOTOR / SÜRÜŞ"),
+
+        LiveMetricDef("fuelSystem", "YAKIT SİSTEMİ DURUMU", "", green, "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("stft", "KISA DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor(), "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("ltft", "UZUN DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor(), "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("fuelPressure", "YAKIT BASINCI", "kPa", red, "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("fuelRailPressure", "YAKIT RAYI BASINCI", "kPa", red, "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("lambda", "HEDEFLENEN LAMBDA", "λ", cyan, "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("maf", "HAVA AKIŞI (MAF)", "g/s", cyan, "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("o2", "OKSİJEN SENSÖRÜ", "V", green, "ENJEKSİYON / YAKIT"),
+        LiveMetricDef("fuelRate", "YAKIT TÜKETİM HIZI", "L/h", green, "ENJEKSİYON / YAKIT"),
+
+        LiveMetricDef("timing", "ATEŞLEME AVANSI", "°", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("iat", "EMME HAVA SICAKLIĞI", "°C", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("oilTemp", "MOTOR YAĞ SICAKLIĞI", "°C", red, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("ambient", "DIŞ HAVA SICAKLIĞI", "°C", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("baro", "ATMOSFER BASINCI", "kPa", cyan, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("pedal", "GAZ PEDALI KONUMU", "%", blue, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("relativeThrottle", "GÖRECELİ GAZ KELEBEĞİ", "%", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
+        LiveMetricDef("commandedThrottle", "ECU'NUN İSTEDİĞİ GAZ KELEBEĞİ", "%", blue, "ATEŞLEME / DİĞER SENSÖRLER")
     )
 
     private fun purpleColor(): Int = Color.rgb(195, 85, 255)
 
     private fun formatLiveValue(key: String, value: Double?): String {
         if (value == null || !value.isFinite()) return "—"
+        if (key == "fuelSystem") {
+            val flags = value.toInt()
+            return when {
+                flags and 0x10 != 0 -> "KAPALI DÖNGÜ • HATA"
+                flags and 0x08 != 0 -> "AÇIK DÖNGÜ • SİSTEM HATASI"
+                flags and 0x04 != 0 -> "AÇIK DÖNGÜ • YÜK / YAVAŞLAMA"
+                flags and 0x02 != 0 -> "KAPALI DÖNGÜ"
+                flags and 0x01 != 0 -> "AÇIK DÖNGÜ • ISINMA"
+                else -> "DURUM BİLİNMİYOR"
+            }
+        }
         return when (key) {
-            "rpm", "speed", "coolant", "map", "fuelPressure", "runTime", "ambient", "fuelLevel", "baro", "distMil", "distClear", "runMil", "runClear", "warmups", "oilTemp" -> value.toLong().toString()
+            "speed", "coolant", "map", "fuelPressure", "fuelRailPressure", "ambient", "baro", "oilTemp" -> value.toLong().toString()
             "voltage" -> "%.2f".format(Locale.US, value)
+            "lambda" -> "%.3f".format(Locale.US, value)
             else -> "%.1f".format(Locale.US, value)
         }
     }
 
     private fun showLiveData() {
+        val keepCurrentRead = currentScreen == "LIVE" && liveLoop
+        if (!keepCurrentRead) liveValues.clear()
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
+
         val gaugeCard = neonCard("ANLIK MOTOR DEVİR GÖSTERGESİ", cyan)
-        liveGauge = RpmGaugeView(this).apply { value = rpm.coerceAtLeast(0) }
+        liveGauge = RpmGaugeView(this).apply { value = rpm }
         val gaugeHeight = when {
             screenHeightDp() < 480 -> 180
-            screenWidthDp() >= 1200 -> 320
-            screenWidthDp() >= 840 -> 290
-            screenWidthDp() >= 600 -> 270
-            else -> 245
+            screenWidthDp() >= 1200 -> 300
+            screenWidthDp() >= 840 -> 270
+            screenWidthDp() >= 600 -> 245
+            else -> 220
         }
         gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(gaugeHeight)))
         c.addView(gaugeCard)
 
-        val columns = liveColumns()
-        val grid = GridLayout(this).apply { columnCount = columns; useDefaultMargins = true }
         liveMetricViews.clear()
-        liveMetricDefinitions().forEachIndexed { index, def ->
+        liveMetricCards.clear()
+        liveSectionGrids.clear()
+        liveSectionHeaders.clear()
+        val columns = liveColumns().coerceAtMost(3)
+        val sectionNames = listOf("MOTOR / SÜRÜŞ", "ENJEKSİYON / YAKIT", "ATEŞLEME / DİĞER SENSÖRLER")
+        sectionNames.forEach { section ->
+            val sectionHeader = text(section, 14, cyan, true).apply {
+                setPadding(dp(3), dp(14), dp(3), dp(5))
+                visibility = View.GONE
+            }
+            c.addView(sectionHeader)
+            val grid = GridLayout(this).apply {
+                columnCount = columns
+                useDefaultMargins = false
+            }
+            c.addView(grid)
+            liveSectionHeaders[section] = sectionHeader
+            liveSectionGrids[section] = grid
+        }
+
+        liveMetricDefinitions().forEach { def ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(11), dp(11), dp(9), dp(11))
-                minimumHeight = dp(if (screenWidthDp() >= 840) 104 else 90)
+                setPadding(dp(11), dp(10), dp(9), dp(10))
+                minimumHeight = dp(if (screenWidthDp() >= 840) 92 else 82)
                 background = rounded(panel2, def.color, 13)
                 elevation = dp(3).toFloat()
-                addView(text(def.label, 11, muted, true).apply { maxLines = 2 })
-                val valueView = text("— ${def.unit}", if (screenWidthDp() >= 840) 23 else 20, white, true)
+                addView(text(def.label, 10, muted, true).apply { maxLines = 2 })
+                val valueView = text(if (def.unit.isBlank()) "—" else "— ${def.unit}",
+                    if (screenWidthDp() >= 840) 20 else 17, white, true)
+                valueView.maxLines = 2
                 liveMetricViews[def.key] = valueView
                 addView(valueView)
             }
-            grid.addView(card, GridLayout.LayoutParams().apply {
-                width = 0
-                columnSpec = GridLayout.spec(index % columns, 1f)
-                setMargins(dp(4), dp(4), dp(4), dp(4))
-            })
+            liveMetricCards[def.key] = card
         }
-        c.addView(grid)
-        addGap(c, 8)
-        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ YENİLE" else "↻  CANLI VERİ AKIŞINI BAŞLAT", blue) {
-            if (simulationMode) startSimulationLiveLoop() else startLiveRead()
+
+        val emptyState = text(
+            "ECU destekli sensörler taranıyor…\nYalnızca gerçek ECU yanıtı alınan göstergeler burada açılır.",
+            13, muted
+        ).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = rounded(panel, blue, 14)
+        }
+        liveEmptyState = emptyState
+        c.addView(emptyState, LinearLayout.LayoutParams(-1, dp(92)))
+
+        val modules = neonCard("EK MODÜL GÖSTERGELERİ", blue)
+        val moduleInfo = listOf(
+            "ABS" to "Genel motor OBD bağlantısı ABS beynine erişmez. Marka / model protokolü gerekir.",
+            "ENJEKTÖR" to "Yakıt sistemi ve düzeltmeler okunabilir; enjektör aktif testi üretici komutu gerektirir.",
+            "RADYATÖR FANI" to "Motor sıcaklığı izlenir. Fanı açma / kapama testi standart PID değildir.",
+            "ATEŞLEME" to "Ateşleme avansı okunabilir. Bobin / kıvılcım aktüatör testi modele özel erişim ister."
+        )
+        moduleInfo.forEach { (name, detail) ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(7), 0, dp(7))
+            }
+            row.addView(text("◇  $name", 13, white, true))
+            row.addView(text(detail, 11, muted))
+            modules.addView(row)
+        }
+        c.addView(modules)
+
+        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ YENİLE" else "↻  CANLI VERİ AKIŞINI YENİLE", blue) {
+            if (simulationMode) startSimulationLiveLoop()
+            else if (!liveLoop) startLiveRead()
+            else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor.", Toast.LENGTH_SHORT).show()
         })
         addGap(c, 5)
         c.addView(text(
             if (simulationMode) "SİMÜLASYON: Değerler örnektir; gerçek ECU'dan gelmez."
-            else "ECU'nun desteklediği PID'ler gerçek zamanlı sorgulanır. Desteklenmeyen değerler — gösterilir. Enjektör süresi ve AFR gibi üreticiye özel veriler standart PID olmadığı için uydurulmaz.",
+            else "Göstergeler yalnızca ECU'nun desteklediği standart PID yanıtlarından oluşturulur. ABS, fan komutu, enjektör aktif testi ve bobin testi için marka / model / yıl bazlı ECU protokolü gerekir.",
             11, if (simulationMode) yellow else muted
         ))
         if (simulationMode) startSimulationLiveLoop() else startLiveRead()
@@ -832,11 +896,35 @@ class MainActivity : ComponentActivity() {
     private fun updateLiveDisplay(values: Map<String, Double>) {
         liveValues.putAll(values)
         rpm = values["rpm"]?.toInt() ?: rpm
-        liveGauge?.value = rpm.coerceAtLeast(0)
+        liveGauge?.value = rpm
         liveGauge?.invalidate()
-        liveMetricDefinitions().forEach { def ->
-            liveMetricViews[def.key]?.text = "${formatLiveValue(def.key, values[def.key])} ${def.unit}"
+
+        val definitions = liveMetricDefinitions()
+        definitions.forEach { def ->
+            val value = values[def.key] ?: liveValues[def.key]
+            if (value != null) {
+                val valueView = liveMetricViews[def.key]
+                if (valueView != null) {
+                    valueView.text = if (def.unit.isBlank()) formatLiveValue(def.key, value)
+                    else "${formatLiveValue(def.key, value)} ${def.unit}"
+                }
+                val card = liveMetricCards[def.key]
+                val grid = liveSectionGrids[def.section]
+                if (card != null && grid != null && card.parent == null) {
+                    val colCount = grid.columnCount.coerceAtLeast(1)
+                    val index = grid.childCount
+                    grid.addView(card, GridLayout.LayoutParams().apply {
+                        width = 0
+                        height = -2
+                        columnSpec = GridLayout.spec(index % colCount, 1f)
+                        setMargins(dp(4), dp(4), dp(4), dp(4))
+                    })
+                    liveSectionHeaders[def.section]?.visibility = View.VISIBLE
+                }
+            }
         }
+        val anyMetric = liveValues.containsKey("rpm") || definitions.any { liveValues.containsKey(it.key) }
+        liveEmptyState?.visibility = if (anyMetric) View.GONE else View.VISIBLE
     }
 
     private fun startLiveRead() {
@@ -896,20 +984,15 @@ class MainActivity : ComponentActivity() {
                     "maf" to (3.2 + (simulationTick % 20) / 3.0),
                     "o2" to (0.15 + (simulationTick % 7) * 0.1),
                     "pedal" to (6 + (simulationTick * 4 % 80)).toDouble(),
-                    "runTime" to (1200 + simulationTick * 2).toDouble(),
+                    "fuelSystem" to 2.0,
+                    "fuelRailPressure" to (350 + simulationTick % 25).toDouble(),
+                    "lambda" to (0.97 + (simulationTick % 7) * 0.01),
                     "ambient" to (24 + (simulationTick % 8)).toDouble(),
-                    "fuelLevel" to (48 + (simulationTick % 25)).toDouble(),
                     "baro" to (98 + (simulationTick % 5)).toDouble(),
                     "relativeThrottle" to (12 + (simulationTick * 3 % 55)).toDouble(),
                     "commandedThrottle" to (10 + (simulationTick * 4 % 70)).toDouble(),
                     "oilTemp" to (78 + (simulationTick % 19)).toDouble(),
-                    "fuelRate" to (1.2 + (simulationTick % 12) * 0.13),
-                    "distMil" to (12 + (simulationTick % 20)).toDouble(),
-                    "distClear" to (230 + simulationTick).toDouble(),
-                    "odometer" to 18452.0,
-                    "runMil" to (3 + simulationTick % 7).toDouble(),
-                    "runClear" to (340 + simulationTick).toDouble(),
-                    "warmups" to (6 + simulationTick % 14).toDouble()
+                    "fuelRate" to (1.2 + (simulationTick % 12) * 0.13)
                 )
                 updateLiveDisplay(sample)
                 simulationRunnable = this
@@ -941,15 +1024,16 @@ class MainActivity : ComponentActivity() {
     private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
         val out = mutableMapOf<String, Double>()
         if (supportedPidSet.isEmpty()) supportedPidSet = readSupportedPids()
-        val fallback = setOf(0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
-            0x0F, 0x10, 0x11, 0x14, 0x1F, 0x21, 0x2F, 0x31, 0x33, 0x42, 0x45, 0x46,
-            0x30, 0x4C, 0x4D, 0x4E, 0x49, 0x5C, 0x5E, 0xA6)
+        // Conservative fallback only; never sweep trip/odometer/service counters.
+        val fallback = setOf(0x03, 0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x0D,
+            0x0E, 0x0F, 0x10, 0x11, 0x14, 0x23, 0x33, 0x42, 0x44, 0x45, 0x46, 0x49, 0x4C, 0x5C, 0x5E)
         val available = if (supportedPidSet.isNotEmpty()) supportedPidSet else fallback
         fun bytes(pid: Int): List<Int>? {
             if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
             if (pid !in available) return null
             return pidBytes("%02X".format(Locale.US, pid))
         }
+        bytes(0x03)?.firstOrNull()?.let { out["fuelSystem"] = it.toDouble() }
         bytes(0x0C)?.takeIf { it.size >= 2 }?.let { out["rpm"] = (it[0] * 256 + it[1]) / 4.0 }
         bytes(0x0D)?.firstOrNull()?.let { out["speed"] = it.toDouble() }
         bytes(0x11)?.firstOrNull()?.let { out["tps"] = it * 100.0 / 255.0 }
@@ -961,27 +1045,18 @@ class MainActivity : ComponentActivity() {
         bytes(0x06)?.firstOrNull()?.let { out["stft"] = (it - 128) * 100.0 / 128.0 }
         bytes(0x07)?.firstOrNull()?.let { out["ltft"] = (it - 128) * 100.0 / 128.0 }
         bytes(0x0A)?.firstOrNull()?.let { out["fuelPressure"] = it * 3.0 }
+        bytes(0x23)?.takeIf { it.size >= 2 }?.let { out["fuelRailPressure"] = (it[0] * 256 + it[1]) * 10.0 }
         bytes(0x0E)?.firstOrNull()?.let { out["timing"] = it / 2.0 - 64.0 }
         bytes(0x10)?.takeIf { it.size >= 2 }?.let { out["maf"] = (it[0] * 256 + it[1]) / 100.0 }
         bytes(0x14)?.firstOrNull()?.let { out["o2"] = it * 0.005 }
+        bytes(0x44)?.takeIf { it.size >= 2 }?.let { out["lambda"] = (it[0] * 256 + it[1]) / 32768.0 }
         bytes(0x49)?.firstOrNull()?.let { out["pedal"] = it * 100.0 / 255.0 }
-        bytes(0x1F)?.takeIf { it.size >= 2 }?.let { out["runTime"] = (it[0] * 256 + it[1]).toDouble() }
         bytes(0x46)?.firstOrNull()?.let { out["ambient"] = (it - 40).toDouble() }
-        bytes(0x2F)?.firstOrNull()?.let { out["fuelLevel"] = it * 100.0 / 255.0 }
-        bytes(0x21)?.takeIf { it.size >= 2 }?.let { out["distMil"] = (it[0] * 256 + it[1]).toDouble() }
-        bytes(0x31)?.takeIf { it.size >= 2 }?.let { out["distClear"] = (it[0] * 256 + it[1]).toDouble() }
         bytes(0x33)?.firstOrNull()?.let { out["baro"] = it.toDouble() }
         bytes(0x45)?.firstOrNull()?.let { out["relativeThrottle"] = it * 100.0 / 255.0 }
         bytes(0x4C)?.firstOrNull()?.let { out["commandedThrottle"] = it * 100.0 / 255.0 }
-        bytes(0x4D)?.takeIf { it.size >= 2 }?.let { out["runMil"] = (it[0] * 256 + it[1]).toDouble() }
-        bytes(0x4E)?.takeIf { it.size >= 2 }?.let { out["runClear"] = (it[0] * 256 + it[1]).toDouble() }
-        bytes(0x30)?.firstOrNull()?.let { out["warmups"] = it.toDouble() }
         bytes(0x5C)?.firstOrNull()?.let { out["oilTemp"] = (it - 40).toDouble() }
         bytes(0x5E)?.takeIf { it.size >= 2 }?.let { out["fuelRate"] = (it[0] * 256 + it[1]) * 0.05 }
-        bytes(0xA6)?.takeIf { it.size >= 4 }?.let {
-            val rawOdo = (it[0].toLong() shl 24) or (it[1].toLong() shl 16) or (it[2].toLong() shl 8) or it[3].toLong()
-            out["odometer"] = rawOdo / 10.0
-        }
         return out
     }
 
@@ -994,10 +1069,11 @@ class MainActivity : ComponentActivity() {
         val tests = listOf(
             "Viecar adaptör bağlantısı" to "Wi‑Fi soket bağlantısı ve ELM yanıtı",
             "ECU iletişim testi" to "0100 desteklenen PID sorgusu",
-            "Sensör yanıt testi" to "RPM / TPS / sıcaklık / MAP / voltaj",
+            "Sensör yanıt testi" to "RPM / TPS / sıcaklık / MAP / MAF / O2 / voltaj (ECU destekledikçe)",
+            "Enjeksiyon veri kontrolü" to "Yakıt sistemi durumu / yakıt düzeltmeleri / yakıt basıncı / lambda (PID desteği varsa)",
+            "Ateşleme veri kontrolü" to "Ateşleme avansı PID kontrolü (ECU destekledikçe)",
             "Arıza hafızası testi" to "Kayıtlı (03), bekleyen (07), kalıcı (0A) DTC sorguları",
-            "Araç bilgisi" to "VIN / kalibrasyon / ECU kimliği (destekleniyorsa)",
-            "Sürüş ve servis sayaçları" to "Odometer A6, MIL mesafesi, arıza silme sonrası mesafe, motor çalışma zamanı"
+            "Araç bilgisi" to "VIN / kalibrasyon / ECU kimliği (destekleniyorsa)"
         )
         tests.forEach { (name, desc) ->
             val card = neonCard(null, blue)
@@ -1008,11 +1084,11 @@ class MainActivity : ComponentActivity() {
         val future = neonCard("GELİŞMİŞ SERVİS FONKSİYONLARI", yellow)
         future.addView(text("Bu modüller arayüzde planlandı. Gerçek işlem için ilgili motosikletin ECU kimliği, üretici servis protokolü, pin bağlantısı ve test edilmiş araç profili gerekir.", 12, white))
         val futureItems = listOf(
-            "ABS arıza / canlı veri / fren hava alma" to "ARAÇ PROFİLİ GEREKLİ",
-            "Enjektör ve yakıt pompası aktif testi" to "ARAÇ PROFİLİ GEREKLİ",
-            "Radyatör fanı / soğutma sistemi testi" to "ARAÇ PROFİLİ GEREKLİ",
-            "TPS kontrolü / gaz kelebeği adaptasyonu" to "ARAÇ PROFİLİ GEREKLİ",
-            "Gösterge kilometresi / toplam motor saati" to "ECU DESTEĞİ GEREKLİ"
+            "ABS arıza / canlı veri / fren hava alma" to "ABS MODÜLÜ VE MARKA PROTOKOLÜ GEREKLİ",
+            "Enjektör / yakıt pompası aktif testi" to "ÜRETİCİYE ÖZEL AKTÜATÖR KOMUTU GEREKLİ",
+            "Radyatör fanı açma / kapama testi" to "ÜRETİCİYE ÖZEL AKTÜATÖR KOMUTU GEREKLİ",
+            "Bobin / ateşleme aktüatör testi" to "ÜRETİCİYE ÖZEL ECU KOMUTU GEREKLİ",
+            "TPS adaptasyonu" to "MARKA / MODEL ECU PROTOKOLÜ GEREKLİ"
         )
         futureItems.forEach { (name, state) ->
             val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(7), 0, dp(7)) }
@@ -1146,6 +1222,7 @@ class MainActivity : ComponentActivity() {
                     record("Adaptör / ELM yanıtı", command, response, ok)
                 }
                 val pids = listOf(
+                    Triple("Yakıt sistemi durumu", "0103", "4103"),
                     Triple("Motor devri", "010C", "410C"),
                     Triple("Hız", "010D", "410D"),
                     Triple("Gaz kelebeği", "0111", "4111"),
@@ -1157,19 +1234,16 @@ class MainActivity : ComponentActivity() {
                     Triple("Kısa dönem yakıt düzeltmesi", "0106", "4106"),
                     Triple("Uzun dönem yakıt düzeltmesi", "0107", "4107"),
                     Triple("Yakıt basıncı", "010A", "410A"),
+                    Triple("Yakıt rayı basıncı", "0123", "4123"),
+                    Triple("Hedeflenen lambda", "0144", "4144"),
                     Triple("Ateşleme avansı", "010E", "410E"),
                     Triple("Hava akış sensörü", "0110", "4110"),
                     Triple("Oksijen sensörü", "0114", "4114"),
                     Triple("Gaz pedalı", "0149", "4149"),
-                    Triple("Motor çalışma süresi", "011F", "411F"),
                     Triple("Dış hava sıcaklığı", "0146", "4146"),
-                    Triple("Yakıt seviyesi", "012F", "412F"),
                     Triple("Atmosfer basıncı", "0133", "4133"),
-                    Triple("MIL açıkken mesafe", "0121", "4121"),
-                    Triple("Arıza hafızası temizlendikten sonra mesafe", "0131", "4131"),
                     Triple("Motor yağı sıcaklığı", "015C", "415C"),
                     Triple("Yakıt tüketim hızı", "015E", "415E"),
-                    Triple("ECU odometre", "01A6", "41A6")
                 )
                 for ((label, command, marker) in pids) {
                     try {
@@ -1486,8 +1560,8 @@ class MainActivity : ComponentActivity() {
             val w = width.toFloat()
             val h = height.toFloat()
             val cx = w / 2f
-            val cy = h * 0.79f
-            val r = min(w * 0.43f, h * 0.70f)
+            val cy = h * 0.84f
+            val r = min(w * 0.43f, h * 0.78f)
             val arc = RectF(cx - r, cy - r, cx + r, cy + r)
 
             // Deep blue instrument face and outer neon rim.
