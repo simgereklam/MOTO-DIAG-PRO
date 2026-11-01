@@ -24,8 +24,38 @@ class ObdCommands(
     )
 
     fun initialize(): CommandResult {
+        val responses = StringBuilder()
+
+        val reset = execute("ATZ")
+
+        responses.append("ATZ: ")
+            .append(reset.response)
+            .append("\n")
+
+        if (!reset.success) {
+            return CommandResult(
+                "INITIALIZE",
+                responses.toString(),
+                false,
+                "Adaptör sıfırlama komutu başarısız."
+            )
+        }
+
+        // ELM327/Viecar yeniden başlasın.
+        try {
+            Thread.sleep(1200)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+
+            return CommandResult(
+                "INITIALIZE",
+                responses.toString(),
+                false,
+                "Adaptör başlatma işlemi kesildi."
+            )
+        }
+
         val commands = listOf(
-            "ATZ",
             "ATE0",
             "ATL0",
             "ATS0",
@@ -33,28 +63,29 @@ class ObdCommands(
             "ATSP0"
         )
 
-        val responses = StringBuilder()
-
         for (command in commands) {
             val result = execute(command)
 
+            responses.append(command)
+                .append(": ")
+                .append(result.response)
+                .append("\n")
+
             if (!result.success) {
                 return CommandResult(
-                    command,
+                    "INITIALIZE",
                     responses.toString(),
                     false,
                     "$command komutu başarısız: ${result.message}"
                 )
             }
-
-            responses.append(result.response).append("\n")
         }
 
         return CommandResult(
             "INITIALIZE",
             responses.toString(),
             true,
-            "Adaptör başlangıç komutları tamamlandı."
+            "Adaptör temel komutları tamamlandı. ECU protokolü henüz doğrulanmadı."
         )
     }
 
@@ -141,7 +172,7 @@ class ObdCommands(
 
         return result.copy(
             message = if (codes.isEmpty()) {
-                "ECU yanıtı alındı ancak arıza kodu ayrıştırılamadı veya kod bulunamadı."
+                "ECU yanıtı alındı ancak ayrıştırılabilir arıza kodu bulunamadı."
             } else {
                 "${codes.size} arıza kodu ayrıştırıldı."
             },
@@ -157,16 +188,18 @@ class ObdCommands(
         return try {
             val response = connection.sendCommand(command)
 
+            val cleaned = ObdResponseParser.cleanResponse(response)
+
             val failed =
-                ObdResponseParser.isErrorResponse(response) ||
-                response.contains("?")
+                ObdResponseParser.isErrorResponse(cleaned) ||
+                cleaned.contains("?")
 
             CommandResult(
                 command = command,
-                response = ObdResponseParser.cleanResponse(response),
+                response = cleaned,
                 success = !failed,
                 message = if (failed) {
-                    "Adaptör yanıtı: $response"
+                    "Adaptör yanıtı: $cleaned"
                 } else {
                     "Yanıt alındı."
                 }
