@@ -24,13 +24,17 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: XML Manifest kontrolü
+        run: |
+          python3 -c "import xml.etree.ElementTree as ET; ET.parse('app/src/main/AndroidManifest.xml'); print('MANIFEST XML GECERLI')"
+
       - name: Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.13
 
       - name: APK oluştur
-        run: gradle :app:assembleDebug
+        run: gradle :app:assembleDebug --stacktrace
 
       - name: APK dosyasını yükle
         uses: actions/upload-artifact@v4
