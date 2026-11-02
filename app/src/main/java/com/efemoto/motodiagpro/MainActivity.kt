@@ -852,7 +852,10 @@ class MainActivity : ComponentActivity() {
 
     private fun showLiveData() {
         val keepCurrentRead = currentScreen == "LIVE" && liveLoop
-        if (!keepCurrentRead) liveValues.clear()
+        if (!keepCurrentRead) {
+            liveValues.clear()
+            rpm = 0
+        }
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
 
@@ -908,7 +911,9 @@ class MainActivity : ComponentActivity() {
         }
 
         val emptyState = text(
-            "ECU destekli sensörler taranıyor…\nYalnızca gerçek ECU yanıtı alınan göstergeler burada açılır.",
+            if (simulationMode) "SİMÜLASYON VERİLERİ HAZIRLANIYOR…\nGösterilen değerler örnektir."
+            else if (connected) "ECU destekli sensörler bekleniyor…\nYalnızca gerçek ECU yanıtı alınan göstergeler açılır."
+            else "ECU BAĞLI DEĞİL\nBu sayfayı ve diğer menüleri bağlantı olmadan inceleyebilirsiniz. Gerçek değerler için aşağıdan ECU bağlantısını başlatın.",
             13, muted
         ).apply {
             gravity = Gravity.CENTER
@@ -939,10 +944,17 @@ class MainActivity : ComponentActivity() {
         }
         c.addView(modules)
 
-        c.addView(actionButton(if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ YENİLE" else "↻  CANLI VERİ AKIŞINI YENİLE", blue) {
+        c.addView(actionButton(
+            if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ YENİLE"
+            else if (connected && liveLoop) "↻  CANLI VERİ AKIŞI ÇALIŞIYOR"
+            else "⚡  ECU'YA BAĞLAN / CANLI VERİYİ BAŞLAT",
+            if (simulationMode) yellow else blue
+        ) {
             if (simulationMode) startSimulationLiveLoop()
-            else if (!liveLoop) startLiveRead()
-            else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor.", Toast.LENGTH_SHORT).show()
+            else if (!liveLoop) {
+                liveEmptyState?.text = "ECU'YA BAĞLANILIYOR…\nBağlantı kurulurken diğer menülere geçebilirsiniz."
+                startLiveRead()
+            } else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor.", Toast.LENGTH_SHORT).show()
         })
         addGap(c, 5)
         c.addView(text(
@@ -950,7 +962,10 @@ class MainActivity : ComponentActivity() {
             else "Göstergeler yalnızca ECU'nun desteklediği standart PID yanıtlarından oluşturulur. ABS, fan komutu, enjektör aktif testi ve bobin testi için marka / model / yıl bazlı ECU protokolü gerekir.",
             11, if (simulationMode) yellow else muted
         ))
-        if (simulationMode) startSimulationLiveLoop() else startLiveRead()
+        // Offline-first navigation: opening the live-data page never initiates a
+        // socket connection. The user can browse every page without an adapter.
+        // A real ECU read starts only after the explicit button above is pressed.
+        if (simulationMode) startSimulationLiveLoop()
     }
 
     private fun updateLiveDisplay(values: Map<String, Double>) {
@@ -1011,7 +1026,10 @@ class MainActivity : ComponentActivity() {
                 }
             } catch (e: Exception) {
                 mainHandler.post {
-                    if (currentScreen == "LIVE") Toast.makeText(this, "Canlı veri okunamadı: ${e.message}", Toast.LENGTH_LONG).show()
+                    if (currentScreen == "LIVE") {
+                        liveEmptyState?.text = "ECU BAĞLANTISI KURULAMADI\n${e.message ?: "Adaptörü kontrol edin."}\nSayfalar arasında gezmeye devam edebilirsiniz. Tekrar denemek için ECU bağlantı düğmesine basın."
+                        Toast.makeText(this, "Canlı veri okunamadı: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
                     log("Canlı veri okunamadı: ${e.message}")
                 }
             } finally {
