@@ -367,18 +367,28 @@ class MainActivity : ComponentActivity() {
         currentScreen = "HOME"
         applyImmersiveMode()
 
+        val wide = isWideLandscape()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
+            layoutParams = ViewGroup.LayoutParams(-1, -1)
         }
+
+        // The original splash artwork already contains the EFE MOTO title and
+        // the YES/NO buttons. FIT_CENTER keeps the complete artwork visible on
+        // short phones instead of cropping its bottom/top edges.
         val content = LinearLayout(this).apply {
-            orientation = if (isWideLandscape()) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
-        val artworkFrame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK); isClickable = true }
+        val artworkFrame = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isClickable = true
+        }
         val artwork = ImageView(this).apply {
             setImageBitmap(homeScreenBitmap)
-            scaleType = ImageView.ScaleType.CENTER_CROP
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = false
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
         }
         artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
@@ -386,54 +396,67 @@ class MainActivity : ComponentActivity() {
             if (event.action == android.view.MotionEvent.ACTION_UP) {
                 val vw = view.width.toFloat().coerceAtLeast(1f)
                 val vh = view.height.toFloat().coerceAtLeast(1f)
-                val scale = maxOf(vw / 403f, vh / 728f)
+                // Match FIT_CENTER: use the smaller scale and account for the
+                // letterboxed area so taps land on the visible artwork buttons.
+                val scale = minOf(vw / 403f, vh / 728f)
                 val drawW = 403f * scale
                 val drawH = 728f * scale
                 val offX = (vw - drawW) / 2f
                 val offY = (vh - drawH) / 2f
                 val x = (event.x - offX) / drawW
                 val y = (event.y - offY) / drawH
-                when {
-                    y in 0.905f..0.995f && x in 0.035f..0.495f -> startDiagnosis()
-                    y in 0.905f..0.995f && x in 0.515f..0.975f -> showExitMessage()
-                    y in 0.795f..0.905f && x in 0.05f..0.95f -> startDiagnosis()
+                if (x in 0f..1f && y in 0f..1f) {
+                    when {
+                        y in 0.905f..0.995f && x in 0.035f..0.495f -> startDiagnosis()
+                        y in 0.905f..0.995f && x in 0.515f..0.975f -> showExitMessage()
+                        y in 0.795f..0.905f && x in 0.05f..0.95f -> startDiagnosis()
+                    }
                 }
             }
             true
         }
 
-        val side = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = rounded(Color.rgb(2, 10, 27), cyan, 18)
-        }
-        side.addView(text("EFE MOTO", if (isWideLandscape()) 32 else 25, white, true).apply { gravity = Gravity.CENTER })
-        side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 13, cyan, true).apply { gravity = Gravity.CENTER })
-        addGap(side, 8)
-        side.addView(text(
-            if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK",
-            11, if (connected) green else muted, true
-        ).apply { gravity = Gravity.CENTER })
-        addGap(side, 8)
-        side.addView(actionButton("✓  GERÇEK ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() },
-            LinearLayout.LayoutParams(-1, dp(if (isWideLandscape()) 64 else 48)).apply { setMargins(0, dp(3), 0, dp(3)) })
-        side.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) { showFaults() },
-            LinearLayout.LayoutParams(-1, dp(if (isWideLandscape()) 64 else 48)).apply { setMargins(0, dp(3), 0, dp(3)) })
-        side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
-            LinearLayout.LayoutParams(-1, dp(if (isWideLandscape()) 64 else 48)).apply { setMargins(0, dp(3), 0, dp(3)) })
+        if (wide) {
+            val side = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+                background = rounded(Color.rgb(2, 10, 27), cyan, 18)
+            }
+            side.addView(text("EFE MOTO", 28, white, true).apply { gravity = Gravity.CENTER })
+            side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 12, cyan, true).apply { gravity = Gravity.CENTER })
+            addGap(side, 6)
+            side.addView(text(
+                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK",
+                10, if (connected) green else muted, true
+            ).apply { gravity = Gravity.CENTER })
+            addGap(side, 6)
+            side.addView(actionButton("✓  GERÇEK ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
+            side.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) { showFaults() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
+            side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
 
-        if (isWideLandscape()) {
-            val artWidthDp = ((screenHeightDp() - 100) * 403f / 728f).toInt().coerceAtLeast(210)
-            content.addView(artworkFrame, LinearLayout.LayoutParams(dp(artWidthDp), -1))
-            content.addView(side, LinearLayout.LayoutParams(0, -1, 1f))
+            val sideScroll = ScrollView(this).apply {
+                isFillViewport = false
+                overScrollMode = View.OVER_SCROLL_NEVER
+                addView(side, ViewGroup.LayoutParams(-1, -2))
+            }
+            content.addView(artworkFrame, LinearLayout.LayoutParams(0, -1, 1.05f))
+            content.addView(sideScroll, LinearLayout.LayoutParams(0, -1, 0.95f).apply {
+                setMargins(dp(8), dp(8), dp(8), dp(8))
+            })
         } else {
-            content.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-            content.addView(side, LinearLayout.LayoutParams(-1, -2))
+            // In portrait the full splash artwork is the home page. Its
+            // embedded YES/NO controls remain tappable; no extra panel is
+            // stacked underneath it, which caused the previous overflow.
+            content.addView(artworkFrame, LinearLayout.LayoutParams(-1, -1))
         }
+
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         val navHeight = when {
-            screenHeightDp() < 480 -> 66
+            screenHeightDp() < 480 -> 70
             screenWidthDp() >= 840 -> 98
             else -> 88
         }
