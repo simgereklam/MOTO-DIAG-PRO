@@ -54,6 +54,8 @@ class MainActivity : ComponentActivity() {
     @Volatile private var currentScreen = "HOME"
     private var faults: MutableList<String> = mutableListOf()
     private var selectedFault = ""
+    private var hasCompletedScan = false
+    private var showingLibraryLookup = false
     private val logs = mutableListOf<String>()
     private var smartInsights: List<String> = emptyList()
     private var currentRiskScore: Int = 0
@@ -68,10 +70,6 @@ class MainActivity : ComponentActivity() {
     @Volatile private var liveLoop = false
     private var liveValues: MutableMap<String, Double> = mutableMapOf()
     private var supportedPidSet: MutableSet<Int> = mutableSetOf()
-    private var simulationMode = false
-    private var simulationTick = 0
-    private val simulationHandler = Handler(Looper.getMainLooper())
-    private var simulationRunnable: Runnable? = null
     private var liveGauge: RpmGaugeView? = null
     private val liveMetricViews = mutableMapOf<String, TextView>()
     private val liveMetricCards = mutableMapOf<String, LinearLayout>()
@@ -125,7 +123,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showScanProgressShell() {
-        val c = baseScreen("SCAN", false)
+        val c = baseScreen("SCAN", true)
         c.addView(header("ECU AKILLI TARAMA"))
         val card = neonCard("TARAMA DEVAM EDİYOR", cyan)
         val progress = CircularProgressView(this).apply { this.progress = scanPercent }
@@ -140,7 +138,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         liveLoop = false
-        stopSimulationLoop()
         closeAdapter()
         io.shutdownNow()
         super.onDestroy()
@@ -312,12 +309,8 @@ class MainActivity : ComponentActivity() {
         line.addView(text(" EFE MOTO", 25, white, true))
         box.addView(line)
         if (!subtitle.isNullOrBlank()) box.addView(text(subtitle, 12, cyan, true).apply { gravity = Gravity.CENTER })
-        val statusText = when {
-            simulationMode -> "● SİMÜLASYON MODU  •  GERÇEK ECU KOMUTU YOK"
-            connected -> "● VIECAR / ECU BAĞLI"
-            else -> "● ADAPTÖR BEKLENİYOR"
-        }
-        val statusColor = when { simulationMode -> yellow; connected -> green; else -> muted }
+        val statusText = if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK"
+        val statusColor = if (connected) green else muted
         val status = text(statusText, 11, statusColor, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(5), 0, 0) }
         statusLine = status
         box.addView(status)
@@ -375,6 +368,10 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
 
         val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        val content = LinearLayout(this).apply {
             orientation = if (isWideLandscape()) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
             setBackgroundColor(Color.BLACK)
         }
@@ -385,13 +382,10 @@ class MainActivity : ComponentActivity() {
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
         }
         artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
-
         artworkFrame.setOnTouchListener { view, event ->
             if (event.action == android.view.MotionEvent.ACTION_UP) {
                 val vw = view.width.toFloat().coerceAtLeast(1f)
                 val vh = view.height.toFloat().coerceAtLeast(1f)
-                // Match ImageView.CENTER_CROP exactly; this removes black bands
-                // on tall phones without shifting the invisible YES/NO hit areas.
                 val scale = maxOf(vw / 403f, vh / 728f)
                 val drawW = 403f * scale
                 val drawH = 728f * scale
@@ -408,97 +402,44 @@ class MainActivity : ComponentActivity() {
             true
         }
 
-        if (isWideLandscape()) {
-            val artWidthDp = ((screenHeightDp() - 8) * 403f / 728f).toInt().coerceAtLeast(210)
-            root.addView(artworkFrame, LinearLayout.LayoutParams(dp(artWidthDp), -1))
-            val side = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                setPadding(dp(28), dp(22), dp(28), dp(22))
-                background = rounded(Color.rgb(2, 10, 27), cyan, 18)
-            }
-            side.addView(text("EFE MOTO", 34, white, true).apply { gravity = Gravity.CENTER })
-            side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 16, cyan, true).apply { gravity = Gravity.CENTER })
-            addGap(side, 18)
-            val state = when {
-                simulationMode -> "SİMÜLASYON MODU AKTİF"
-                connected -> "VIECAR / ECU BAĞLI"
-                else -> "ADAPTÖR BEKLENİYOR"
-            }
-            side.addView(text(state, 15, if (simulationMode) yellow else if (connected) green else muted, true).apply { gravity = Gravity.CENTER })
-            addGap(side, 22)
-            side.addView(actionButton("✓  GERÇEK ARIZA TEŞHİSİ BAŞLAT", green) { startDiagnosis() },
-                LinearLayout.LayoutParams(-1, dp(76)).apply { setMargins(0, dp(6), 0, dp(6)) })
-            side.addView(actionButton("◉  SİMÜLASYON MODU", yellow) { startSimulation() },
-                LinearLayout.LayoutParams(-1, dp(76)).apply { setMargins(0, dp(6), 0, dp(6)) })
-            side.addView(actionButton("CANLI VERİLERİ GÖRÜNTÜLE", blue) { showLiveData() },
-                LinearLayout.LayoutParams(-1, dp(76)).apply { setMargins(0, dp(6), 0, dp(6)) })
-            root.addView(side, LinearLayout.LayoutParams(0, -1, 1f))
-        } else {
-            root.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
-            val simButton = actionButton("◉  SİMÜLASYON MODU", yellow) { startSimulation() }
-            root.addView(simButton, LinearLayout.LayoutParams(-1, dp(if (screenHeightDp() < 480) 54 else 66)).apply {
-                setMargins(dp(12), dp(5), dp(12), dp(8))
-            })
+        val side = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(18), dp(12), dp(18), dp(12))
+            background = rounded(Color.rgb(2, 10, 27), cyan, 18)
         }
+        side.addView(text("EFE MOTO", if (isWideLandscape()) 32 else 25, white, true).apply { gravity = Gravity.CENTER })
+        side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 13, cyan, true).apply { gravity = Gravity.CENTER })
+        addGap(side, 8)
+        side.addView(text(
+            if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK",
+            11, if (connected) green else muted, true
+        ).apply { gravity = Gravity.CENTER })
+        addGap(side, 8)
+        side.addView(actionButton("✓  GERÇEK ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() },
+            LinearLayout.LayoutParams(-1, dp(if (isWideLandscape()) 64 else 48)).apply { setMargins(0, dp(3), 0, dp(3)) })
+        side.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) { showFaults() },
+            LinearLayout.LayoutParams(-1, dp(if (isWideLandscape()) 64 else 48)).apply { setMargins(0, dp(3), 0, dp(3)) })
+        side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
+            LinearLayout.LayoutParams(-1, dp(if (isWideLandscape()) 64 else 48)).apply { setMargins(0, dp(3), 0, dp(3)) })
+
+        if (isWideLandscape()) {
+            val artWidthDp = ((screenHeightDp() - 100) * 403f / 728f).toInt().coerceAtLeast(210)
+            content.addView(artworkFrame, LinearLayout.LayoutParams(dp(artWidthDp), -1))
+            content.addView(side, LinearLayout.LayoutParams(0, -1, 1f))
+        } else {
+            content.addView(artworkFrame, LinearLayout.LayoutParams(-1, 0, 1f))
+            content.addView(side, LinearLayout.LayoutParams(-1, -2))
+        }
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
+        val navHeight = when {
+            screenHeightDp() < 480 -> 66
+            screenWidthDp() >= 840 -> 98
+            else -> 88
+        }
+        root.addView(bottomNav("HOME"), LinearLayout.LayoutParams(-1, dp(navHeight)))
         setContentView(root)
         applyImmersiveMode()
-    }
-
-    private fun stopSimulationLoop() {
-        simulationRunnable?.let { simulationHandler.removeCallbacks(it) }
-        simulationRunnable = null
-    }
-
-    private fun stopSimulationMode() {
-        stopSimulationLoop()
-        simulationMode = false
-    }
-
-    private fun startSimulation() {
-        closeAdapter()
-        stopSimulationLoop()
-        simulationMode = true
-        simulationTick = 0
-        connected = false
-        faults = mutableListOf("P0335")
-        selectedFault = "P0335"
-        log("SIMÜLASYON başladı • Gerçek ECU'ya komut gönderilmiyor")
-
-        val c = baseScreen("SCAN", false)
-        c.addView(header("SİMÜLASYONLU ECU TARAMASI"))
-        val card = neonCard("DEMO / SİMÜLASYON", yellow)
-        val progress = CircularProgressView(this)
-        card.addView(progress, LinearLayout.LayoutParams(-1, dp(220)))
-        val message = text("Örnek ECU verileri hazırlanıyor…  •  %0", 17, white, true).apply { gravity = Gravity.CENTER }
-        card.addView(message)
-        addGap(card, 10)
-        listOf("Bağlantı ekranı örnekleniyor", "Sensör verileri hazırlanıyor", "Örnek arıza kodları yükleniyor").forEach {
-            card.addView(text("✓  $it", 14, cyan, true).apply { setPadding(0, dp(5), 0, dp(5)) })
-        }
-        c.addView(card)
-        c.addView(text("Bu mod yalnızca ekranı ve butonları denemek içindir. Hiçbir gerçek adaptöre veya ECU'ya komut göndermez.", 12, yellow))
-        val steps = listOf(25, 55, 80, 100)
-        var step = 0
-        val task = object : Runnable {
-            override fun run() {
-                if (!simulationMode || currentScreen != "SCAN") return
-                val value = steps[step.coerceAtMost(steps.lastIndex)]
-                progress.progress = value
-                progress.invalidate()
-                message.text = "Örnek tarama tamamlanıyor…  •  %$value"
-                step++
-                if (step >= steps.size) {
-                    stopSimulationLoop()
-                    showFaults()
-                } else {
-                    simulationRunnable = this
-                    simulationHandler.postDelayed(this, 450)
-                }
-            }
-        }
-        simulationRunnable = task
-        simulationHandler.post(task)
     }
 
     private fun showExitMessage() {
@@ -507,8 +448,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startDiagnosis() {
-        stopSimulationMode()
-        val c = baseScreen("SCAN", false)
+        val c = baseScreen("SCAN", true)
         c.addView(header("ECU AKILLI TARAMA"))
         val card = neonCard(null, cyan)
         val progress = CircularProgressView(this)
@@ -568,17 +508,19 @@ class MainActivity : ComponentActivity() {
                 updateScan(100, "Tarama tamamlandı")
                 mainHandler.post {
                     faults = found.toMutableList()
+                    hasCompletedScan = true
                     log("ECU taraması tamamlandı • ${faults.size} arıza • ${faults.joinToString().ifBlank { "kod yok" }} • risk $currentRiskScore/100")
                     smartInsights.forEach { log("Akıllı teşhis: $it") }
-                    showFaults()
+                    if (currentScreen == "SCAN") showFaults()
                 }
             } catch (e: Exception) {
                 mainHandler.post {
                     log("Tarama hatası: ${e.message}")
-                    AlertDialog.Builder(this).setTitle("BAĞLANTI / TARAMA BAŞARISIZ")
-                        .setMessage(e.message ?: "Bilinmeyen bağlantı hatası")
-                        .setPositiveButton("TEKRAR DENE") { _, _ -> startDiagnosis() }
-                        .setNegativeButton("ANA SAYFA") { _, _ -> showHome() }.show()
+                    if (currentScreen == "SCAN") {
+                        progressLine?.text = "BAĞLANTI / TARAMA BAŞARISIZ\n${e.message ?: "Viecar adaptörünü kontrol edin."}\n\nAlt menüden diğer sayfalara geçebilirsiniz."
+                        statusLine?.text = "● ECU BAĞLANTISI KURULAMADI"
+                        Toast.makeText(this, "ECU bağlantısı kurulamadı. Diğer sayfaları kullanmaya devam edebilirsiniz.", Toast.LENGTH_LONG).show()
+                    }
                 }
             }
         }
@@ -638,7 +580,7 @@ class MainActivity : ComponentActivity() {
 
     private fun showFaults() {
         val c = baseScreen("FAULTS")
-        c.addView(header(if (simulationMode) "SİMÜLASYON • TÜM ARIZALAR (${faults.size})" else "TÜM ARIZALAR  (${faults.size})"))
+        c.addView(header("TÜM ARIZALAR  (${faults.size})"))
         if (smartInsights.isNotEmpty() || currentRiskScore > 0) {
             val smart = neonCard("EFE MOTO • AKILLI TEŞHİS", if (currentRiskScore >= 60) red else if (currentRiskScore >= 30) yellow else cyan)
             smart.addView(text("RİSK PUANI: $currentRiskScore / 100", 18, if (currentRiskScore >= 60) red else if (currentRiskScore >= 30) yellow else green, true))
@@ -646,14 +588,13 @@ class MainActivity : ComponentActivity() {
             smartInsights.forEach { insight -> smart.addView(text("•  $insight", 13, white).apply { setPadding(0, dp(5), 0, dp(5)) }) }
             c.addView(smart)
         }
-        if (simulationMode) {
-            val demo = neonCard("DEMO VERİSİ", yellow)
-            demo.addView(text("Aşağıdaki arıza örnek amaçlıdır. Gerçek motosikletten okunmamıştır.", 13, white))
-            c.addView(demo)
-        }
         if (faults.isEmpty()) {
-            val ok = neonCard("✓  ARIZA BULUNAMADI", green)
-            ok.addView(text("ECU, standart OBD arıza sorgusuna kayıtlı kod döndürmedi.", 15, white))
+            val ok = if (hasCompletedScan) neonCard("✓  ARIZA BULUNAMADI", green) else neonCard("TARAMA HENÜZ YAPILMADI", yellow)
+            ok.addView(text(
+                if (hasCompletedScan) "ECU, standart OBD arıza sorgusuna kayıtlı kod döndürmedi."
+                else "Bu ekran bağlantı olmadan da açılır. Gerçek arıza listesini görmek için ECU taraması başlatın.",
+                15, white
+            ))
             c.addView(ok)
         } else {
             faults.forEach { code ->
@@ -666,11 +607,13 @@ class MainActivity : ComponentActivity() {
                 row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
                 row.addView(text("›", 34, cyan, true))
                 card.addView(row)
-                card.setOnClickListener { selectedFault = code; showFaultDetail() }
+                card.setOnClickListener { selectedFault = code; showingLibraryLookup = false; showFaultDetail() }
                 c.addView(card)
             }
         }
         addGap(c, 10)
+        c.addView(actionButton("⌕  ARIZA KODU ARA / AÇIKLAMASINI İNCELE", cyan) { promptFaultLookup() })
+        addGap(c, 5)
         c.addView(actionButton("▤  TÜM ARIZALARI SİL", red) {
             confirmClearFaults()
         })
@@ -680,11 +623,37 @@ class MainActivity : ComponentActivity() {
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
 
+    private fun promptFaultLookup() {
+        val input = EditText(this).apply {
+            hint = "Örn. P0335"
+            setSingleLine()
+            setTextColor(white)
+            setHintTextColor(muted)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("ARIZA KODU KÜTÜPHANESİ")
+            .setMessage("Bir arıza kodunun açıklamasını bağlantı olmadan arayabilirsiniz. Bu işlem ECU taraması yapmaz.")
+            .setView(input)
+            .setNegativeButton("VAZGEÇ", null)
+            .setPositiveButton("AÇIKLAMAYI GÖSTER") { _, _ ->
+                val code = input.text.toString().trim().uppercase(Locale.US)
+                if (code.isNotBlank()) {
+                    selectedFault = code
+                    showingLibraryLookup = true
+                    showFaultDetail()
+                }
+            }.show()
+    }
+
     private fun showFaultDetail() {
         val c = baseScreen("DETAIL")
-        c.addView(header("ARIZA TEŞHİS RAPORU"))
-        val card = neonCard(null, red)
-        card.addView(text("⚠  ARIZA BULUNDU", 22, red, true).apply { gravity = Gravity.CENTER })
+        c.addView(header(if (showingLibraryLookup) "ARIZA KODU KÜTÜPHANE BİLGİSİ" else "ARIZA TEŞHİS RAPORU"))
+        val card = neonCard(null, if (showingLibraryLookup) cyan else red)
+        card.addView(text(
+            if (showingLibraryLookup) "KÜTÜPHANE AÇIKLAMASI • ECU'DAN OKUNMADI" else "⚠  ARIZA BULUNDU",
+            17, if (showingLibraryLookup) cyan else red, true
+        ).apply { gravity = Gravity.CENTER })
         addGap(card, 8)
         card.addView(text(baseDtcCode(selectedFault), 31, white, true).apply { gravity = Gravity.CENTER })
         selectedFault.substringAfter(" •", "").takeIf { it.isNotBlank() }?.let {
@@ -715,6 +684,12 @@ class MainActivity : ComponentActivity() {
     private fun faultChecks(code: String): List<String> = DtcDatabase.checks(baseDtcCode(code))
 
     private fun confirmClearFaults() {
+        if (!hasCompletedScan || faults.isEmpty()) {
+            AlertDialog.Builder(this).setTitle("SİLİNECEK ECU ARIZASI YOK")
+                .setMessage("Önce gerçek motosiklet bağlantısıyla ECU taraması yapın. Kütüphane açıklamaları gerçek ECU arıza kaydı değildir.")
+                .setPositiveButton("TAMAM", null).show()
+            return
+        }
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
             .setMessage("Kontak açık, motor kapalı olmalı. Standart OBD Mode 04 komutu uzatılmış yanıt süresiyle en fazla 3 kez denenir. Ardından kayıtlı, bekleyen ve kalıcı arıza hafızaları yeniden okunarak sonuç doğrulanır. Desteklenmeyen üretici komutları gönderilmez. Devam edilsin mi?")
             .setNegativeButton("VAZGEÇ", null)
@@ -722,13 +697,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun clearFaults() {
-        if (simulationMode) {
-            faults.clear()
-            log("Simülasyondaki örnek arıza listesi temizlendi • ECU'ya komut gönderilmedi")
-            Toast.makeText(this, "Simülasyon arızası temizlendi (gerçek ECU'ya komut gönderilmedi).", Toast.LENGTH_LONG).show()
-            showFaults()
-            return
-        }
         if (!busy.compareAndSet(false, true)) return
         io.execute {
             val attempts = mutableListOf<String>()
@@ -854,7 +822,7 @@ class MainActivity : ComponentActivity() {
         val keepCurrentRead = currentScreen == "LIVE" && liveLoop
         if (!keepCurrentRead) {
             liveValues.clear()
-            rpm = 0
+            rpm = -1
         }
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
@@ -908,12 +876,22 @@ class MainActivity : ComponentActivity() {
                 addView(valueView)
             }
             liveMetricCards[def.key] = card
+            val grid = liveSectionGrids[def.section]
+            if (grid != null) {
+                val index = grid.childCount
+                grid.addView(card, GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = -2
+                    columnSpec = GridLayout.spec(index % grid.columnCount.coerceAtLeast(1), 1f)
+                    setMargins(dp(4), dp(4), dp(4), dp(4))
+                })
+                liveSectionHeaders[def.section]?.visibility = View.VISIBLE
+            }
         }
 
         val emptyState = text(
-            if (simulationMode) "SİMÜLASYON VERİLERİ HAZIRLANIYOR…\nGösterilen değerler örnektir."
-            else if (connected) "ECU destekli sensörler bekleniyor…\nYalnızca gerçek ECU yanıtı alınan göstergeler açılır."
-            else "ECU BAĞLI DEĞİL\nBu sayfayı ve diğer menüleri bağlantı olmadan inceleyebilirsiniz. Gerçek değerler için aşağıdan ECU bağlantısını başlatın.",
+            if (liveValues.isNotEmpty()) "ECU destekli sensörler gösteriliyor."
+            else "ECU BAĞLI DEĞİL / HENÜZ VERİ OKUNMADI\nBu ekranı bağlantı olmadan inceleyebilirsiniz. Gerçek sensör değerleri için aşağıdan ECU bağlantısını başlatın.",
             13, muted
         ).apply {
             gravity = Gravity.CENTER
@@ -945,27 +923,22 @@ class MainActivity : ComponentActivity() {
         c.addView(modules)
 
         c.addView(actionButton(
-            if (simulationMode) "↻  SİMÜLASYON VERİLERİNİ YENİLE"
-            else if (connected && liveLoop) "↻  CANLI VERİ AKIŞI ÇALIŞIYOR"
+            if (connected && liveLoop) "↻  CANLI VERİ AKIŞI ÇALIŞIYOR"
             else "⚡  ECU'YA BAĞLAN / CANLI VERİYİ BAŞLAT",
-            if (simulationMode) yellow else blue
+            blue
         ) {
-            if (simulationMode) startSimulationLiveLoop()
-            else if (!liveLoop) {
+            if (!liveLoop) {
                 liveEmptyState?.text = "ECU'YA BAĞLANILIYOR…\nBağlantı kurulurken diğer menülere geçebilirsiniz."
                 startLiveRead()
             } else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor.", Toast.LENGTH_SHORT).show()
         })
         addGap(c, 5)
         c.addView(text(
-            if (simulationMode) "SİMÜLASYON: Değerler örnektir; gerçek ECU'dan gelmez."
-            else "Göstergeler yalnızca ECU'nun desteklediği standart PID yanıtlarından oluşturulur. ABS, fan komutu, enjektör aktif testi ve bobin testi için marka / model / yıl bazlı ECU protokolü gerekir.",
-            11, if (simulationMode) yellow else muted
+            "Göstergeler yalnızca ECU'nun desteklediği standart PID yanıtlarından oluşturulur. Veri gelmezse değerler boş kalır; sahte değer üretilmez. ABS, fan komutu, enjektör aktif testi ve bobin testi için marka / model / yıl bazlı ECU protokolü gerekir.",
+            11, muted
         ))
-        // Offline-first navigation: opening the live-data page never initiates a
-        // socket connection. The user can browse every page without an adapter.
-        // A real ECU read starts only after the explicit button above is pressed.
-        if (simulationMode) startSimulationLiveLoop()
+        // Opening this page never initiates a connection. Only the explicit
+        // "ECU'YA BAĞLAN" action starts a real read; no sample values are generated.
     }
 
     private fun updateLiveDisplay(values: Map<String, Double>) {
@@ -1003,10 +976,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startLiveRead() {
-        if (simulationMode) {
-            startSimulationLiveLoop()
-            return
-        }
         if (liveLoop) return
         liveLoop = true
         if (!busy.compareAndSet(false, true)) {
@@ -1037,42 +1006,6 @@ class MainActivity : ComponentActivity() {
                 busy.set(false)
             }
         }
-    }
-
-    private fun startSimulationLiveLoop() {
-        stopSimulationLoop()
-        liveLoop = true
-        val task = object : Runnable {
-            override fun run() {
-                if (!simulationMode || currentScreen != "LIVE") return
-                simulationTick++
-                val sample = mutableMapOf(
-                    "rpm" to (1600 + ((simulationTick * 317) % 5200)).toDouble(),
-                    "speed" to (simulationTick * 7 % 145).toDouble(),
-                    "tps" to (8 + (simulationTick * 7) % 72).toDouble(),
-                    "coolant" to (82 + (simulationTick % 14)).toDouble(),
-                    "map" to (28 + (simulationTick * 3 % 48)).toDouble(),
-                    "iat" to (22 + (simulationTick % 17)).toDouble(),
-                    "voltage" to (13.7 + ((simulationTick % 7) * 0.05)),
-                    "load" to (18 + (simulationTick * 5 % 72)).toDouble(),
-                    "stft" to (-4 + (simulationTick % 9)).toDouble(),
-                    "ltft" to (-2 + (simulationTick % 6)).toDouble(),
-                    "timing" to (12 + (simulationTick % 18)).toDouble(),
-                    "maf" to (3.2 + (simulationTick % 20) / 3.0),
-                    "o2" to (0.15 + (simulationTick % 7) * 0.1),
-                    "pedal" to (6 + (simulationTick * 4 % 80)).toDouble(),
-                    "lambda" to (0.97 + (simulationTick % 7) * 0.01),
-                    "relativeThrottle" to (12 + (simulationTick * 3 % 55)).toDouble(),
-                    "commandedThrottle" to (10 + (simulationTick * 4 % 70)).toDouble(),
-                    "oilTemp" to (78 + (simulationTick % 19)).toDouble()
-                )
-                updateLiveDisplay(sample)
-                simulationRunnable = this
-                simulationHandler.postDelayed(this, 900)
-            }
-        }
-        simulationRunnable = task
-        task.run()
     }
 
     private fun readSupportedPids(): MutableSet<Int> {
@@ -1176,13 +1109,15 @@ class MainActivity : ComponentActivity() {
         identityCard.addView(text("Mode 09 VIN ve kalibrasyon kimliği sorguları yalnızca ECU destekliyorsa sonuç verir. Desteklenmeyen yanıt hata olarak değil, 'desteklenmiyor / yanıt yok' olarak raporlanır.", 12, white))
         c.addView(identityCard)
         val commCard = neonCard("KOMUT / YANIT DOĞRULAMA", cyan)
-        commCard.addView(text("ELM327 komutlarının gönderilip yanıtlarının alındığını adım adım gösterir. Simülasyon testi örnek yanıt üretir; gerçek ECU'ya hiçbir komut göndermez.", 13, white))
+        commCard.addView(text("ELM327 komutlarının gerçek Viecar adaptörüne gönderilip ECU'dan alınan yanıtları adım adım gösterir. Bağlantı yoksa test başarısız olarak kaydedilir; sahte yanıt üretilmez.", 13, white))
         c.addView(commCard)
-        c.addView(actionButton("◉  SİMÜLASYON KOMUT TESTİ", yellow) { runCommunicationCheck(useSimulation = true) })
+        c.addView(actionButton("⚡  GERÇEK VIECAR / ECU TESTİ", green) { runCommunicationCheck() })
         addGap(c, 5)
-        c.addView(actionButton("⚡  GERÇEK VIECAR / ECU TESTİ", green) { runCommunicationCheck(useSimulation = false) })
+        c.addView(actionButton("⌁  ECU HIZLI KONTROL", blue) { runSystemCheck() })
         addGap(c, 8)
-        c.addView(actionButton("▶  ARIZA KODLARINI OKU", blue) { startDiagnosis() })
+        c.addView(actionButton("▶  GERÇEK ECU ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() })
+        addGap(c, 5)
+        c.addView(actionButton("▤  ARIZA KODLARI / AÇIKLAMALARINI İNCELE", cyan) { showFaults() })
     }
 
     private fun appendCommunicationLine(
@@ -1204,22 +1139,12 @@ class MainActivity : ComponentActivity() {
         mainHandler.post { output.append(line) }
     }
 
-    private fun runCommunicationCheck(useSimulation: Boolean) {
-        if (!useSimulation && simulationMode) {
-            AlertDialog.Builder(this).setTitle("SİMÜLASYON AÇIK")
-                .setMessage("Gerçek ECU testi için simülasyonu durdurup ana sayfadan EVET ile gerçek teşhisi başlatın.")
-                .setPositiveButton("TAMAM", null).show()
-            return
-        }
-
+    private fun runCommunicationCheck() {
         val body = baseScreen("TESTS")
-        body.addView(header(if (useSimulation) "SİMÜLASYON KOMUT / YANIT TESTİ" else "GERÇEK VIECAR / ECU İLETİŞİM TESTİ"))
-        val card = neonCard(if (useSimulation) "ÖRNEK ELM327 HABERLEŞMESİ" else "CANLI ADAPTÖR HABERLEŞMESİ", if (useSimulation) yellow else cyan)
-        val warning = if (useSimulation)
-            "SİMÜLASYON: Aşağıdaki gönderilen/alınan değerler örnektir. Wi‑Fi adaptörüne ve gerçek ECU'ya bağlantı yapılmaz."
-        else
-            "GERÇEK TEST: Adaptöre bağlanılır ve salt-okunur OBD sorguları gönderilir. Arıza silme (04) komutu bu testte gönderilmez."
-        card.addView(text(warning, 12, if (useSimulation) yellow else white))
+        body.addView(header("GERÇEK VIECAR / ECU İLETİŞİM TESTİ"))
+        val card = neonCard("CANLI ADAPTÖR HABERLEŞMESİ", cyan)
+        val warning = "GERÇEK TEST: Adaptöre bağlanılır ve salt-okunur OBD sorguları gönderilir. Arıza silme (04) komutu bu testte gönderilmez. Bağlantı yoksa örnek yanıt oluşturulmaz."
+        card.addView(text(warning, 12, white))
         addGap(card, 8)
         val scroll = ScrollView(this).apply { isFillViewport = false }
         val output = text("Test hazırlanıyor…\n\n", 12, white).apply {
@@ -1230,52 +1155,9 @@ class MainActivity : ComponentActivity() {
         scroll.addView(output)
         card.addView(scroll, LinearLayout.LayoutParams(-1, dp(360)))
         body.addView(card)
-        body.addView(actionButton("↻  TESTİ TEKRARLA", blue) { runCommunicationCheck(useSimulation) })
+        body.addView(actionButton("↻  TESTİ TEKRARLA", blue) { runCommunicationCheck() })
         addGap(body, 6)
         body.addView(actionButton("←  SİSTEM TESTLERİNE DÖN", blue) { showTests() })
-
-        if (useSimulation) {
-            val steps = listOf(
-                Triple("ELM327 başlatma", "ATZ", "ELM327 v1.5"),
-                Triple("Komut yankısını kapatma", "ATE0", "OK"),
-                Triple("Satır sonu kontrolü", "ATL0", "OK"),
-                Triple("Boşluk ayarı", "ATS0", "OK"),
-                Triple("Başlık ayarı", "ATH0", "OK"),
-                Triple("Protokol otomatik seçimi", "ATSP0", "OK"),
-                Triple("ECU desteklenen PID kontrolü", "0100", "4100BE3EA813"),
-                Triple("Motor devri sorgusu", "010C", "410C1AF8  •  1726 RPM"),
-                Triple("Gaz kelebeği sorgusu", "0111", "411140  •  %25,1"),
-                Triple("Motor sıcaklığı sorgusu", "0105", "41055A  •  50 °C"),
-                Triple("Emme basıncı sorgusu", "010B", "410B32  •  50 kPa"),
-                Triple("Akü voltajı sorgusu", "0142", "4142342A  •  13,35 V"),
-                Triple("Arıza kodu okuma", "03", "4303350000  •  P0335"),
-                Triple("Arıza silme komutu (yalnız simülasyon)", "04", "44  •  Örnek olumlu yanıt"),
-                Triple("Silme sonrası yeniden okuma", "03", "430000000000  •  Örnek: kayıtlı kod yok")
-            )
-            var index = 0
-            val task = object : Runnable {
-                override fun run() {
-                    if (currentScreen != "TESTS") return
-                    if (index < steps.size) {
-                        val (label, command, response) = steps[index]
-                        appendCommunicationLine(output, label, command, response, true,
-                            if (command == "04") {
-                                faults.clear()
-                                selectedFault = ""
-                                "UYARI: Bu yanıt yalnızca sanaldır; yalnızca örnek arıza listesi temizlendi. Gerçek ECU'ya komut gönderilmedi."
-                            } else "")
-                        index++
-                        simulationHandler.postDelayed(this, 380)
-                    } else {
-                        appendCommunicationLine(output, "TEST SONUCU", "—", "15 / 15 örnek adım tamamlandı", true,
-                            "Simülasyon başarılı. Bu sonuç gerçek adaptör veya ECU bağlantısını doğrulamaz.")
-                        log("Simülasyon komut/yanıt testi tamamlandı • 15 örnek adım • fiziksel ECU komutu yok")
-                    }
-                }
-            }
-            simulationHandler.post(task)
-            return
-        }
 
         if (!busy.compareAndSet(false, true)) return
         appendCommunicationLine(output, "TEST BAŞLADI", "TCP 192.168.0.10:35000", "Bağlantı deneniyor…", null)
@@ -1365,13 +1247,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun runSystemCheck() {
-        if (simulationMode) {
-            log("Simülasyon sistem kontrolü çalıştırıldı • Gerçek ECU komutu gönderilmedi")
-            AlertDialog.Builder(this).setTitle("SİMÜLASYON TESTİ")
-                .setMessage("Arayüz testi başarılı. Bu modda adaptöre bağlanılmaz ve gerçek ECU komutu gönderilmez.")
-                .setPositiveButton("TAMAM", null).show()
-            return
-        }
         if (!busy.compareAndSet(false, true)) return
         Toast.makeText(this, "ECU kontrolü başlatıldı…", Toast.LENGTH_SHORT).show()
         io.execute {
@@ -1464,7 +1339,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
-        if (simulationMode) throw IllegalStateException("Simülasyon açık. Gerçek ECU komutu için ana sayfadan EVET ile gerçek teşhisi başlatın.")
         if (connected && socket?.isConnected == true && socket?.isClosed == false) return
         closeAdapter()
         supportedPidSet.clear()
