@@ -3,6 +3,7 @@ package com.efemoto.motodiagpro
 import android.app.AlertDialog
 import android.graphics.*
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
@@ -54,6 +55,11 @@ class MainActivity : ComponentActivity() {
     private var faults: MutableList<String> = mutableListOf()
     private var selectedFault = ""
     private val logs = mutableListOf<String>()
+    private var smartInsights: List<String> = emptyList()
+    private var currentRiskScore: Int = 0
+    private var serviceCustomer: String = ""
+    private var servicePlate: String = ""
+    private var serviceComplaint: String = ""
     private var rpm = -1
     private var tps = -1.0
     private var coolant = -999
@@ -94,6 +100,7 @@ class MainActivity : ComponentActivity() {
         window.statusBarColor = bg
         window.navigationBarColor = bg
         applyImmersiveMode()
+        loadPersistentState()
         showHome()
     }
 
@@ -160,10 +167,35 @@ class MainActivity : ComponentActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
+    private fun persistentPrefs() = getSharedPreferences("efe_moto_records", Context.MODE_PRIVATE)
+
+    private fun loadPersistentState() {
+        val prefs = persistentPrefs()
+        logs.clear()
+        prefs.getString("logs", "").orEmpty().lineSequence()
+            .filter { it.isNotBlank() }.take(250).forEach { logs.add(it) }
+        serviceCustomer = prefs.getString("service_customer", "").orEmpty()
+        servicePlate = prefs.getString("service_vehicle", "").orEmpty()
+        serviceComplaint = prefs.getString("service_complaint", "").orEmpty()
+    }
+
+    private fun persistLogs() {
+        persistentPrefs().edit().putString("logs", logs.take(250).joinToString("\n")).apply()
+    }
+
+    private fun persistServiceFields() {
+        persistentPrefs().edit()
+            .putString("service_customer", serviceCustomer)
+            .putString("service_vehicle", servicePlate)
+            .putString("service_complaint", serviceComplaint)
+            .apply()
+    }
+
     private fun log(message: String) {
-        val time = SimpleDateFormat("HH:mm:ss", Locale("tr", "TR")).format(Date())
+        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("tr", "TR")).format(Date())
         logs.add(0, "$time  $message")
         if (logs.size > 250) logs.removeAt(logs.lastIndex)
+        persistLogs()
     }
 
     private fun baseScreen(title: String, showNav: Boolean = true): LinearLayout {
@@ -503,6 +535,9 @@ class MainActivity : ComponentActivity() {
                 if (!supportHex.contains("4100")) {
                     throw IllegalStateException("Adaptöre ulaşıldı ancak ECU'dan geçerli 41 00 yanıtı alınamadı. Yanıt: ${support.ifBlank { "(boş)" }}")
                 }
+                updateScan(54, "Desteklenen sensörlerden teşhis verisi alınıyor…")
+                val diagnosticSnapshot = try { readLivePids() } catch (_: Exception) { emptyMap() }
+                currentRiskScore = calculateRiskScore(diagnosticSnapshot)
                 updateScan(68, "Kayıtlı, bekleyen ve kalıcı arızalar okunuyor…")
                 val found = mutableListOf<String>()
                 val dtcModes = listOf(
@@ -527,10 +562,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 if (!validDtcResponse) throw IllegalStateException("ECU'dan Mode 03/07/0A için geçerli arıza yanıtı alınamadı.")
+                smartInsights = buildSmartDiagnosis(found, diagnosticSnapshot)
+                val anomalies = buildAnomalyWarnings(diagnosticSnapshot)
+                smartInsights = smartInsights + anomalies
                 updateScan(100, "Tarama tamamlandı")
                 mainHandler.post {
                     faults = found.toMutableList()
-                    log("ECU taraması tamamlandı • ${faults.size} arıza")
+                    log("ECU taraması tamamlandı • ${faults.size} arıza • ${faults.joinToString().ifBlank { "kod yok" }} • risk $currentRiskScore/100")
+                    smartInsights.forEach { log("Akıllı teşhis: $it") }
                     showFaults()
                 }
             } catch (e: Exception) {
@@ -557,9 +596,56 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun calculateRiskScore(data: Map<String, Double>): Int {
+        var score = 0
+        data["coolant"]?.let { if (it > 95.0) score += 30 }
+        data["voltage"]?.let { if (it < 12.0) score += 20 }
+        data["stft"]?.let { if (kotlin.math.abs(it) > 15.0) score += 25 }
+        val throttle = data["tps"]
+        val engineRpm = data["rpm"]
+        if (throttle != null && engineRpm != null && throttle > 10.0 && engineRpm < 1500.0) score += 25
+        return score.coerceIn(0, 100)
+    }
+
+    private fun buildAnomalyWarnings(data: Map<String, Double>): List<String> {
+        val warnings = mutableListOf<String>()
+        data["coolant"]?.let { if (it > 105.0) warnings.add("KRİTİK HARARET: ${it.toInt()} °C. Motoru zorlamayın; soğutma sistemini kontrol ettirin.") }
+        data["voltage"]?.let { if (it in 0.1..11.79) warnings.add("AKÜ / ŞARJ UYARISI: ${"%.2f".format(Locale.US, it)} V ölçüldü.") }
+        data["stft"]?.let { if (it > 25.0) warnings.add("YAKIT DÜZELTMESİ YÜKSEK: STFT %${"%.1f".format(Locale.US, it)}. Hava-yakıt sistemi kontrol edilmeli.") }
+        return warnings
+    }
+
+    private fun buildSmartDiagnosis(codes: List<String>, data: Map<String, Double>): List<String> {
+        val plainCodes = codes.map { baseDtcCode(it) }
+        val out = mutableListOf<String>()
+        if (plainCodes.any { it == "P0171" }) {
+            val stft = data["stft"]
+            val mapValue = data["map"]
+            when {
+                stft != null && mapValue != null && stft > 15.0 && mapValue < 40.0 -> out.add("P0171: Vakum / emme hattı kaçağı olasılığı. Hortumlar ve emme bağlantıları kontrol edilmeli.")
+                stft != null && stft < -15.0 -> out.add("P0171: Yakıt basıncı veya karışım ölçümü sorunu olasılığı. Yakıt sistemi kontrol edilmeli.")
+                else -> out.add("P0171: Karışım fakir. Hava filtresi, emme hattı ve egzoz kaçağı kontrol edilmeli.")
+            }
+        }
+        if (plainCodes.any { it in setOf("P0300", "P0301", "P0302") }) out.add("Ateşleme teklemesi: Buji, bobin, enjektör ve yakıt beslemesi kontrol edilmeli.")
+        if (plainCodes.contains("P0511")) {
+            val tps = data["tps"]
+            out.add(if (tps != null && tps > 5.0) "P0511: Rölanti hatasıyla birlikte TPS %${"%.1f".format(Locale.US, tps)} açık görünüyor; gaz kelebeği ve adaptasyon kontrol edilmeli." else "P0511: Rölanti hava kontrol sistemi / gaz kelebeği kirlenme veya takılma açısından kontrol edilmeli.")
+        }
+        if (plainCodes.contains("P0335")) out.add("P0335: Krank konum sensörü ve kablo / soket bağlantıları kontrol edilmeli. Kodun nedeni doğrulanmadan silinmesi arızayı çözmez.")
+        return out
+    }
+
     private fun showFaults() {
         val c = baseScreen("FAULTS")
         c.addView(header(if (simulationMode) "SİMÜLASYON • TÜM ARIZALAR (${faults.size})" else "TÜM ARIZALAR  (${faults.size})"))
+        if (smartInsights.isNotEmpty() || currentRiskScore > 0) {
+            val smart = neonCard("EFE MOTO • AKILLI TEŞHİS", if (currentRiskScore >= 60) red else if (currentRiskScore >= 30) yellow else cyan)
+            smart.addView(text("RİSK PUANI: $currentRiskScore / 100", 18, if (currentRiskScore >= 60) red else if (currentRiskScore >= 30) yellow else green, true))
+            smart.addView(text("Bu puan yalnızca ECU'dan gerçekten okunabilen sensör değerleriyle hesaplanır; desteklenmeyen veriler tahmin edilmez.", 11, muted))
+            smartInsights.forEach { insight -> smart.addView(text("•  $insight", 13, white).apply { setPadding(0, dp(5), 0, dp(5)) }) }
+            c.addView(smart)
+        }
         if (simulationMode) {
             val demo = neonCard("DEMO VERİSİ", yellow)
             demo.addView(text("Aşağıdaki arıza örnek amaçlıdır. Gerçek motosikletten okunmamıştır.", 13, white))
@@ -588,6 +674,8 @@ class MainActivity : ComponentActivity() {
         c.addView(actionButton("▤  TÜM ARIZALARI SİL", red) {
             confirmClearFaults()
         })
+        addGap(c, 5)
+        c.addView(actionButton("⇧  ARIZA RAPORUNU KAYDET / PAYLAŞ", cyan) { exportDiagnosticReport() })
         addGap(c, 5)
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
@@ -628,7 +716,7 @@ class MainActivity : ComponentActivity() {
 
     private fun confirmClearFaults() {
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
-            .setMessage("Kontak açık, motor kapalı olmalı. Önce standart silme komutu uzatılmış yanıt süresiyle en fazla 3 kez denenir. Yanıt alınamazsa orijinal Python testindeki KWP2000 14 komutu alternatif olarak denenir. Sonra arıza hafızası tekrar okunarak doğrulanır. Devam edilsin mi?")
+            .setMessage("Kontak açık, motor kapalı olmalı. Standart OBD Mode 04 komutu uzatılmış yanıt süresiyle en fazla 3 kez denenir. Ardından kayıtlı, bekleyen ve kalıcı arıza hafızaları yeniden okunarak sonuç doğrulanır. Desteklenmeyen üretici komutları gönderilmez. Devam edilsin mi?")
             .setNegativeButton("VAZGEÇ", null)
             .setPositiveButton("SİL VE DOĞRULA") { _, _ -> clearFaults() }.show()
     }
@@ -646,29 +734,15 @@ class MainActivity : ComponentActivity() {
             val attempts = mutableListOf<String>()
             try {
                 ensureConnected()
-                var standardAccepted = false
-                // Tested Python flow: repeat the standard clear request with a pause for slow ECUs.
+                // Repeat only the standardized OBD Mode 04 clear request; never guess a manufacturer-specific command.
                 for (i in 1..3) {
                     mainHandler.post { statusLine?.text = "● STANDART ARIZA SİLME $i/3 • YANIT BEKLENİYOR" }
                     val response = elm("04", 8000)
                     val compact = response.filter { it in "0123456789ABCDEF" }
                     val accepted = compact.contains("44")
                     attempts.add("Standart silme $i/3 • 04 → ${response.ifBlank { "YANIT YOK" }}")
-                    if (accepted) {
-                        standardAccepted = true
-                        break
-                    }
+                    if (accepted) break
                     if (i < 3) Thread.sleep(2000)
-                }
-
-                var kwpAccepted = false
-                if (!standardAccepted) {
-                    // The user's confirmed Python workflow used KWP2000 service 14 as a fallback.
-                    mainHandler.post { statusLine?.text = "● KWP2000 ALTERNATİF SİLME • YANIT BEKLENİYOR" }
-                    val response = elm("14", 8000)
-                    val compact = response.filter { it in "0123456789ABCDEF" }
-                    kwpAccepted = compact.contains("54")
-                    attempts.add("KWP2000 alternatif • 14 → ${response.ifBlank { "YANIT YOK" }}")
                 }
 
                 mainHandler.post { statusLine?.text = "● SİLME SONRASI DOĞRULAMA OKUMALARI" }
@@ -745,26 +819,20 @@ class MainActivity : ComponentActivity() {
     private fun liveMetricDefinitions(): List<LiveMetricDef> = listOf(
         LiveMetricDef("speed", "ARAÇ HIZI", "km/h", yellow, "MOTOR / SÜRÜŞ"),
         LiveMetricDef("tps", "GAZ KELEBEĞİ (TPS)", "%", green, "MOTOR / SÜRÜŞ"),
-        LiveMetricDef("coolant", "SOĞUTMA SUYU SICAKLIĞI", "°C", red, "MOTOR / SÜRÜŞ"),
+        LiveMetricDef("coolant", "MOTOR SOĞUTMA SUYU (ECT)", "°C", red, "MOTOR / SÜRÜŞ"),
         LiveMetricDef("map", "EMME MANİFOLD BASINCI", "kPa", cyan, "MOTOR / SÜRÜŞ"),
         LiveMetricDef("load", "MOTOR YÜKÜ", "%", blue, "MOTOR / SÜRÜŞ"),
         LiveMetricDef("voltage", "ECU / AKÜ VOLTAJI", "V", green, "MOTOR / SÜRÜŞ"),
 
-        LiveMetricDef("fuelSystem", "YAKIT SİSTEMİ DURUMU", "", green, "ENJEKSİYON / YAKIT"),
         LiveMetricDef("stft", "KISA DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor(), "ENJEKSİYON / YAKIT"),
         LiveMetricDef("ltft", "UZUN DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor(), "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("fuelPressure", "YAKIT BASINCI", "kPa", red, "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("fuelRailPressure", "YAKIT RAYI BASINCI", "kPa", red, "ENJEKSİYON / YAKIT"),
         LiveMetricDef("lambda", "HEDEFLENEN LAMBDA", "λ", cyan, "ENJEKSİYON / YAKIT"),
         LiveMetricDef("maf", "HAVA AKIŞI (MAF)", "g/s", cyan, "ENJEKSİYON / YAKIT"),
         LiveMetricDef("o2", "OKSİJEN SENSÖRÜ", "V", green, "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("fuelRate", "YAKIT TÜKETİM HIZI", "L/h", green, "ENJEKSİYON / YAKIT"),
 
         LiveMetricDef("timing", "ATEŞLEME AVANSI", "°", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
         LiveMetricDef("iat", "EMME HAVA SICAKLIĞI", "°C", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
         LiveMetricDef("oilTemp", "MOTOR YAĞ SICAKLIĞI", "°C", red, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("ambient", "DIŞ HAVA SICAKLIĞI", "°C", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("baro", "ATMOSFER BASINCI", "kPa", cyan, "ATEŞLEME / DİĞER SENSÖRLER"),
         LiveMetricDef("pedal", "GAZ PEDALI KONUMU", "%", blue, "ATEŞLEME / DİĞER SENSÖRLER"),
         LiveMetricDef("relativeThrottle", "GÖRECELİ GAZ KELEBEĞİ", "%", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
         LiveMetricDef("commandedThrottle", "ECU'NUN İSTEDİĞİ GAZ KELEBEĞİ", "%", blue, "ATEŞLEME / DİĞER SENSÖRLER")
@@ -774,19 +842,8 @@ class MainActivity : ComponentActivity() {
 
     private fun formatLiveValue(key: String, value: Double?): String {
         if (value == null || !value.isFinite()) return "—"
-        if (key == "fuelSystem") {
-            val flags = value.toInt()
-            return when {
-                flags and 0x10 != 0 -> "KAPALI DÖNGÜ • HATA"
-                flags and 0x08 != 0 -> "AÇIK DÖNGÜ • SİSTEM HATASI"
-                flags and 0x04 != 0 -> "AÇIK DÖNGÜ • YÜK / YAVAŞLAMA"
-                flags and 0x02 != 0 -> "KAPALI DÖNGÜ"
-                flags and 0x01 != 0 -> "AÇIK DÖNGÜ • ISINMA"
-                else -> "DURUM BİLİNMİYOR"
-            }
-        }
         return when (key) {
-            "speed", "coolant", "map", "fuelPressure", "fuelRailPressure", "ambient", "baro", "oilTemp" -> value.toLong().toString()
+            "speed", "coolant", "map", "oilTemp" -> value.toLong().toString()
             "voltage" -> "%.2f".format(Locale.US, value)
             "lambda" -> "%.3f".format(Locale.US, value)
             else -> "%.1f".format(Locale.US, value)
@@ -863,10 +920,13 @@ class MainActivity : ComponentActivity() {
 
         val modules = neonCard("EK MODÜL GÖSTERGELERİ", blue)
         val moduleInfo = listOf(
-            "ABS" to "Genel motor OBD bağlantısı ABS beynine erişmez. Marka / model protokolü gerekir.",
-            "ENJEKTÖR" to "Yakıt sistemi ve düzeltmeler okunabilir; enjektör aktif testi üretici komutu gerektirir.",
-            "RADYATÖR FANI" to "Motor sıcaklığı izlenir. Fanı açma / kapama testi standart PID değildir.",
-            "ATEŞLEME" to "Ateşleme avansı okunabilir. Bobin / kıvılcım aktüatör testi modele özel erişim ister."
+            "ENJEKTÖR" to "Viecar ile ECU destekliyorsa yakıt düzeltmesi / O2 verisi okunur. Enjektör tetikleme testi CAN / üretici protokolü aşamasında açılacak.",
+            "YAKIT POMPASI" to "Pompa motorunu çalıştırma ve basınç testi aktif ECU komutudur. Şimdilik Viecar üzerinden tetiklenmez; uygun CAN / servis protokolüyle eklenecek.",
+            "RADYATÖR FANI" to "Hararet müşürü / soğutma suyu sıcaklığı (ECT) okunur. Fan rölesi aktif testi üretici protokolü gerektirir.",
+            "ATEŞLEME BOBİNİ" to "Ateşleme avansı ECU destekliyorsa okunur. Bobin kesme / kıvılcım testi çift yönlü ECU erişimi ister.",
+            "TPS / GAZ KELEBEĞİ" to "TPS konumu gerçek ECU verisi olarak okunur. Sıfırlama / adaptasyon ayrı üretici servis işlemi olarak eklenecek.",
+            "HARARET MÜŞÜRÜ" to "Soğutma suyu sıcaklığı ECT PID yanıtı üzerinden izlenir; müşürün elektriksel testi için şema ve üretici ölçüm değerleri gerekir.",
+            "ABS" to "ABS beynine erişim, ayrı ECU adresleme ve uygun motosiklet kablosu / protokolü gerektirir."
         )
         moduleInfo.forEach { (name, detail) ->
             val row = LinearLayout(this).apply {
@@ -979,20 +1039,14 @@ class MainActivity : ComponentActivity() {
                     "load" to (18 + (simulationTick * 5 % 72)).toDouble(),
                     "stft" to (-4 + (simulationTick % 9)).toDouble(),
                     "ltft" to (-2 + (simulationTick % 6)).toDouble(),
-                    "fuelPressure" to (280 + (simulationTick % 35)).toDouble(),
                     "timing" to (12 + (simulationTick % 18)).toDouble(),
                     "maf" to (3.2 + (simulationTick % 20) / 3.0),
                     "o2" to (0.15 + (simulationTick % 7) * 0.1),
                     "pedal" to (6 + (simulationTick * 4 % 80)).toDouble(),
-                    "fuelSystem" to 2.0,
-                    "fuelRailPressure" to (350 + simulationTick % 25).toDouble(),
                     "lambda" to (0.97 + (simulationTick % 7) * 0.01),
-                    "ambient" to (24 + (simulationTick % 8)).toDouble(),
-                    "baro" to (98 + (simulationTick % 5)).toDouble(),
                     "relativeThrottle" to (12 + (simulationTick * 3 % 55)).toDouble(),
                     "commandedThrottle" to (10 + (simulationTick * 4 % 70)).toDouble(),
-                    "oilTemp" to (78 + (simulationTick % 19)).toDouble(),
-                    "fuelRate" to (1.2 + (simulationTick % 12) * 0.13)
+                    "oilTemp" to (78 + (simulationTick % 19)).toDouble()
                 )
                 updateLiveDisplay(sample)
                 simulationRunnable = this
@@ -1023,40 +1077,43 @@ class MainActivity : ComponentActivity() {
 
     private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
         val out = mutableMapOf<String, Double>()
-        if (supportedPidSet.isEmpty()) supportedPidSet = readSupportedPids()
-        // Conservative fallback only; never sweep trip/odometer/service counters.
-        val fallback = setOf(0x03, 0x04, 0x05, 0x06, 0x07, 0x0A, 0x0B, 0x0C, 0x0D,
-            0x0E, 0x0F, 0x10, 0x11, 0x14, 0x23, 0x33, 0x42, 0x44, 0x45, 0x46, 0x49, 0x4C, 0x5C, 0x5E)
-        val available = if (supportedPidSet.isNotEmpty()) supportedPidSet else fallback
+        if (supportedPidSet.isEmpty()) {
+            supportedPidSet = try { readSupportedPids() } catch (_: Exception) { mutableSetOf() }
+        }
+        // Core PIDs are actively probed even when the motorcycle ECU's 0100 bitmap
+        // is incomplete. Only a real 41xx response creates a displayed value.
+        val core = listOf(0x0C, 0x11, 0x05, 0x0B, 0x42)
+        val optional = listOf(0x04, 0x06, 0x07, 0x0D, 0x0E, 0x0F, 0x10, 0x14,
+            0x45, 0x49, 0x4C, 0x5C)
+        val candidates = (core + optional.filter { it in supportedPidSet }).distinct()
         fun bytes(pid: Int): List<Int>? {
             if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
-            if (pid !in available) return null
-            return pidBytes("%02X".format(Locale.US, pid))
+            return try { pidBytes("%02X".format(Locale.US, pid), 1400) } catch (_: Exception) { null }
         }
-        bytes(0x03)?.firstOrNull()?.let { out["fuelSystem"] = it.toDouble() }
         bytes(0x0C)?.takeIf { it.size >= 2 }?.let { out["rpm"] = (it[0] * 256 + it[1]) / 4.0 }
-        bytes(0x0D)?.firstOrNull()?.let { out["speed"] = it.toDouble() }
         bytes(0x11)?.firstOrNull()?.let { out["tps"] = it * 100.0 / 255.0 }
         bytes(0x05)?.firstOrNull()?.let { out["coolant"] = (it - 40).toDouble() }
         bytes(0x0B)?.firstOrNull()?.let { out["map"] = it.toDouble() }
-        bytes(0x0F)?.firstOrNull()?.let { out["iat"] = (it - 40).toDouble() }
         bytes(0x42)?.takeIf { it.size >= 2 }?.let { out["voltage"] = (it[0] * 256 + it[1]) / 1000.0 }
-        bytes(0x04)?.firstOrNull()?.let { out["load"] = it * 100.0 / 255.0 }
-        bytes(0x06)?.firstOrNull()?.let { out["stft"] = (it - 128) * 100.0 / 128.0 }
-        bytes(0x07)?.firstOrNull()?.let { out["ltft"] = (it - 128) * 100.0 / 128.0 }
-        bytes(0x0A)?.firstOrNull()?.let { out["fuelPressure"] = it * 3.0 }
-        bytes(0x23)?.takeIf { it.size >= 2 }?.let { out["fuelRailPressure"] = (it[0] * 256 + it[1]) * 10.0 }
-        bytes(0x0E)?.firstOrNull()?.let { out["timing"] = it / 2.0 - 64.0 }
-        bytes(0x10)?.takeIf { it.size >= 2 }?.let { out["maf"] = (it[0] * 256 + it[1]) / 100.0 }
-        bytes(0x14)?.firstOrNull()?.let { out["o2"] = it * 0.005 }
-        bytes(0x44)?.takeIf { it.size >= 2 }?.let { out["lambda"] = (it[0] * 256 + it[1]) / 32768.0 }
-        bytes(0x49)?.firstOrNull()?.let { out["pedal"] = it * 100.0 / 255.0 }
-        bytes(0x46)?.firstOrNull()?.let { out["ambient"] = (it - 40).toDouble() }
-        bytes(0x33)?.firstOrNull()?.let { out["baro"] = it.toDouble() }
-        bytes(0x45)?.firstOrNull()?.let { out["relativeThrottle"] = it * 100.0 / 255.0 }
-        bytes(0x4C)?.firstOrNull()?.let { out["commandedThrottle"] = it * 100.0 / 255.0 }
-        bytes(0x5C)?.firstOrNull()?.let { out["oilTemp"] = (it - 40).toDouble() }
-        bytes(0x5E)?.takeIf { it.size >= 2 }?.let { out["fuelRate"] = (it[0] * 256 + it[1]) * 0.05 }
+        if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return out
+        // Optional values are queried only when the ECU declared support in 0100+.
+        for (pid in candidates.filter { it !in core }) {
+            val data = bytes(pid) ?: continue
+            when (pid) {
+                0x04 -> data.firstOrNull()?.let { out["load"] = it * 100.0 / 255.0 }
+                0x06 -> data.firstOrNull()?.let { out["stft"] = (it - 128) * 100.0 / 128.0 }
+                0x07 -> data.firstOrNull()?.let { out["ltft"] = (it - 128) * 100.0 / 128.0 }
+                0x0D -> data.firstOrNull()?.let { out["speed"] = it.toDouble() }
+                0x0E -> data.firstOrNull()?.let { out["timing"] = it / 2.0 - 64.0 }
+                0x0F -> data.firstOrNull()?.let { out["iat"] = (it - 40).toDouble() }
+                0x10 -> if (data.size >= 2) out["maf"] = (data[0] * 256 + data[1]) / 100.0
+                0x14 -> data.firstOrNull()?.let { out["o2"] = it * 0.005 }
+                0x45 -> data.firstOrNull()?.let { out["relativeThrottle"] = it * 100.0 / 255.0 }
+                0x49 -> data.firstOrNull()?.let { out["pedal"] = it * 100.0 / 255.0 }
+                0x4C -> data.firstOrNull()?.let { out["commandedThrottle"] = it * 100.0 / 255.0 }
+                0x5C -> data.firstOrNull()?.let { out["oilTemp"] = (it - 40).toDouble() }
+            }
+        }
         return out
     }
 
@@ -1070,7 +1127,7 @@ class MainActivity : ComponentActivity() {
             "Viecar adaptör bağlantısı" to "Wi‑Fi soket bağlantısı ve ELM yanıtı",
             "ECU iletişim testi" to "0100 desteklenen PID sorgusu",
             "Sensör yanıt testi" to "RPM / TPS / sıcaklık / MAP / MAF / O2 / voltaj (ECU destekledikçe)",
-            "Enjeksiyon veri kontrolü" to "Yakıt sistemi durumu / yakıt düzeltmeleri / yakıt basıncı / lambda (PID desteği varsa)",
+            "Enjeksiyon veri kontrolü" to "Kısa / uzun dönem yakıt düzeltmesi, O2 / lambda (ECU destekliyorsa)",
             "Ateşleme veri kontrolü" to "Ateşleme avansı PID kontrolü (ECU destekledikçe)",
             "Arıza hafızası testi" to "Kayıtlı (03), bekleyen (07), kalıcı (0A) DTC sorguları",
             "Araç bilgisi" to "VIN / kalibrasyon / ECU kimliği (destekleniyorsa)"
@@ -1097,6 +1154,9 @@ class MainActivity : ComponentActivity() {
             future.addView(row)
         }
         c.addView(future)
+        val identityCard = neonCard("ECU KİMLİĞİ / SERVİS BİLGİSİ", blue)
+        identityCard.addView(text("Mode 09 VIN ve kalibrasyon kimliği sorguları yalnızca ECU destekliyorsa sonuç verir. Desteklenmeyen yanıt hata olarak değil, 'desteklenmiyor / yanıt yok' olarak raporlanır.", 12, white))
+        c.addView(identityCard)
         val commCard = neonCard("KOMUT / YANIT DOĞRULAMA", cyan)
         commCard.addView(text("ELM327 komutlarının gönderilip yanıtlarının alındığını adım adım gösterir. Simülasyon testi örnek yanıt üretir; gerçek ECU'ya hiçbir komut göndermez.", 13, white))
         c.addView(commCard)
@@ -1222,7 +1282,6 @@ class MainActivity : ComponentActivity() {
                     record("Adaptör / ELM yanıtı", command, response, ok)
                 }
                 val pids = listOf(
-                    Triple("Yakıt sistemi durumu", "0103", "4103"),
                     Triple("Motor devri", "010C", "410C"),
                     Triple("Hız", "010D", "410D"),
                     Triple("Gaz kelebeği", "0111", "4111"),
@@ -1233,17 +1292,12 @@ class MainActivity : ComponentActivity() {
                     Triple("Motor yükü", "0104", "4104"),
                     Triple("Kısa dönem yakıt düzeltmesi", "0106", "4106"),
                     Triple("Uzun dönem yakıt düzeltmesi", "0107", "4107"),
-                    Triple("Yakıt basıncı", "010A", "410A"),
-                    Triple("Yakıt rayı basıncı", "0123", "4123"),
                     Triple("Hedeflenen lambda", "0144", "4144"),
                     Triple("Ateşleme avansı", "010E", "410E"),
                     Triple("Hava akış sensörü", "0110", "4110"),
                     Triple("Oksijen sensörü", "0114", "4114"),
                     Triple("Gaz pedalı", "0149", "4149"),
-                    Triple("Dış hava sıcaklığı", "0146", "4146"),
-                    Triple("Atmosfer basıncı", "0133", "4133"),
                     Triple("Motor yağı sıcaklığı", "015C", "415C"),
-                    Triple("Yakıt tüketim hızı", "015E", "415E"),
                 )
                 for ((label, command, marker) in pids) {
                     try {
@@ -1264,6 +1318,18 @@ class MainActivity : ComponentActivity() {
                     record("Arıza hafızası okuma", "03", dtcResponse, true, decoded)
                 } else {
                     record("Arıza hafızası okuma", "03", dtcResponse, false, "ECU'dan geçerli 43 yanıtı alınamadı.")
+                }
+                // Read-only ECU identification: never sends a write / actuator command.
+                listOf(Triple("VIN kimlik sorgusu", "0902", "4902"), Triple("Kalibrasyon kimliği", "0904", "4904")).forEach { (label, command, marker) ->
+                    try {
+                        val response = elm(command, 4500)
+                        val compact = response.filter { it in "0123456789ABCDEF" }
+                        val supported = compact.contains(marker)
+                        record(label, command, response.ifBlank { "YANIT YOK" }, if (supported) true else null,
+                            if (supported) "ECU kimlik yanıtı alındı." else "Bu ECU / protokol bu kimlik sorgusunu desteklemiyor olabilir.")
+                    } catch (e: Exception) {
+                        record(label, command, "YANIT YOK: ${e.message}", null, "İsteğe bağlı kimlik sorgusu; ana iletişim testini etkilemez.")
+                    }
                 }
                 record("Arıza silme güvenlik kontrolü", "04", "GÖNDERİLMEDİ", null,
                     "Gerçek silme komutu bu tanılama testinde çalıştırılmaz. Arıza ekranındaki onaylı Sil ve Doğrula işlemi kullanılır.")
@@ -1314,13 +1380,55 @@ class MainActivity : ComponentActivity() {
     private fun showLogs() {
         val c = baseScreen("LOGS")
         c.addView(header("HATA DÖKÜMÜ / İŞLEM KAYITLARI"))
+        val service = neonCard("SERVİS KAYDI", cyan)
+        val customerInput = EditText(this).apply { hint = "Müşteri adı (isteğe bağlı)"; setSingleLine(); setText(serviceCustomer); setTextColor(white); setHintTextColor(muted); setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(panel2, blue, 10) }
+        val plateInput = EditText(this).apply { hint = "Plaka / motor bilgisi"; setSingleLine(); setText(servicePlate); setTextColor(white); setHintTextColor(muted); setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(panel2, blue, 10) }
+        val complaintInput = EditText(this).apply { hint = "Müşteri şikâyeti / servis notu"; setText(serviceComplaint); setTextColor(white); setHintTextColor(muted); minLines = 2; gravity = Gravity.TOP; setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(panel2, blue, 10) }
+        service.addView(customerInput); addGap(service, 5); service.addView(plateInput); addGap(service, 5); service.addView(complaintInput)
+        service.addView(actionButton("SERVİS BİLGİSİNİ KAYDET", green) {
+            serviceCustomer = customerInput.text.toString().trim()
+            servicePlate = plateInput.text.toString().trim()
+            serviceComplaint = complaintInput.text.toString().trim()
+            persistServiceFields()
+            log("SERVİS KAYDI • Müşteri: ${serviceCustomer.ifBlank { "—" }} • Araç: ${servicePlate.ifBlank { "—" }} • Şikâyet: ${serviceComplaint.ifBlank { "—" }}")
+            Toast.makeText(this, "Servis bilgisi işlem kayıtlarına eklendi.", Toast.LENGTH_SHORT).show()
+            showLogs()
+        })
+        c.addView(service)
         val card = neonCard("SON İŞLEMLER VE HATA KAYITLARI", cyan)
         if (logs.isEmpty()) card.addView(text("Henüz işlem kaydı yok.", 14, muted))
         else logs.forEach { line -> card.addView(text("•  $line", 12, white).apply { setPadding(0, dp(5), 0, dp(5)) }) }
         c.addView(card)
         c.addView(actionButton("↻  KAYITLARI YENİLE", blue) { showLogs() })
+        addGap(c, 5)
+        c.addView(actionButton("⇧  RAPORU DIŞA AKTAR / PAYLAŞ", cyan) { exportDiagnosticReport() })
         addGap(c, 7)
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
+    }
+
+    private fun exportDiagnosticReport() {
+        val report = buildString {
+            appendLine("EFE MOTO - TEŞHİS / SERVİS RAPORU")
+            appendLine("Tarih: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("tr", "TR")).format(Date())}")
+            appendLine("Müşteri: ${serviceCustomer.ifBlank { "—" }}")
+            appendLine("Araç / Plaka: ${servicePlate.ifBlank { "—" }}")
+            appendLine("Şikâyet / Not: ${serviceComplaint.ifBlank { "—" }}")
+            appendLine("Arıza kodları: ${faults.joinToString().ifBlank { "Kayıtlı arıza yok / henüz taranmadı" }}")
+            appendLine("Akıllı risk puanı: $currentRiskScore / 100")
+            appendLine("CANLI ECU VERİLERİ")
+            if (liveValues.isEmpty()) appendLine("Canlı veri snapshot'ı alınmadı.")
+            else liveValues.forEach { (key, value) -> appendLine("$key = ${"%.2f".format(Locale.US, value)}") }
+            appendLine()
+            appendLine("İŞLEM GEÇMİŞİ")
+            if (logs.isEmpty()) appendLine("Henüz kayıt yok.") else logs.forEach { appendLine(it) }
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "EFE MOTO Teşhis Raporu")
+            putExtra(Intent.EXTRA_TEXT, report)
+        }
+        try { startActivity(Intent.createChooser(send, "EFE MOTO raporunu kaydet / paylaş")) }
+        catch (e: Exception) { Toast.makeText(this, "Rapor dışa aktarılamadı: ${e.message}", Toast.LENGTH_LONG).show() }
     }
 
     // ---------------- Viecar / ELM327 Wi-Fi ----------------
@@ -1407,8 +1515,8 @@ class MainActivity : ComponentActivity() {
         return response
     }
 
-    private fun pidBytes(pid: String): List<Int>? {
-        val response = elm("01$pid")
+    private fun pidBytes(pid: String, timeoutMs: Int = 3000): List<Int>? {
+        val response = elm("01$pid", timeoutMs)
         val compact = response.replace(Regex("[^0-9A-F]"), "")
         val marker = "41$pid"
         val at = compact.indexOf(marker)
