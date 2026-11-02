@@ -1094,53 +1094,188 @@ class MainActivity : ComponentActivity() {
     private fun showTests() {
         val c = baseScreen("TESTS")
         c.addView(header("SİSTEM TESTLERİ"))
-        val intro = neonCard("ECU / ADAPTÖR KONTROLÜ", cyan)
-        intro.addView(text("Bu sürüm standart OBD / EOBD motor ECU verilerini okur. ABS, fren hava alma, enjektör/pompa aktüatör testi, fan testi, TPS adaptasyonu ve gösterge kilometresi için marka-model-yıl-ECU profili ile uygun K-Line/CAN adaptör desteği gerekir. Destek doğrulanmadan hiçbir aktüatör komutu gönderilmez.", 13, white))
+
+        val intro = neonCard("GERÇEK ECU KONTROLLERİ", cyan)
+        intro.addView(text(
+            "Bu bölümdeki düğmeler gerçek Viecar / ELM327 adaptörüne salt-okunur sorgular gönderir. " +
+                "ECU'nun desteklemediği bir PID için sonuç 'desteklenmiyor / yanıt yok' gösterilir; " +
+                "bu tek başına arıza anlamına gelmez. Bu ekranda enjektör, fan, pompa veya bobin çalıştırılmaz.",
+            13, white
+        ))
         c.addView(intro)
-        val tests = listOf(
-            "Viecar adaptör bağlantısı" to "Wi‑Fi soket bağlantısı ve ELM yanıtı",
-            "ECU iletişim testi" to "0100 desteklenen PID sorgusu",
-            "Sensör yanıt testi" to "RPM / TPS / sıcaklık / MAP / MAF / O2 / voltaj (ECU destekledikçe)",
-            "Enjeksiyon veri kontrolü" to "Kısa / uzun dönem yakıt düzeltmesi, O2 / lambda (ECU destekliyorsa)",
-            "Ateşleme veri kontrolü" to "Ateşleme avansı PID kontrolü (ECU destekledikçe)",
-            "Arıza hafızası testi" to "Kayıtlı (03), bekleyen (07), kalıcı (0A) DTC sorguları",
-            "Araç bilgisi" to "VIN / kalibrasyon / ECU kimliği (destekleniyorsa)"
-        )
-        tests.forEach { (name, desc) ->
-            val card = neonCard(null, blue)
-            card.addView(text("◎  $name", 16, white, true))
-            card.addView(text(desc, 12, muted))
+
+        fun testCard(title: String, detail: String, button: String, color: Int, action: () -> Unit) {
+            val card = neonCard(null, color)
+            card.addView(text(title, 16, white, true))
+            card.addView(text(detail, 12, muted))
+            addGap(card, 6)
+            card.addView(actionButton(button, color, action))
             c.addView(card)
         }
-        val future = neonCard("GELİŞMİŞ SERVİS FONKSİYONLARI", yellow)
-        future.addView(text("Bu modüller arayüzde planlandı. Gerçek işlem için ilgili motosikletin ECU kimliği, üretici servis protokolü, pin bağlantısı ve test edilmiş araç profili gerekir.", 12, white))
-        val futureItems = listOf(
-            "ABS arıza / canlı veri / fren hava alma" to "ABS MODÜLÜ VE MARKA PROTOKOLÜ GEREKLİ",
-            "Enjektör / yakıt pompası aktif testi" to "ÜRETİCİYE ÖZEL AKTÜATÖR KOMUTU GEREKLİ",
-            "Radyatör fanı açma / kapama testi" to "ÜRETİCİYE ÖZEL AKTÜATÖR KOMUTU GEREKLİ",
-            "Bobin / ateşleme aktüatör testi" to "ÜRETİCİYE ÖZEL ECU KOMUTU GEREKLİ",
-            "TPS adaptasyonu" to "MARKA / MODEL ECU PROTOKOLÜ GEREKLİ"
-        )
-        futureItems.forEach { (name, state) ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, dp(7), 0, dp(7)) }
-            row.addView(text("◇  $name", 14, white, true))
-            row.addView(text(state, 10, yellow, true))
-            future.addView(row)
+
+        testCard(
+            "VIECAR ADAPTÖR KONTROLÜ",
+            "Gerçek Wi-Fi / TCP bağlantısını kurar, ELM327 kimliğini ve adaptör voltaj yanıtını okur. ECU el sıkışması da doğrulanır.",
+            "ADAPTÖRÜ TEST ET", cyan
+        ) {
+            runReadOnlyTest("VIECAR ADAPTÖR KONTROLÜ", "Adaptör bağlantısı ve kimlik sorguları", listOf(
+                Triple("ELM327 kimliği", "ATI", ""),
+                Triple("Adaptör voltajı", "ATRV", "")
+            ))
         }
+
+        testCard(
+            "ECU İLETİŞİM TESTİ",
+            "Motor ECU'suna standart 0100 destek sorgusu gönderir. Geçerli 4100 yanıtı aranır.",
+            "ECU İLETİŞİMİNİ TEST ET", blue
+        ) {
+            runReadOnlyTest("ECU İLETİŞİM TESTİ", "Standart OBD destek sorgusu", listOf(
+                Triple("ECU destek sorgusu", "0100", "4100")
+            ))
+        }
+
+        testCard(
+            "SENSÖR VERİ KONTROLÜ",
+            "RPM, gaz kelebeği, soğutma suyu, MAP ve ECU voltajını tek tek sorgular. Yalnızca gerçek ECU yanıtları gösterilir.",
+            "SENSÖRLERİ KONTROL ET", blue
+        ) {
+            runReadOnlyTest("SENSÖR VERİ KONTROLÜ", "Temel canlı veri PID sorguları", listOf(
+                Triple("Motor devri (RPM)", "010C", "410C"),
+                Triple("Gaz kelebeği (TPS)", "0111", "4111"),
+                Triple("Soğutma suyu sıcaklığı", "0105", "4105"),
+                Triple("Emme basıncı (MAP)", "010B", "410B"),
+                Triple("ECU / kontrol modülü voltajı", "0142", "4142")
+            ))
+        }
+
+        testCard(
+            "YAKIT KARIŞIMI VERİ KONTROLÜ",
+            "ECU destekliyorsa kısa / uzun dönem yakıt düzeltmesi ve oksijen sensörü yanıtını okur. Bu bir enjektör püskürtme veya yakıt basıncı testi değildir.",
+            "YAKIT VERİLERİNİ OKU", cyan
+        ) {
+            runReadOnlyTest("YAKIT KARIŞIMI VERİ KONTROLÜ", "Salt-okunur yakıt / O2 PID sorguları", listOf(
+                Triple("Kısa dönem yakıt düzeltmesi (STFT)", "0106", "4106"),
+                Triple("Uzun dönem yakıt düzeltmesi (LTFT)", "0107", "4107"),
+                Triple("Oksijen sensörü 1 verisi", "0114", "4114")
+            ))
+        }
+
+        testCard(
+            "ATEŞLEME AVANSI VERİ KONTROLÜ",
+            "ECU destekliyorsa ateşleme avansı değerini okur. Bobini tetiklemez ve kıvılcım testi yapmaz.",
+            "ATEŞLEME VERİSİNİ OKU", blue
+        ) {
+            runReadOnlyTest("ATEŞLEME AVANSI VERİ KONTROLÜ", "Salt-okunur ateşleme avansı sorgusu", listOf(
+                Triple("Ateşleme avansı", "010E", "410E")
+            ))
+        }
+
+        testCard(
+            "ARIZA HAFIZASI KONTROLÜ",
+            "Kayıtlı, bekleyen ve kalıcı arıza kodlarını ayrı ayrı sorgular. Bu işlem arıza silmez.",
+            "ARIZA HAFIZASINI OKU", cyan
+        ) {
+            runReadOnlyTest("ARIZA HAFIZASI KONTROLÜ", "Üç standart arıza hafızası sorgusu", listOf(
+                Triple("Kayıtlı arızalar", "03", "43"),
+                Triple("Bekleyen arızalar", "07", "47"),
+                Triple("Kalıcı arızalar", "0A", "4A")
+            ))
+        }
+
+        testCard(
+            "ECU / ARAÇ KİMLİĞİ",
+            "ECU destekliyorsa VIN ve kalibrasyon kimliğini okur. Desteklenmeyen kimlik sorgusu bağlantı arızası sayılmaz.",
+            "ECU BİLGİSİNİ OKU", blue
+        ) {
+            runReadOnlyTest("ECU / ARAÇ KİMLİĞİ", "Salt-okunur Mode 09 sorguları", listOf(
+                Triple("Şasi numarası (VIN)", "0902", "4902"),
+                Triple("Kalibrasyon kimliği", "0904", "4904")
+            ))
+        }
+
+        val future = neonCard("PROFESYONEL SERVİS TESTLERİ", yellow)
+        future.addView(text(
+            "Fan, yakıt pompası, enjektör, ateşleme bobini, ABS ve TPS adaptasyonu telefon sürümünde çalıştırılmaz. " +
+                "Bu aktif üretici testleri daha sonra bilgisayar sürümünde, uygun K-Line / CANBUS arayüzü ve doğrulanmış motosiklet-ECU profiliyle ele alınacak.",
+            12, white
+        ))
         c.addView(future)
-        val identityCard = neonCard("ECU KİMLİĞİ / SERVİS BİLGİSİ", blue)
-        identityCard.addView(text("Mode 09 VIN ve kalibrasyon kimliği sorguları yalnızca ECU destekliyorsa sonuç verir. Desteklenmeyen yanıt hata olarak değil, 'desteklenmiyor / yanıt yok' olarak raporlanır.", 12, white))
-        c.addView(identityCard)
-        val commCard = neonCard("KOMUT / YANIT DOĞRULAMA", cyan)
-        commCard.addView(text("ELM327 komutlarının gerçek Viecar adaptörüne gönderilip ECU'dan alınan yanıtları adım adım gösterir. Bağlantı yoksa test başarısız olarak kaydedilir; sahte yanıt üretilmez.", 13, white))
+
+        val commCard = neonCard("AYRINTILI KOMUT / YANIT RAPORU", cyan)
+        commCard.addView(text(
+            "Adaptör başlatma komutlarını, gerçek ECU yanıtlarını ve desteklenmeyen PID'leri tek raporda gösterir. " +
+                "Arıza silme veya aktif test komutu göndermez.",
+            13, white
+        ))
         c.addView(commCard)
-        c.addView(actionButton("⚡  GERÇEK VIECAR / ECU TESTİ", green) { runCommunicationCheck() })
-        addGap(c, 5)
-        c.addView(actionButton("⌁  ECU HIZLI KONTROL", blue) { runSystemCheck() })
-        addGap(c, 8)
-        c.addView(actionButton("▶  GERÇEK ECU ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() })
+        c.addView(actionButton("⚡  TAM VIECAR / ECU İLETİŞİM RAPORU", green) { runCommunicationCheck() })
         addGap(c, 5)
         c.addView(actionButton("▤  ARIZA KODLARI / AÇIKLAMALARINI İNCELE", cyan) { showFaults() })
+    }
+
+    /** Executes only explicitly listed read-only OBD / ELM queries and reports real responses. */
+    private fun runReadOnlyTest(
+        title: String,
+        subtitle: String,
+        queries: List<Triple<String, String, String>>
+    ) {
+        if (!busy.compareAndSet(false, true)) {
+            Toast.makeText(this, "Başka bir ECU işlemi sürüyor.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "$title başlatıldı…", Toast.LENGTH_SHORT).show()
+        io.execute {
+            val report = StringBuilder()
+            var passed = 0
+            var unsupported = 0
+            try {
+                ensureConnected()
+                report.appendLine(subtitle)
+                report.appendLine("Bağlantı: Viecar Wi-Fi / ECU yanıt verdi")
+                report.appendLine()
+                for ((label, command, marker) in queries) {
+                    try {
+                        val response = elm(command, if (command.startsWith("09")) 4500 else 3000)
+                        val compact = response.replace(Regex("[^0-9A-F]"), "")
+                        val ok = if (marker.isBlank()) {
+                            response.isNotBlank() && !response.contains("ERROR") &&
+                                !response.contains("NO DATA") && !response.contains("?")
+                        } else compact.contains(marker)
+                        if (ok) passed++ else unsupported++
+                        report.append(if (ok) "✓ " else "○ ")
+                            .append(label).append('\n')
+                            .append("  Komut: ").append(command).append('\n')
+                            .append("  Yanıt: ").append(response.ifBlank { "Yanıt yok" }).append('\n')
+                        if (!ok) report.append("  Bilgi: ECU bu sorguyu desteklemiyor olabilir veya yanıt vermedi.\n")
+                        if (marker in listOf("43", "47", "4A") && ok) {
+                            val codes = try { decodeDtcs(response, marker) } catch (_: Exception) { emptyList() }
+                            report.append("  Kodlar: ").append(codes.joinToString().ifBlank { "Bu hafızada arıza kodu bulunmadı" }).append('\n')
+                        }
+                        report.append('\n')
+                    } catch (e: Exception) {
+                        unsupported++
+                        report.append("○ ").append(label).append('\n')
+                            .append("  Komut: ").append(command).append('\n')
+                            .append("  Sonuç: Yanıt alınamadı (${e.message ?: "iletişim hatası"})\n\n")
+                    }
+                }
+                report.append("ÖZET: $passed olumlu yanıt • $unsupported desteklenmeyen / yanıtsız sorgu")
+                log("$title tamamlandı • $passed olumlu • $unsupported yanıtsız/desteklenmeyen")
+            } catch (e: Exception) {
+                report.append("BAĞLANTI KURULAMADI\n${e.message ?: "Viecar ve ECU bağlantısını kontrol edin."}\n\n")
+                    .append("Hiçbir örnek veya sahte yanıt oluşturulmadı.")
+                log("$title başarısız: ${e.message}")
+            } finally {
+                busy.set(false)
+                mainHandler.post {
+                    AlertDialog.Builder(this)
+                        .setTitle(title)
+                        .setMessage(report.toString())
+                        .setPositiveButton("TAMAM", null)
+                        .show()
+                }
+            }
+        }
     }
 
     private fun appendCommunicationLine(
