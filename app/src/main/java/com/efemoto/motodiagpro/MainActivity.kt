@@ -99,7 +99,24 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = bg
         applyImmersiveMode()
         loadPersistentState()
-        showHome()
+        val restoredScreen = savedInstanceState?.getString("efe_screen") ?: "HOME"
+        selectedFault = savedInstanceState?.getString("efe_selected_fault").orEmpty()
+        when (restoredScreen) {
+            "LIVE" -> showLiveData()
+            "TESTS" -> showTests()
+            "LOGS" -> showLogs()
+            "FAULTS" -> showFaults()
+            "DETAIL" -> if (selectedFault.isNotBlank()) showFaultDetail() else showFaults()
+            // A running scan cannot safely survive Activity recreation; return to
+            // the home screen rather than showing a progress screen with no worker.
+            else -> showHome()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("efe_screen", currentScreen)
+        outState.putString("efe_selected_fault", selectedFault)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -1010,6 +1027,7 @@ class MainActivity : ComponentActivity() {
             try {
                 ensureConnected()
                 while (liveLoop && currentScreen == "LIVE") {
+                    if (!connected || socket?.isClosed != false) ensureConnected()
                     val values = readLivePids(stopIfNotLive = true)
                     mainHandler.post {
                         if (currentScreen == "LIVE") updateLiveDisplay(values)
@@ -1488,24 +1506,53 @@ class MainActivity : ComponentActivity() {
         val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         @Suppress("DEPRECATION")
         val candidates = (listOfNotNull(manager.activeNetwork) + manager.allNetworks.toList()).distinct()
-        val wifiNetwork = candidates.firstOrNull { network ->
-            manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-        } ?: throw IllegalStateException(
-            "Wi‑Fi ağı bulunamadı. Önce telefonun Wi‑Fi ayarlarından Viecar adaptörünün ağına bağlanın."
+            .filter { network ->
+                manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }
+            // A direct adapter hotspot commonly has no internet. Prefer it over
+            // a household Wi-Fi network when both are visible to Android.
+            .sortedBy { network ->
+                manager.getNetworkCapabilities(network)
+                    ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            }
+        if (candidates.isEmpty()) throw IllegalStateException(
+            "Wi‑Fi ağı bulunamadı. Telefon/tableti Viecar adaptörünün Wi‑Fi ağına bağlayın."
         )
-        return wifiNetwork.socketFactory.createSocket()
+
+        var lastError: Exception? = null
+        for (network in candidates) {
+            val candidate = try { network.socketFactory.createSocket() }
+                catch (e: Exception) { lastError = e; continue }
+            try {
+                candidate.tcpNoDelay = true
+                candidate.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
+                candidate.soTimeout = 3500
+                return candidate
+            } catch (e: Exception) {
+                lastError = e
+                try { candidate.close() } catch (_: Exception) { }
+            }
+        }
+        throw IllegalStateException(
+            "Viecar Wi‑Fi ağları üzerinden 192.168.0.10:35000 bağlantısı kurulamadı. " +
+                (lastError?.message ?: "Adaptörün Wi‑Fi ağına bağlı olduğunuzu kontrol edin.")
+        )
     }
 
     private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
-        if (connected && socket?.isConnected == true && socket?.isClosed == false) return
+        if (connected && socket?.isConnected == true && socket?.isClosed == false) {
+            // TCP can remain locally "connected" after the adapter has disappeared.
+            // A positive Mode 01 response is the actual ECU/adapter health check.
+            val health = try { elm("0100", 3000) } catch (_: Exception) { "" }
+            val healthHex = health.filter { it in "0123456789ABCDEF" }
+            if (healthHex.contains("4100")) return
+            closeAdapter()
+        }
         closeAdapter()
         supportedPidSet.clear()
-        // Bind the TCP socket to the phone's Wi-Fi network so Android does not route
-        // the connection through mobile data when the Viecar hotspot has no internet.
+        // Socket is explicitly bound to each Wi-Fi candidate; mobile data is never
+        // used as a fallback for the adapter's private 192.168.0.10 address.
         val s = createWifiBoundSocket()
-        s.tcpNoDelay = true
-        s.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
-        s.soTimeout = 3500
         socket = s
 
         fun exchange(command: String, timeoutMs: Int = 3000): String {
@@ -1519,13 +1566,20 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // ELM327 initialization. Commands are reported to the communication test when requested.
-        exchange("ATZ", 5000)
-        exchange("ATE0")
-        exchange("ATL0")
-        exchange("ATS0")
-        exchange("ATH0")
-        exchange("ATSP0")
+        // ELM327 initialization. Reject explicit adapter errors, but do not assume
+        // a TCP connection alone means that the ECU is reachable.
+        val reset = exchange("ATZ", 5000)
+        if (reset.isBlank() || reset.contains("ERROR") || reset.contains("?")) {
+            closeAdapter()
+            throw IllegalStateException("Viecar ELM başlatma yanıtı geçersiz: ${reset.ifBlank { "YANIT YOK" }}")
+        }
+        listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATSP0").forEach { command ->
+            val response = exchange(command, 3000)
+            if (response.contains("ERROR") || response.contains("?")) {
+                closeAdapter()
+                throw IllegalStateException("Viecar komutu kabul etmedi: $command → $response")
+            }
+        }
         val test = exchange("0100", 7000)
         val testHex = test.filter { it in "0123456789ABCDEF" }
         if (!testHex.contains("4100")) {
@@ -1548,21 +1602,35 @@ class MainActivity : ComponentActivity() {
         try {
             while (input.available() > 0) input.read()
         } catch (_: Exception) { }
-        out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
-        out.flush()
         val result = ByteArrayOutputStream()
-        val started = System.currentTimeMillis()
         try {
+            out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
+            out.flush()
+            val started = System.currentTimeMillis()
+            var promptReceived = false
             while (System.currentTimeMillis() - started < timeoutMs) {
                 val b = input.read()
-                if (b < 0) break
-                if (b == '>'.code) break
+                if (b < 0) throw java.io.IOException("Viecar bağlantısı karşı uç tarafından kapatıldı")
+                if (b == '>'.code) { promptReceived = true; break }
                 result.write(b)
             }
-        } catch (_: SocketTimeoutException) { }
-        val response = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
-        lastRaw = response
-        return response
+            val response = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
+            lastRaw = response
+            if (response.isBlank() && !promptReceived) {
+                throw SocketTimeoutException("$command komutuna Viecar yanıt vermedi (${timeoutMs} ms)")
+            }
+            return response
+        } catch (e: SocketTimeoutException) {
+            // A partial ELM response can still be useful; an entirely empty timeout
+            // is surfaced so callers never treat silence as a successful response.
+            val partial = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
+            lastRaw = partial
+            if (partial.isNotBlank()) return partial
+            throw e
+        } catch (e: Exception) {
+            closeAdapter()
+            throw e
+        }
     }
 
     private fun pidBytes(pid: String, timeoutMs: Int = 3000): List<Int>? {
