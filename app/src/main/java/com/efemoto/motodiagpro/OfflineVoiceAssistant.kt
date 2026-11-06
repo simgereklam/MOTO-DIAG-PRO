@@ -6,6 +6,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -28,7 +29,9 @@ class OfflineVoiceAssistant(
     private val turkish = Locale("tr", "TR")
 
     fun initialize() {
-        if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            onStatus("Çevrimdışı konuşma tanıma için Android 12 veya üzeri gerekiyor.")
+        } else if (!SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)) {
             onStatus("Bu cihazda çevrimdışı konuşma tanıma servisi bulunamadı.")
         } else {
             recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
