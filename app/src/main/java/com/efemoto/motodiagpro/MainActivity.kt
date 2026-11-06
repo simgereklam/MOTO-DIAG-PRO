@@ -16,7 +16,6 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
 import android.util.Base64
 import android.view.Gravity
 import android.view.View
@@ -60,8 +59,6 @@ class MainActivity : ComponentActivity() {
     private var selectedFault = ""
     private var hasCompletedScan = false
     private val logs = mutableListOf<String>()
-    private var smartInsights: List<String> = emptyList()
-    private var currentRiskScore: Int = 0
     private var rpm = -1
     private var tps = -1.0
     private var coolant = -999
@@ -187,7 +184,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    // İNTERNETSİZ YEREL YAPAY ZEKA & USTA KARAR MEKANİZMASI
     private fun handleVoiceCommand(rawCommand: String) {
         val cmd = rawCommand.lowercase(Locale("tr", "TR"))
             .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
@@ -565,7 +561,6 @@ class MainActivity : ComponentActivity() {
             .setPositiveButton("TAMAM", null).show()
     }
 
-    // Wİ-Fİ BAĞLANTI & TARAMA MOTORU (ORİJİNAL KORUNMUŞTUR)
     private fun startDiagnosis() {
         seyfiAssistant?.speak("Arıza taramasını başlatıyorum Usta, adaptör verilerini topluyorum.")
         val c = baseScreen("SCAN", true)
@@ -743,118 +738,138 @@ class MainActivity : ComponentActivity() {
         socket = null
         mainHandler.post { statusLine?.apply { text = "● ÇEVRİMDIŞI MOD"; setTextColor(muted) } }
     }
+}
 
-    private inner class NeonBackdrop(context: Context) : View(context) {
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            canvas.drawColor(bg)
-            paint.shader = RadialGradient(width * .5f, height * .25f, width * .8f, intArrayOf(Color.rgb(0, 30, 85), bg), null, Shader.TileMode.CLAMP)
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-        }
-    }
+// ==========================================
+// YARDIMCI SINIFLAR (MainActivity Dışında)
+// ==========================================
 
-    private inner class CircularProgressView(context: Context) : View(context) {
-        var progress = 0
-        private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val cx = width / 2f; val cy = height / 2f; val r = min(width, height) * .36f
-            p.style = Paint.Style.STROKE; p.strokeWidth = dp(15).toFloat(); p.strokeCap = Paint.Cap.ROUND
-            p.color = Color.rgb(10, 38, 76); canvas.drawArc(cx-r, cy-r, cx+r, cy+r, -90f, 360f, false, p)
-            p.color = cyan; canvas.drawArc(cx-r, cy-r, cx+r, cy+r, -90f, 360f * progress / 100f, false, p)
-            p.style = Paint.Style.FILL; p.color = white; p.textSize = dp(39).toFloat(); p.textAlign = Paint.Align.CENTER
-            canvas.drawText("%$progress", cx, cy + dp(13), p)
-        }
+private class NeonBackdrop(context: Context) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        canvas.drawColor(Color.rgb(2, 7, 18))
+        paint.shader = RadialGradient(width * .5f, height * .25f, width * .8f, intArrayOf(Color.rgb(0, 30, 85), Color.rgb(2, 7, 18)), null, Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+
+        paint.shader = null
+        paint.color = Color.rgb(0, 180, 255)
+        paint.alpha = 18
+        canvas.drawCircle(width * 0.15f, height * 0.6f, width * 0.35f, paint)
     }
 }
 
-// SEYFİ USTA YEREL SESLİ ASİSTAN MOTORU (İNTERNET GEREKTİRMEZ)
-class SeyfiUstaAI(
-    private val activity: ComponentActivity,
-    private val onRecognized: (String) -> Unit
-) : RecognitionListener {
+private class CircularProgressView(context: Context) : View(context) {
+    var progress: Int = 0
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeWidth = 22f
+    }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(238, 246, 255)
+        textSize = 46f
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.DEFAULT_BOLD
+    }
 
-    private var speechRecognizer: SpeechRecognizer? = null
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val radius = min(w, h) / 2f - 35f
+        val cx = w / 2f
+        val cy = h / 2f
+
+        paint.color = Color.rgb(6, 30, 70)
+        canvas.drawCircle(cx, cy, radius, paint)
+
+        paint.color = Color.rgb(0, 220, 255)
+        val sweepAngle = (progress.coerceIn(0, 100) / 100f) * 360f
+        canvas.drawArc(cx - radius, cy - radius, cx + radius, cy + radius, -90f, sweepAngle, false, paint)
+
+        val fontMetrics = textPaint.fontMetrics
+        val textY = cy - (fontMetrics.ascent + fontMetrics.descent) / 2f
+        canvas.drawText("%$progress", cx, textY, textPaint)
+    }
+}
+
+private class SeyfiUstaAI(
+    private val context: Context,
+    private val onCommandRecognized: (String) -> Unit
+) {
     private var textToSpeech: TextToSpeech? = null
-    private var isSpeaking = false
-    private var isListeningActive = false
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var isListening = false
+    private val handler = Handler(Looper.getMainLooper())
 
     fun initialize() {
-        if (SpeechRecognizer.isRecognitionAvailable(activity)) {
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(activity).apply {
-                setRecognitionListener(this@SeyfiUstaAI)
+        textToSpeech = TextToSpeech(context) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                textToSpeech?.language = Locale("tr", "TR")
             }
         }
 
-        textToSpeech = TextToSpeech(activity) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                textToSpeech?.setLanguage(Locale("tr", "TR"))
-                textToSpeech?.setPitch(0.6f)
-                textToSpeech?.setSpeechRate(0.95f)
-
-                textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(id: String?) { isSpeaking = true; stopListeningSafe() }
-                    override fun onDone(id: String?) { isSpeaking = false; activity.runOnUiThread { startListening() } }
-                    override fun onError(id: String?) { isSpeaking = false; activity.runOnUiThread { startListening() } }
+        if (SpeechRecognizer.isRecognitionAvailable(context)) {
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                setRecognitionListener(object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {}
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {}
+                    override fun onError(error: Int) {
+                        handler.postDelayed({ restartListening() }, 1200)
+                    }
+                    override fun onResults(results: Bundle?) {
+                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                        if (!matches.isNullOrEmpty()) {
+                            onCommandRecognized(matches[0])
+                        }
+                        handler.postDelayed({ restartListening() }, 800)
+                    }
+                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
             }
         }
     }
 
     fun startListening() {
-        if (!isListeningActive) isListeningActive = true
-        if (isSpeaking) return
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
-
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-        }
+        if (isListening) return
         try {
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra(RecognizerIntent.EXTRA_SILENCE_MUSIC_LENGTH_MILLIS, 3000L)
+            }
             speechRecognizer?.startListening(intent)
-        } catch (_: Exception) {}
+            isListening = true
+        } catch (_: Exception) {
+            isListening = false
+        }
     }
 
-    private fun stopListeningSafe() {
-        try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+    private fun restartListening() {
+        isListening = false
+        startListening()
     }
 
     fun speak(text: String) {
-        stopListeningSafe()
-        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SEYFI_USTA_AI")
+        textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SEYFI_UTTERANCE")
     }
 
     fun release() {
-        isListeningActive = false
-        try { speechRecognizer?.destroy() } catch (_: Exception) {}
-        try { textToSpeech?.stop(); textToSpeech?.shutdown() } catch (_: Exception) {}
+        try {
+            speechRecognizer?.destroy()
+        } catch (_: Exception) {}
+        try {
+            textToSpeech?.stop()
+            textToSpeech?.shutdown()
+        } catch (_: Exception) {}
+        speechRecognizer = null
+        textToSpeech = null
+        isListening = false
     }
-
-    override fun onReadyForSpeech(p: Bundle?) {}
-    override fun onBeginningOfSpeech() {}
-    override fun onRmsChanged(r: Float) {}
-    override fun onBufferReceived(b: ByteArray?) {}
-    override fun onEndOfSpeech() {}
-    override fun onError(error: Int) {
-        activity.runOnUiThread {
-            Handler(Looper.getMainLooper()).postDelayed({
-                if (isListeningActive && !isSpeaking) startListening()
-            }, 1500)
-        }
-    }
-    override fun onResults(results: Bundle?) {
-        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-        if (!matches.isNullOrEmpty()) {
-            onRecognized(matches[0])
-        }
-        activity.runOnUiThread {
-            Handler(Looper.getMainLooper()).postDelayed({
-                if (isListeningActive && !isSpeaking) startListening()
-            }, 500)
-        }
-    }
-    override fun onPartialResults(p: Bundle?) {}
-    override fun onEvent(type: Int, p: Bundle?) {}
 }
