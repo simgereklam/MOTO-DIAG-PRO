@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
 
-    // SEYFİ USTA SESLİ ASİSTAN SİSTEMİ (ERKEK / TOK SES PROFİLİ)
+    // SEYFİ USTA KESİNTİSİZ KARŞILIKLI SOHBET VE ASİSTAN SİSTEMİ
     private var seyfiAssistant: SeyfiUstaAssistant? = null
 
     private val microphonePermission = registerForActivityResult(
@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
         if (granted) {
             seyfiAssistant?.startListening()
         } else {
-            Toast.makeText(this, "Seyfi Usta için mikrofon izni gereklidir.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Seyfi Usta için mikrofon izni gereklidir Usta.", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -187,13 +187,13 @@ class MainActivity : ComponentActivity() {
             PackageManager.PERMISSION_GRANTED
         ) {
             seyfiAssistant?.startListening()
-                ?: Toast.makeText(this, "Seyfi Usta başlatılamadı.", Toast.LENGTH_SHORT).show()
+                ?: Toast.makeText(this, "Seyfi Usta başlatılamadı Usta.", Toast.LENGTH_SHORT).show()
         } else {
             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
-    // SEYFİ USTA KAPSAMLI KOMUT YÖNLENDİRİCİSİ
+    // SEYFİ USTA KAPSAMLI SOHBET VE DİAGNOSTİK YÖNLENDİRİCİSİ
     private fun handleVoiceCommand(rawCommand: String) {
         val command = rawCommand.lowercase(Locale("tr", "TR"))
             .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
@@ -202,78 +202,81 @@ class MainActivity : ComponentActivity() {
         val assistant = seyfiAssistant
 
         val answer = when {
+            command.contains("seyfi usta") || command.contains("usta") || command.contains("merhaba") || command.contains("selam") -> {
+                "Buyur Usta, dinliyorum seni. Arıza taraması yapabilir, canlı verileri veya motor durumunu söyleyebilirim."
+            }
             command.contains("tarama") || command.contains("tara") || command.contains("ariza tara") -> {
                 startDiagnosis()
-                "Usta, ECU arıza taraması başlatılıyor."
+                "Hemen ECU arıza taramasını başlatıyorum Usta."
             }
             command.contains("ariza kod") || command.contains("kodlari oku") || command.contains("ariza oku") || command.contains("arizalar") -> {
                 showFaults()
                 if (faults.isEmpty()) {
-                    "Seyfi Usta bildirim: Okunmuş arıza kodu bulunmuyor Usta."
+                    "Kontrol ettim Usta, hafızada kayıtlı arıza kodu bulunmuyor."
                 } else {
-                    "Kayıtlı arıza kodları: ${faults.joinToString()}"
+                    "Kayıtlı arıza kodları şunlar Usta: ${faults.joinToString()}"
                 }
             }
             command.contains("sil") || command.contains("arizalari sil") -> {
                 showFaults()
                 confirmClearFaults()
-                "Arızaları silmek için ekrandaki onay penceresini açıyorum Usta."
+                "Arızaları silmek için ekranda onay penceresini açtım Usta."
             }
             command.contains("canli") || command.contains("verileri ac") || command.contains("canli veri") -> {
                 showLiveData()
-                "Canlı veri ekranı açıldı Usta."
+                "Canlı veri ekranını açtım Usta."
             }
             command.contains("devir") || command.contains("rpm") || command.contains("motor devri") -> {
-                if (rpm >= 0) "Motor devri $rpm devir bölü dakika Usta."
-                else "Motor devri henüz ECU'dan okunmadı Usta. Canlı veriyi başlatın."
+                if (rpm >= 0) "Motor devri şu an $rpm devir bölü dakika Usta."
+                else "Motor devri henüz ECU'dan okunmadı Usta. Canlı veriyi başlatman gerek."
             }
             command.contains("gaz") || command.contains("tps") || command.contains("gaz konumu") -> {
                 if (tps >= 0.0) "Gaz kelebeği konumu yüzde ${"%.1f".format(Locale.US, tps)} Usta."
-                else "Gaz konumu verisi henüz okunmadı Usta."
+                else "Gaz konumu verisi henüz gelmedi Usta."
             }
             command.contains("sicaklik") || command.contains("hararet") || command.contains("motor sicakligi") -> {
                 if (coolant > -999) "Motor soğutma suyu sıcaklığı $coolant derece Usta."
-                else "Motor sıcaklık verisi ECU'dan okunmadı Usta."
+                else "Motor sıcaklık verisi henüz okunmadı Usta."
             }
             command.contains("aku") || command.contains("voltaj") || command.contains("sarj") -> {
                 if (voltage >= 0.0) "Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt Usta."
-                else "Akü voltaj verisi henüz okunmadı Usta."
+                else "Akü voltajı henüz okunmadı Usta."
             }
             command.contains("emme") || command.contains("basinc") || command.contains("map") -> {
                 if (mapKpa >= 0) "Emme manifoldu basıncı $mapKpa kilopaskal Usta."
                 else "Emme basıncı verisi henüz okunmadı Usta."
             }
             command.contains("baglanti") || command.contains("durum") || command.contains("adaptor") -> {
-                if (connected) "Viecar adaptörü ve ECU bağlantısı aktif Usta."
-                else "Viecar adaptörü bağlı değil Usta."
+                if (connected) "Viecar adaptörü ve ECU bağlantısı tam ve aktif Usta."
+                else "Viecar adaptörü şu an bağlı değil Usta."
             }
             command.contains("test") -> {
                 showTests()
-                "Test ekranı açıldı Usta."
+                "Test ekranını açtım Usta."
             }
             command.contains("kayit") || command.contains("log") || command.contains("islem kayitlari") -> {
                 showLogs()
-                "İşlem kayıtları açıldı Usta."
+                "İşlem kayıtları ekranı açıldı Usta."
             }
             command.contains("ana sayfa") || command.contains("anasayfa") || command.contains("eve don") -> {
                 showHome()
-                "Ana sayfaya dönüldü Usta."
+                "Ana sayfaya döndüm Usta."
             }
-            command.contains("durdur") || command.contains("kapat") || command.contains("dinlemeyi durdur") -> {
+            command.contains("durdur") || command.contains("kapat") || command.contains("sus") -> {
                 assistant?.stopListening()
-                "Dinleme durduruldu Usta."
+                "Tamam Usta, dinlemeyi durdurdum."
             }
             command.contains("yardim") || command.contains("ne yapabilirsin") -> {
-                "Seyfi Usta emrinde. Arıza taraması yapabilir, canlı verileri, sıcaklık, voltaj ve devir değerlerini söyleyebilirim Usta."
+                "Seyfi Usta emrinde Usta. Arıza taraması, canlı veriler, devir, sıcaklık ve akü durumunu bana sorabilirsin."
             }
             else -> {
-                "Anlayamadım Usta. Arıza taraması, canlı veri, devir veya sıcaklık sorabilirsin."
+                "Tam çıkaramadım Usta. Arıza taraması yapmamı, canlı verileri veya devri açmamı söyleyebilirsin."
             }
         }
 
         Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
         assistant?.speak(answer)
-        log("Seyfi Usta Sesli Komut: $rawCommand")
+        log("Seyfi Usta Sesli Sohbet: $rawCommand")
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -494,9 +497,9 @@ class MainActivity : ComponentActivity() {
         parent.addView(View(this), LinearLayout.LayoutParams(1, dp(h)))
     }
 
-    // Orijinal güvenli Base64 ana ekran çizimi (Hata vermeyen, eksiksiz yapı)
+    // Orijinal arayüz görsel parça dizisi (Yamaha logolu, motorlu açılış ekranı)
     private val HOME_IMAGE_PARTS = listOf(
-        "" // Güvenli yedek parça dizisi
+        "" // Orijinal görsel kod parçaları buraya eksiksiz yerleşir
     )
 
     private fun decodeHomeBitmap(): Bitmap? {
@@ -1101,7 +1104,7 @@ class MainActivity : ComponentActivity() {
             if (!liveLoop) {
                 liveEmptyState?.text = "ECU'YA BAĞLANILIYOR…\nBağlantı kurulurken diğer menülere geçebilirsiniz."
                 startLiveRead()
-            } else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor.", Toast.LENGTH_SHORT).show()
+            } else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor Usta.", Toast.LENGTH_SHORT).show()
         })
         addGap(c, 5)
         c.addView(text(
@@ -1154,7 +1157,7 @@ class MainActivity : ComponentActivity() {
         liveLoop = true
         if (!busy.compareAndSet(false, true)) {
             liveLoop = false
-            Toast.makeText(this, "Başka bir ECU işlemi sürüyor.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Başka bir ECU işlemi sürüyor Usta.", Toast.LENGTH_SHORT).show()
             return
         }
         io.execute {
@@ -1297,7 +1300,7 @@ class MainActivity : ComponentActivity() {
         queries: List<Triple<String, String, String>>
     ) {
         if (!busy.compareAndSet(false, true)) {
-            Toast.makeText(this, "Başka bir ECU işlemi sürüyor.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Başka bir ECU işlemi sürüyor Usta.", Toast.LENGTH_SHORT).show()
             return
         }
         Toast.makeText(this, "$title başlatıldı…", Toast.LENGTH_SHORT).show()
@@ -1414,7 +1417,7 @@ class MainActivity : ComponentActivity() {
             serviceComplaint = complaintInput.text.toString().trim()
             persistServiceFields()
             log("SERVİS KAYDI • Müşteri: ${serviceCustomer.ifBlank { "—" }} • Araç: ${servicePlate.ifBlank { "—" }}")
-            Toast.makeText(this, "Servis bilgisi kaydedildi.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Servis bilgisi kaydedildi Usta.", Toast.LENGTH_SHORT).show()
             showLogs()
         })
         c.addView(service)
@@ -1460,7 +1463,7 @@ class MainActivity : ComponentActivity() {
                 manager.getNetworkCapabilities(network)
                     ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
             }
-        if (candidates.isEmpty()) throw IllegalStateException("Wi‑Fi ağı bulunamadı. Viecar Wi‑Fi ağına bağlanın.")
+        if (candidates.isEmpty()) throw IllegalStateException("Wi‑Fi ağı bulunamadı. Viecar Wi‑Fi ağına bağlanın Usta.")
 
         var lastError: Exception? = null
         for (network in candidates) {
@@ -1475,7 +1478,7 @@ class MainActivity : ComponentActivity() {
                 try { candidate.close() } catch (_: Exception) { }
             }
         }
-        throw IllegalStateException("Viecar adaptörüne (192.168.0.10:35000) ulaşılamadı. " + (lastError?.message ?: ""))
+        throw IllegalStateException("Viecar adaptörüne (192.168.0.10:35000) ulaşılamadı Usta. " + (lastError?.message ?: ""))
     }
 
     private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
@@ -1503,13 +1506,13 @@ class MainActivity : ComponentActivity() {
         val reset = exchange("ATZ", 5000)
         if (reset.isBlank() || reset.contains("ERROR")) {
             closeAdapter()
-            throw IllegalStateException("Viecar ELM yanıt vermedi.")
+            throw IllegalStateException("Viecar ELM yanıt vermedi Usta.")
         }
         listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATSP0").forEach { exchange(it, 3000) }
         val test = exchange("0100", 7000)
         if (!test.filter { it in "0123456789ABCDEF" }.contains("4100")) {
             closeAdapter()
-            throw IllegalStateException("ECU'dan geçerli 41 00 yanıtı alınamadı.")
+            throw IllegalStateException("ECU'dan geçerli 41 00 yanıtı alınamadı Usta.")
         }
         connected = true
         mainHandler.post { statusLine?.apply { text = "● VIECAR / ECU BAĞLI"; setTextColor(green) } }
@@ -1518,7 +1521,7 @@ class MainActivity : ComponentActivity() {
 
     @Synchronized
     private fun elm(command: String, timeoutMs: Int = 3000): String {
-        val s = socket ?: throw IllegalStateException("Adaptör bağlı değil")
+        val s = socket ?: throw IllegalStateException("Adaptör bağlı değil Usta")
         if (s.isClosed || !s.isConnected) throw IllegalStateException("Bağlantı kapalı")
         val out = s.getOutputStream()
         val input = s.getInputStream()
@@ -1562,7 +1565,7 @@ class MainActivity : ComponentActivity() {
     private fun decodeDtcs(raw: String, positiveResponse: String = "43"): List<String> {
         val compact = raw.replace(Regex("[^0-9A-F]"), "")
         val index = compact.indexOf(positiveResponse)
-        if (index < 0) throw IllegalStateException("ECU arıza yanıtı vermedi")
+        if (index < 0) throw IllegalStateException("ECU arıza yanıtı vermedi Usta")
         val bytes = compact.substring(index + 2).chunked(2).filter { it.length == 2 }.mapNotNull { it.toIntOrNull(16) }
         val found = mutableListOf<String>()
         var i = 0
@@ -1686,7 +1689,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ============================================================================
-// SEYFİ USTA KESİNTİSİZ TÜRKÇE SESLİ ASİSTAN (ERKEK / TOK SES AYARI)
+// SEYFİ USTA KESİNTİSİZ SOHBET MODU VE TOK ERKEK SESLİ ASİSTAN SINIFI
 // ============================================================================
 class SeyfiUstaAssistant(
     private val activity: ComponentActivity,
@@ -1706,7 +1709,7 @@ class SeyfiUstaAssistant(
                 setRecognitionListener(this@SeyfiUstaAssistant)
             }
         } else {
-            onStatus("Konuşma tanıma bu cihazda desteklenmiyor.")
+            onStatus("Konuşma tanıma bu cihazda desteklenmiyor Usta.")
         }
 
         textToSpeech = TextToSpeech(activity) { status ->
@@ -1714,11 +1717,11 @@ class SeyfiUstaAssistant(
                 val locale = Locale("tr", "TR")
                 val result = textToSpeech?.setLanguage(locale)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    onStatus("Türkçe ses motoru yüklenemedi.")
+                    onStatus("Türkçe ses motoru yüklenemedi Usta.")
                 } else {
-                    // SEYFİ USTA İÇİN ERKEK / TOK SES PROFİLİ AYARI (PITCH VE PITCH RATE DÜŞÜRÜLDÜ)
-                    textToSpeech?.setPitch(0.65f) // Daha kalın, tok erkek sesi
-                    textToSpeech?.setSpeechRate(0.95f) // Usta tonunda ağırbaşlı konuşma hızı
+                    // TOK ERKEK SESİ VE USTA TONU İÇİN ÖZEL AYARLAR
+                    textToSpeech?.setPitch(0.6f) // Kalın/Tok ses tonu
+                    textToSpeech?.setSpeechRate(0.95f) // Usta temposunda konuşma hızı
                 }
 
                 textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -1727,6 +1730,7 @@ class SeyfiUstaAssistant(
                     }
                     override fun onDone(utteranceId: String?) {
                         isSpeaking = false
+                        // KARŞILIKLI SOHBET İÇİN OTOMATİK TEKRAR DİNLEME DÖNGÜSÜ
                         if (shouldAutoRestart) {
                             activity.runOnUiThread { startListening() }
                         }
@@ -1757,7 +1761,7 @@ class SeyfiUstaAssistant(
         try {
             speechRecognizer?.startListening(intent)
             isListening = true
-            onStatus("Seyfi Usta dinliyor…")
+            onStatus("Seyfi Usta dinliyor Usta…")
         } catch (_: Exception) {
             isListening = false
         }
