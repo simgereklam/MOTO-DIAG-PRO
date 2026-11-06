@@ -88,7 +88,7 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
 
-    // SEYFİ USTA SESLİ ASİSTAN SİSTEMİ
+    // SEYFİ USTA SESLİ ASİSTAN SİSTEMİ (ERKEK / TOK SES PROFİLİ)
     private var seyfiAssistant: SeyfiUstaAssistant? = null
 
     private val microphonePermission = registerForActivityResult(
@@ -209,7 +209,7 @@ class MainActivity : ComponentActivity() {
             command.contains("ariza kod") || command.contains("kodlari oku") || command.contains("ariza oku") || command.contains("arizalar") -> {
                 showFaults()
                 if (faults.isEmpty()) {
-                    "Seyfi Usta bildirim: Okunmuş arıza kodu bulunmuyor."
+                    "Seyfi Usta bildirim: Okunmuş arıza kodu bulunmuyor Usta."
                 } else {
                     "Kayıtlı arıza kodları: ${faults.joinToString()}"
                 }
@@ -224,50 +224,50 @@ class MainActivity : ComponentActivity() {
                 "Canlı veri ekranı açıldı Usta."
             }
             command.contains("devir") || command.contains("rpm") || command.contains("motor devri") -> {
-                if (rpm >= 0) "Motor devri $rpm devir bölü dakika."
-                else "Motor devri henüz ECU'dan okunmadı. Lütfen canlı veriyi başlatın."
+                if (rpm >= 0) "Motor devri $rpm devir bölü dakika Usta."
+                else "Motor devri henüz ECU'dan okunmadı Usta. Canlı veriyi başlatın."
             }
             command.contains("gaz") || command.contains("tps") || command.contains("gaz konumu") -> {
-                if (tps >= 0.0) "Gaz kelebeği konumu yüzde ${"%.1f".format(Locale.US, tps)}."
-                else "Gaz konumu verisi henüz okunmadı."
+                if (tps >= 0.0) "Gaz kelebeği konumu yüzde ${"%.1f".format(Locale.US, tps)} Usta."
+                else "Gaz konumu verisi henüz okunmadı Usta."
             }
             command.contains("sicaklik") || command.contains("hararet") || command.contains("motor sicakligi") -> {
-                if (coolant > -999) "Motor soğutma suyu sıcaklığı $coolant derece."
-                else "Motor sıcaklık verisi ECU'dan okunmadı."
+                if (coolant > -999) "Motor soğutma suyu sıcaklığı $coolant derece Usta."
+                else "Motor sıcaklık verisi ECU'dan okunmadı Usta."
             }
             command.contains("aku") || command.contains("voltaj") || command.contains("sarj") -> {
-                if (voltage >= 0.0) "Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt."
-                else "Akü voltaj verisi henüz okunmadı."
+                if (voltage >= 0.0) "Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt Usta."
+                else "Akü voltaj verisi henüz okunmadı Usta."
             }
             command.contains("emme") || command.contains("basinc") || command.contains("map") -> {
-                if (mapKpa >= 0) "Emme manifoldu basıncı $mapKpa kilopaskal."
-                else "Emme basıncı verisi henüz okunmadı."
+                if (mapKpa >= 0) "Emme manifoldu basıncı $mapKpa kilopaskal Usta."
+                else "Emme basıncı verisi henüz okunmadı Usta."
             }
             command.contains("baglanti") || command.contains("durum") || command.contains("adaptor") -> {
                 if (connected) "Viecar adaptörü ve ECU bağlantısı aktif Usta."
-                else "Viecar adaptörü bağlı değil."
+                else "Viecar adaptörü bağlı değil Usta."
             }
             command.contains("test") -> {
                 showTests()
-                "Test ekranı açıldı."
+                "Test ekranı açıldı Usta."
             }
             command.contains("kayit") || command.contains("log") || command.contains("islem kayitlari") -> {
                 showLogs()
-                "İşlem kayıtları açıldı."
+                "İşlem kayıtları açıldı Usta."
             }
             command.contains("ana sayfa") || command.contains("anasayfa") || command.contains("eve don") -> {
                 showHome()
-                "Ana sayfaya dönüldü."
+                "Ana sayfaya dönüldü Usta."
             }
             command.contains("durdur") || command.contains("kapat") || command.contains("dinlemeyi durdur") -> {
                 assistant?.stopListening()
                 "Dinleme durduruldu Usta."
             }
             command.contains("yardim") || command.contains("ne yapabilirsin") -> {
-                "Seyfi Usta hizmetinizde. Arıza taraması yapabilir, canlı verileri, sıcaklık, voltaj ve devir değerlerini söyleyebilirim."
+                "Seyfi Usta emrinde. Arıza taraması yapabilir, canlı verileri, sıcaklık, voltaj ve devir değerlerini söyleyebilirim Usta."
             }
             else -> {
-                "Anlayamadım Usta. Arıza taraması, canlı veri, devir veya sıcaklık sorabilirsiniz."
+                "Anlayamadım Usta. Arıza taraması, canlı veri, devir veya sıcaklık sorabilirsin."
             }
         }
 
@@ -1686,7 +1686,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ============================================================================
-// SEYFİ USTA KESİNTİSİZ TÜRKÇE SESLİ ASİSTAN SINIFI
+// SEYFİ USTA KESİNTİSİZ TÜRKÇE SESLİ ASİSTAN (ERKEK / TOK SES AYARI)
 // ============================================================================
 class SeyfiUstaAssistant(
     private val activity: ComponentActivity,
@@ -1715,7 +1715,12 @@ class SeyfiUstaAssistant(
                 val result = textToSpeech?.setLanguage(locale)
                 if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
                     onStatus("Türkçe ses motoru yüklenemedi.")
+                } else {
+                    // SEYFİ USTA İÇİN ERKEK / TOK SES PROFİLİ AYARI (PITCH VE PITCH RATE DÜŞÜRÜLDÜ)
+                    textToSpeech?.setPitch(0.65f) // Daha kalın, tok erkek sesi
+                    textToSpeech?.setSpeechRate(0.95f) // Usta tonunda ağırbaşlı konuşma hızı
                 }
+
                 textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) {
                         isSpeaking = true
