@@ -1,6 +1,8 @@
 package com.efemoto.motodiagpro
 
 import android.app.AlertDialog
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.*
 import android.content.Context
 import android.content.Intent
@@ -16,6 +18,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -81,6 +85,18 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
 
+    // Türkçe çevrimdışı sesli asistan
+    private var voiceAssistant: OfflineVoiceAssistant? = null
+    private val microphonePermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            voiceAssistant?.startListening()
+        } else {
+            Toast.makeText(this, "Sesli komut için mikrofon izni gerekli.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private val homeScreenBitmap: Bitmap by lazy {
         val bytes = Base64.decode(HOME_IMAGE_PARTS.joinToString(""), Base64.DEFAULT)
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -99,6 +115,17 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = bg
         applyImmersiveMode()
         loadPersistentState()
+        voiceAssistant = OfflineVoiceAssistant(
+            activity = this,
+            onRecognized = { phrase ->
+                mainHandler.post { handleVoiceCommand(phrase) }
+            },
+            onStatus = { message ->
+                mainHandler.post {
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        ).also { it.initialize() }
         val restoredScreen = savedInstanceState?.getString("efe_screen") ?: "HOME"
         selectedFault = savedInstanceState?.getString("efe_selected_fault").orEmpty()
         when (restoredScreen) {
@@ -155,9 +182,84 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         liveLoop = false
+        voiceAssistant?.release()
+        voiceAssistant = null
         closeAdapter()
         io.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun requestVoiceCommand() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            voiceAssistant?.startListening()
+                ?: Toast.makeText(this, "Sesli asistan başlatılamadı.", Toast.LENGTH_SHORT).show()
+        } else {
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun handleVoiceCommand(rawCommand: String) {
+        val command = rawCommand.lowercase(Locale("tr", "TR"))
+            .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
+            .replace("ş", "s").replace("ö", "o").replace("ç", "c")
+            .trim()
+        val assistant = voiceAssistant
+        val answer = when {
+            listOf("ana sayfa", "anasayfa", "eve don").any { command.contains(it) } -> {
+                showHome()
+                "Ana sayfa açıldı."
+            }
+            listOf("canli veri", "canli ekran", "canli degerler").any { command.contains(it) } -> {
+                showLiveData()
+                "Canlı veri ekranı açıldı."
+            }
+            listOf("test", "sistem testi").any { command.contains(it) } -> {
+                showTests()
+                "Sistem testleri açıldı."
+            }
+            listOf("hata dokumu", "islem kayitlari", "loglar").any { command.contains(it) } -> {
+                showLogs()
+                "İşlem kayıtları açıldı."
+            }
+            listOf("ariza", "hata kodu").any { command.contains(it) } -> {
+                showFaults()
+                if (faults.isEmpty()) "Ekran açıldı. Henüz okunmuş arıza kodu bulunmuyor."
+                else "Kayıtlı arızalar: ${faults.joinToString()}"
+            }
+            command.contains("motor devri") || command.contains("devir") || command.contains("rpm") -> {
+                if (rpm >= 0) "Motor devri ${rpm} devir dakika."
+                else "Motor devri henüz ECU'dan okunmadı. Önce Viecar bağlantısını kurup canlı veri taramasını başlatın."
+            }
+            command.contains("gaz") || command.contains("tps") -> {
+                if (tps >= 0.0) "Gaz kelebeği yüzde ${"%.1f".format(Locale.US, tps)}."
+                else "Gaz kelebeği verisi henüz ECU'dan okunmadı."
+            }
+            command.contains("sicaklik") || command.contains("hararet") -> {
+                if (coolant > -999) "Motor soğutma suyu sıcaklığı ${coolant} derece."
+                else "Motor sıcaklığı verisi henüz ECU'dan okunmadı."
+            }
+            command.contains("aku") || command.contains("voltaj") || command.contains("sarj") -> {
+                if (voltage >= 0.0) "Akü voltajı ${"%.2f".format(Locale.US, voltage)} volt."
+                else "Akü voltajı henüz ECU'dan okunmadı."
+            }
+            command.contains("emme") || command.contains("map") || command.contains("basinc") -> {
+                if (mapKpa >= 0) "Emme manifoldu basıncı ${mapKpa} kilopaskal."
+                else "Emme basıncı verisi henüz ECU'dan okunmadı."
+            }
+            command.contains("baglanti") || command.contains("adaptör") || command.contains("adaptoru") -> {
+                if (connected) "Viecar adaptörü ve ECU bağlı."
+                else "Viecar adaptörü şu anda bağlı değil."
+            }
+            command.contains("yardim") || command.contains("ne yapabilirsin") -> {
+                "Motor devrini, gaz kelebeğini, motor sıcaklığını, akü voltajını, emme basıncını ve bağlantı durumunu sorabilirsiniz. Ayrıca canlı veri, arıza, testler ve ana sayfa ekranlarını açabilirim."
+            }
+            else -> "Komutu anlayamadım. Motor devri, motor sıcaklığı, akü voltajı, arıza kodları veya canlı veri diyebilirsiniz."
+        }
+        Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
+        assistant?.speak(answer)
+        log("Sesli komut: $rawCommand")
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -279,7 +381,8 @@ class MainActivity : ComponentActivity() {
             Triple("HOME", "⌂", "Ana Sayfa"),
             Triple("LIVE", "◉", "Canlı Veri"),
             Triple("TESTS", "⚒", "Test"),
-            Triple("LOGS", "▤", "Hata Dökümü")
+            Triple("LOGS", "▤", "Hata Dökümü"),
+            Triple("VOICE", "🎙", "Sesli Komut")
         )
         entries.forEach { (key, symbol, label) ->
             val selected = active == key || (key == "HOME" && active in listOf("FAULTS", "DETAIL", "SCAN"))
@@ -301,6 +404,7 @@ class MainActivity : ComponentActivity() {
                         "LIVE" -> showLiveData()
                         "TESTS" -> showTests()
                         "LOGS" -> showLogs()
+                        "VOICE" -> requestVoiceCommand()
                     }
                 }
             }
