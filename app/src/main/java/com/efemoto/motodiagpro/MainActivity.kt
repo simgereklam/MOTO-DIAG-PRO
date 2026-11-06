@@ -604,8 +604,12 @@ class MainActivity : ComponentActivity() {
             addGap(c, 6)
             
             val btnRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-            val yesBtn = actionButton("EVET SİL", red) { confirmClearFaults() }.apply { layoutParams = LinearLayout.LayoutParams(0, -2, 1f) }
-            val noBtn = actionButton("HAYIR", blue) { showHome() }.apply { layoutParams = LinearLayout.LayoutParams(0, -2, 1f); setMargins(dp(8), 0, 0, 0) }
+            val yesBtn = actionButton("EVET SİL", red) { confirmClearFaults() }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+            }
+            val noBtn = actionButton("HAYIR", blue) { showHome() }.apply {
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { setMargins(dp(8), 0, 0, 0) }
+            }
             btnRow.addView(yesBtn)
             btnRow.addView(noBtn)
             c.addView(btnRow)
