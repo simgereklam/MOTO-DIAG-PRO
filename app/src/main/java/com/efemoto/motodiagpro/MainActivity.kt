@@ -170,7 +170,7 @@ class MainActivity : ComponentActivity() {
     }
 
     // ==========================================
-    // SEYFİ USTA İNTERNETLİ & SOHBET EDEN AKILLI ASİSTAN
+    // SEYFİ USTA AKILLI SOHBET VE ASİSTAN MERKEZİ
     // ==========================================
     private fun handleVoiceCommand(rawCommand: String) {
         val cmd = rawCommand.lowercase(Locale("tr", "TR"))
