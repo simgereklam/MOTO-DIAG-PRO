@@ -584,7 +584,7 @@ class MainActivity : ComponentActivity() {
             side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 12, cyan, true).apply { gravity = Gravity.CENTER })
             addGap(side, 6)
             side.addView(text(
-                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK",
+                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞİ GEZİNME AÇIK",
                 10, if (connected) green else muted, true
             ).apply { gravity = Gravity.CENTER })
             addGap(side, 6)
