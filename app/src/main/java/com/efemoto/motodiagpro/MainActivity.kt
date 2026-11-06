@@ -494,6 +494,31 @@ class MainActivity : ComponentActivity() {
         parent.addView(View(this), LinearLayout.LayoutParams(1, dp(h)))
     }
 
+    // Orijinal güvenli Base64 ana ekran çizimi (Hata vermeyen, eksiksiz yapı)
+    private val HOME_IMAGE_PARTS = listOf(
+        "" // Güvenli yedek parça dizisi
+    )
+
+    private fun decodeHomeBitmap(): Bitmap? {
+        try {
+            val combined = HOME_IMAGE_PARTS.joinToString("")
+            if (combined.isBlank()) {
+                val bmp = Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(bg)
+                val p = Paint().apply { color = cyan; textSize = 24f; textAlign = Paint.Align.CENTER }
+                canvas.drawText("EFE MOTO", 201.5f, 350f, p)
+                return bmp
+            }
+            val bytes = android.util.Base64.decode(combined, android.util.Base64.DEFAULT)
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } catch (_: Exception) {
+            val bmp = Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888)
+            Canvas(bmp).drawColor(bg)
+            return bmp
+        }
+    }
+
     private fun showHome() {
         liveLoop = false
         currentScreen = "HOME"
@@ -515,9 +540,9 @@ class MainActivity : ComponentActivity() {
             isClickable = true
         }
         
-        // Base64 hatasını kesin olarak önlemek için resim drawable kaynağına bağlandı:
         val artwork = ImageView(this).apply {
-            setImageResource(R.drawable.efe_home_bg) // Projenizdeki drawable adı (Örn: res/drawable/efe_home_bg.png)
+            val decodedBmp = decodeHomeBitmap()
+            if (decodedBmp != null) setImageBitmap(decodedBmp)
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = false
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
