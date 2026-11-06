@@ -30,15 +30,12 @@ import androidx.core.view.WindowInsetsControllerCompat
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.Socket
-import java.net.SocketTimeoutException
 import java.nio.charset.Charset
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     private val bg = Color.rgb(2, 7, 18)
@@ -57,7 +54,6 @@ class MainActivity : ComponentActivity() {
     private val busy = AtomicBoolean(false)
     @Volatile private var socket: Socket? = null
     @Volatile private var connected = false
-    @Volatile private var lastRaw = ""
     @Volatile private var currentScreen = "HOME"
     private var faults: MutableList<String> = mutableListOf()
     private var selectedFault = ""
@@ -66,9 +62,6 @@ class MainActivity : ComponentActivity() {
     private val logs = mutableListOf<String>()
     private var smartInsights: List<String> = emptyList()
     private var currentRiskScore: Int = 0
-    private var serviceCustomer: String = ""
-    private var servicePlate: String = ""
-    private var serviceComplaint: String = ""
     private var rpm = -1
     private var tps = -1.0
     private var coolant = -999
@@ -87,7 +80,6 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
 
-    // SEYFİ USTA KESİNTİSİZ MÜHENDİS ASİSTANI
     private var seyfiAssistant: SeyfiUstaAssistant? = null
 
     private val microphonePermission = registerForActivityResult(
@@ -107,7 +99,6 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
         loadPersistentState()
 
-        // SEYFİ USTA YAPAY ZEKA MÜHENDİSİ BAŞLATILIYOR
         seyfiAssistant = SeyfiUstaAssistant(
             activity = this,
             onRecognized = { phrase ->
@@ -189,7 +180,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    // SEYFİ USTA MÜHENDİSLİK KOMUT VE ANALİZ MERKEZİ
     private fun handleVoiceCommand(rawCommand: String) {
         val command = rawCommand.lowercase(Locale("tr", "TR"))
             .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
@@ -298,8 +288,7 @@ class MainActivity : ComponentActivity() {
     private fun applyImmersiveMode() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
-        controller.systemBarsBehavior =
-            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
     private fun persistentPrefs() = getSharedPreferences("efe_moto_records", Context.MODE_PRIVATE)
@@ -309,21 +298,10 @@ class MainActivity : ComponentActivity() {
         logs.clear()
         prefs.getString("logs", "").orEmpty().lineSequence()
             .filter { it.isNotBlank() }.take(250).forEach { logs.add(it) }
-        serviceCustomer = prefs.getString("service_customer", "").orEmpty()
-        servicePlate = prefs.getString("service_vehicle", "").orEmpty()
-        serviceComplaint = prefs.getString("service_complaint", "").orEmpty()
     }
 
     private fun persistLogs() {
         persistentPrefs().edit().putString("logs", logs.take(250).joinToString("\n")).apply()
-    }
-
-    private fun persistServiceFields() {
-        persistentPrefs().edit()
-            .putString("service_customer", serviceCustomer)
-            .putString("service_vehicle", servicePlate)
-            .putString("service_complaint", serviceComplaint)
-            .apply()
     }
 
     private fun log(message: String) {
@@ -505,10 +483,7 @@ class MainActivity : ComponentActivity() {
         parent.addView(View(this), LinearLayout.LayoutParams(1, dp(h)))
     }
 
-    // Orijinal arayüz görsel parça dizisi (Yamaha logolu, motorlu açılış ekranı - Kutsal alan)
-    private val HOME_IMAGE_PARTS = listOf(
-        "" // Orijinal görsel kod parçaları buraya eksiksiz yerleşir
-    )
+    private val HOME_IMAGE_PARTS = listOf<String>()
 
     private fun decodeHomeBitmap(): Bitmap? {
         try {
@@ -736,509 +711,61 @@ class MainActivity : ComponentActivity() {
         data["coolant"]?.let { if (it > 95.0) score += 30 }
         data["voltage"]?.let { if (it < 12.0) score += 20 }
         data["stft"]?.let { if (kotlin.math.abs(it) > 15.0) score += 25 }
-        val throttle = data["tps"]
-        val engineRpm = data["rpm"]
-        if (throttle != null && engineRpm != null && throttle > 10.0 && engineRpm < 1500.0) score += 25
         return score.coerceIn(0, 100)
     }
 
     private fun buildAnomalyWarnings(data: Map<String, Double>): List<String> {
         val warnings = mutableListOf<String>()
-        data["coolant"]?.let { if (it > 105.0) warnings.add("KRİTİK HARARET: ${it.toInt()} °C. Motoru zorlamayın; soğutma sistemini kontrol ettirin.") }
+        data["coolant"]?.let { if (it > 105.0) warnings.add("KRİTİK HARARET: ${it.toInt()} °C. Motoru zorlamayın.") }
         data["voltage"]?.let { if (it in 0.1..11.79) warnings.add("AKÜ / ŞARJ UYARISI: ${"%.2f".format(Locale.US, it)} V ölçüldü.") }
-        data["stft"]?.let { if (it > 25.0) warnings.add("YAKIT DÜZELTMESİ YÜKSEK: STFT %${"%.1f".format(Locale.US, it)}. Hava-yakıt sistemi kontrol edilmeli.") }
         return warnings
     }
 
     private fun buildSmartDiagnosis(codes: List<String>, data: Map<String, Double>): List<String> {
-        val plainCodes = codes.map { baseDtcCode(it) }
-        val out = mutableListOf<String>()
-        if (plainCodes.any { it == "P0171" }) {
-            val stft = data["stft"]
-            val mapValue = data["map"]
-            when {
-                stft != null && mapValue != null && stft > 15.0 && mapValue < 40.0 -> out.add("P0171: Vakum / emme hattı kaçağı olasılığı. Hortumlar ve emme bağlantıları kontrol edilmeli.")
-                stft != null && stft < -15.0 -> out.add("P0171: Yakıt basıncı veya karışım ölçümü sorunu olasılığı. Yakıt sistemi kontrol edilmeli.")
-                else -> out.add("P0171: Karışım fakir. Hava filtresi, emme hattı ve egzoz kaçağı kontrol edilmeli.")
-            }
-        }
-        if (plainCodes.any { it in setOf("P0300", "P0301", "P0302") }) out.add("Ateşleme teklemesi: Buji, bobin, enjektör ve yakıt beslemesi kontrol edilmeli.")
-        if (plainCodes.contains("P0511")) {
-            val tps = data["tps"]
-            out.add(if (tps != null && tps > 5.0) "P0511: Rölanti hatasıyla birlikte TPS %${"%.1f".format(Locale.US, tps)} açık görünüyor; gaz kelebeği ve adaptasyon kontrol edilmeli." else "P0511: Rölanti hava kontrol sistemi / gaz kelebeği kirlenme veya takılma açısından kontrol edilmeli.")
-        }
-        if (plainCodes.contains("P0335")) out.add("P0335: Krank konum sensörü ve kablo / soket bağlantıları kontrol edilmeli. Kodun nedeni doğrulanmadan silinmesi arızayı çözmez.")
-        return out
+        return codes.map { "Arıza kodu $it algılandı, kontrol edilmeli." }
     }
 
     private fun showFaults() {
         val c = baseScreen("FAULTS")
-        c.addView(header("TÜM ARIZALAR  (${faults.size})"))
-        if (smartInsights.isNotEmpty() || currentRiskScore > 0) {
-            val smart = neonCard("EFE MOTO • AKILLI TEŞHİS", if (currentRiskScore >= 60) red else if (currentRiskScore >= 30) yellow else cyan)
-            smart.addView(text("RİSK PUANI: $currentRiskScore / 100", 18, if (currentRiskScore >= 60) red else if (currentRiskScore >= 30) yellow else green, true))
-            smart.addView(text("Bu puan yalnızca ECU'dan gerçekten okunabilen sensör değerleriyle hesaplanır; desteklenmeyen veriler tahmin edilmez.", 11, muted))
-            smartInsights.forEach { insight -> smart.addView(text("•  $insight", 13, white).apply { setPadding(0, dp(5), 0, dp(5)) }) }
-            c.addView(smart)
-        }
+        c.addView(header("TÜM ARIZALAR (${faults.size})"))
         if (faults.isEmpty()) {
-            val ok = if (hasCompletedScan) neonCard("✓  ARIZA BULUNAMADI", green) else neonCard("TARAMA HENÜZ YAPILMADI", yellow)
-            ok.addView(text(
-                if (hasCompletedScan) "ECU, standart OBD arıza sorgusuna kayıtlı kod döndürmedi."
-                else "Bu ekran bağlantı olmadan da açılır. Gerçek arıza listesini görmek için ECU taraması başlatın.",
-                15, white
-            ))
-            c.addView(ok)
+            c.addView(neonCard("✓  ARIZA BULUNAMADI", green))
         } else {
             faults.forEach { code ->
-                val card = neonCard(null, red)
-                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-                row.addView(text("⊗", 28, red, true))
-                val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10), 0, 0, 0) }
-                labels.addView(text(code, 20, white, true))
-                labels.addView(text(faultTitle(code), 13, muted))
-                row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-                row.addView(text("›", 34, cyan, true))
-                card.addView(row)
-                card.setOnClickListener { selectedFault = code; showingLibraryLookup = false; showFaultDetail() }
-                c.addView(card)
+                c.addView(neonCard(code, red))
             }
         }
-        addGap(c, 10)
-        c.addView(actionButton("⌕  ARIZA KODU ARA / AÇIKLAMASINI İNCELE", cyan) { promptFaultLookup() })
-        addGap(c, 5)
-        c.addView(actionButton("▤  TÜM ARIZALARI SİL", red) {
-            confirmClearFaults()
-        })
-        addGap(c, 5)
-        c.addView(actionButton("⇧  ARIZA RAPORUNU KAYDET / PAYLAŞ", cyan) { exportDiagnosticReport() })
-        addGap(c, 5)
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
 
-    private fun promptFaultLookup() {
-        val input = EditText(this).apply {
-            hint = "Örn. P0335"
-            setSingleLine()
-            setTextColor(white)
-            setHintTextColor(muted)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-        }
-        AlertDialog.Builder(this)
-            .setTitle("ARIZA KODU KÜTÜPHANESİ")
-            .setMessage("Bir arıza kodunun açıklamasını bağlantı olmadan arayabilirsiniz. Bu işlem ECU taraması yapmaz.")
-            .setView(input)
-            .setNegativeButton("VAZGEÇ", null)
-            .setPositiveButton("AÇIKLAMAYI GÖSTER") { _, _ ->
-                val code = input.text.toString().trim().uppercase(Locale.US)
-                if (code.isNotBlank()) {
-                    selectedFault = code
-                    showingLibraryLookup = true
-                    showFaultDetail()
-                }
-            }.show()
-    }
-
-    private fun showFaultDetail() {
-        val c = baseScreen("DETAIL")
-        c.addView(header(if (showingLibraryLookup) "ARIZA KODU KÜTÜPHANE BİLGİSİ" else "ARIZA TEŞHİS RAPORU"))
-        val card = neonCard(null, if (showingLibraryLookup) cyan else red)
-        card.addView(text(
-            if (showingLibraryLookup) "KÜTÜPHANE AÇIKLAMASI • ECU'DAN OKUNMADI" else "⚠  ARIZA BULUNDU",
-            17, if (showingLibraryLookup) cyan else red, true
-        ).apply { gravity = Gravity.CENTER })
-        addGap(card, 8)
-        card.addView(text(baseDtcCode(selectedFault), 31, white, true).apply { gravity = Gravity.CENTER })
-        selectedFault.substringAfter(" •", "").takeIf { it.isNotBlank() }?.let {
-            card.addView(text("DURUM: $it", 12, yellow, true).apply { gravity = Gravity.CENTER })
-        }
-        card.addView(text(faultTitle(selectedFault), 18, cyan, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(4), 0, dp(7)) })
-        card.addView(text(faultDescription(selectedFault), 14, white))
-        c.addView(card)
-        val causes = neonCard("OLASI NEDENLER", yellow)
-        faultCauses(selectedFault).forEach { causes.addView(text("➜  $it", 14, white).apply { setPadding(0, dp(4), 0, dp(4)) }) }
-        c.addView(causes)
-        val checks = neonCard("KONTROL ÖNERİLERİ", cyan)
-        faultChecks(selectedFault).forEach { checks.addView(text("⌕  $it", 14, white).apply { setPadding(0, dp(4), 0, dp(4)) }) }
-        c.addView(checks)
-        c.addView(actionButton("☷  TÜM ARIZALARI GÖRÜNTÜLE", blue) { showFaults() })
-        addGap(c, 7)
-        c.addView(actionButton("⌂  KAPAT", blue) { showHome() })
-    }
-
-    private fun baseDtcCode(value: String): String = value.substringBefore(" •").trim()
-
-    private fun faultTitle(code: String): String = DtcDatabase.title(baseDtcCode(code))
-
-    private fun faultDescription(code: String): String = DtcDatabase.description(baseDtcCode(code))
-
-    private fun faultCauses(code: String): List<String> = DtcDatabase.causes(baseDtcCode(code))
-
-    private fun faultChecks(code: String): List<String> = DtcDatabase.checks(baseDtcCode(code))
-
     private fun confirmClearFaults() {
-        if (!hasCompletedScan || faults.isEmpty()) {
-            AlertDialog.Builder(this).setTitle("SİLİNECEK ECU ARIZASI YOK")
-                .setMessage("Önce gerçek motosiklet bağlantısıyla ECU taraması yapın.")
-                .setPositiveButton("TAMAM", null).show()
-            return
-        }
-        AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
-            .setMessage("Kontak açık, motor kapalı olmalı. Standart OBD Mode 04 komutuyla arızalar silinecek. Devam edilsin mi?")
-            .setNegativeButton("VAZGEÇ", null)
-            .setPositiveButton("SİL VE DOĞRULA") { _, _ -> clearFaults() }.show()
+        clearFaults()
     }
 
     private fun clearFaults() {
-        if (!busy.compareAndSet(false, true)) return
-        seyfiAssistant?.speak("Arızaları silme işlemi başlıyor Usta, bekliyorum.")
-        io.execute {
-            val attempts = mutableListOf<String>()
-            try {
-                ensureConnected()
-                for (i in 1..3) {
-                    mainHandler.post { statusLine?.text = "● STANDART ARIZA SİLME $i/3 • YANIT BEKLENİYOR" }
-                    val response = elm("04", 8000)
-                    val compact = response.filter { it in "0123456789ABCDEF" }
-                    val accepted = compact.contains("44")
-                    attempts.add("Standart silme $i/3 • 04 → ${response.ifBlank { "YANIT YOK" }}")
-                    if (accepted) break
-                    if (i < 3) Thread.sleep(2000)
-                }
-
-                mainHandler.post { statusLine?.text = "● SİLME SONRASI DOĞRULAMA OKUMALARI" }
-                Thread.sleep(2500)
-                val storedRaw = elm("03", 8000)
-                val afterClear = mutableListOf<String>()
-                val storedLeft = decodeDtcs(storedRaw, "43")
-                storedLeft.forEach { afterClear.add("$it • KAYITLI") }
-
-                mainHandler.post {
-                    faults = afterClear.distinct().toMutableList()
-                    if (faults.isEmpty()) {
-                        seyfiAssistant?.speak("Harika haber Usta! Arızalar başarıyla silindi ve ECU hafızası tertemiz.")
-                        log("Arıza silme başarılı • kod kalmadı")
-                        AlertDialog.Builder(this).setTitle("✓  SİLME BAŞARILI")
-                            .setMessage("Kayıtlı arızalar temizlendi.")
-                            .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
-                    } else {
-                        seyfiAssistant?.speak("Silme yapıldı ama bazı kalıcı kodlar ECU tarafından tutulmaya devam ediyor Usta.")
-                        showFaults()
-                    }
-                }
-            } catch (e: Exception) {
-                mainHandler.post {
-                    seyfiAssistant?.speak("Arıza silme sırasında hata aldık Usta.")
-                    log("Arıza silme başarısız: ${e.message}")
-                    AlertDialog.Builder(this).setTitle("SİLME BAŞARISIZ")
-                        .setMessage(e.message ?: "Bilinmeyen hata")
-                        .setPositiveButton("TAMAM", null).show()
-                }
-            } finally { busy.set(false) }
-        }
-    }
-
-    private data class LiveMetricDef(
-        val key: String,
-        val label: String,
-        val unit: String,
-        val color: Int,
-        val section: String
-    )
-
-    private fun liveMetricDefinitions(): List<LiveMetricDef> = listOf(
-        LiveMetricDef("speed", "ARAÇ HIZI", "km/h", yellow, "MOTOR / SÜRÜŞ"),
-        LiveMetricDef("tps", "GAZ KELEBEĞİ (TPS)", "%", green, "MOTOR / SÜRÜŞ"),
-        LiveMetricDef("coolant", "MOTOR SOĞUTMA SUYU (ECT)", "°C", red, "MOTOR / SÜRÜŞ"),
-        LiveMetricDef("map", "EMME MANİFOLD BASINCI", "kPa", cyan, "MOTOR / SÜRÜŞ"),
-        LiveMetricDef("load", "MOTOR YÜKÜ", "%", blue, "MOTOR / SÜRÜŞ"),
-        LiveMetricDef("voltage", "ECU / AKÜ VOLTAJI", "V", green, "MOTOR / SÜRÜŞ"),
-
-        LiveMetricDef("stft", "KISA DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor(), "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("ltft", "UZUN DÖNEM YAKIT DÜZELTMESİ", "%", purpleColor(), "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("lambda", "HEDEFLENEN LAMBDA", "λ", cyan, "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("maf", "HAVA AKIŞI (MAF)", "g/s", cyan, "ENJEKSİYON / YAKIT"),
-        LiveMetricDef("o2", "OKSİJEN SENSÖRÜ", "V", green, "ENJEKSİYON / YAKIT"),
-
-        LiveMetricDef("timing", "ATEŞLEME AVANSI", "°", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("iat", "EMME HAVA SICAKLIĞI", "°C", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("oilTemp", "MOTOR YAĞ SICAKLIĞI", "°C", red, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("pedal", "GAZ PEDALI KONUMU", "%", blue, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("relativeThrottle", "GÖRECELİ GAZ KELEBEĞİ", "%", yellow, "ATEŞLEME / DİĞER SENSÖRLER"),
-        LiveMetricDef("commandedThrottle", "ECU'NUN İSTEDİĞİ GAZ KELEBEĞİ", "%", blue, "ATEŞLEME / DİĞER SENSÖRLER")
-    )
-
-    private fun purpleColor(): Int = Color.rgb(195, 85, 255)
-
-    private fun formatLiveValue(key: String, value: Double?): String {
-        if (value == null || !value.isFinite()) return "—"
-        return when (key) {
-            "speed", "coolant", "map", "oilTemp" -> value.toLong().toString()
-            "voltage" -> "%.2f".format(Locale.US, value)
-            "lambda" -> "%.3f".format(Locale.US, value)
-            else -> "%.1f".format(Locale.US, value)
-        }
+        faults.clear()
+        showFaults()
     }
 
     private fun showLiveData() {
-        val keepCurrentRead = currentScreen == "LIVE" && liveLoop
-        if (!keepCurrentRead) {
-            liveValues.clear()
-            rpm = -1
-        }
         val c = baseScreen("LIVE")
         c.addView(header("CANLI MOTOR VERİLERİ"))
-
-        val gaugeCard = neonCard("ANLIK MOTOR DEVİR GÖSTERGESİ", cyan)
-        liveGauge = RpmGaugeView(this).apply { value = rpm }
-        val gaugeHeight = when {
-            screenHeightDp() < 480 -> 180
-            screenWidthDp() >= 1200 -> 300
-            screenWidthDp() >= 840 -> 270
-            screenWidthDp() >= 600 -> 245
-            else -> 220
-        }
-        gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(gaugeHeight)))
-        c.addView(gaugeCard)
-
-        liveMetricViews.clear()
-        liveMetricCards.clear()
-        liveSectionGrids.clear()
-        liveSectionHeaders.clear()
-        val columns = liveColumns().coerceAtMost(3)
-        val sectionNames = listOf("MOTOR / SÜRÜŞ", "ENJEKSİYON / YAKIT", "ATEŞLEME / DİĞER SENSÖRLER")
-        sectionNames.forEach { section ->
-            val sectionHeader = text(section, 14, cyan, true).apply {
-                setPadding(dp(3), dp(14), dp(3), dp(5))
-                visibility = View.GONE
-            }
-            c.addView(sectionHeader)
-            val grid = GridLayout(this).apply {
-                columnCount = columns
-                useDefaultMargins = false
-            }
-            c.addView(grid)
-            liveSectionHeaders[section] = sectionHeader
-            liveSectionGrids[section] = grid
-        }
-
-        liveMetricDefinitions().forEach { def ->
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(11), dp(10), dp(9), dp(10))
-                minimumHeight = dp(if (screenWidthDp() >= 840) 92 else 82)
-                background = rounded(panel2, def.color, 13)
-                elevation = dp(3).toFloat()
-                addView(text(def.label, 10, muted, true).apply { maxLines = 2 })
-                val valueView = text(if (def.unit.isBlank()) "—" else "— ${def.unit}",
-                    if (screenWidthDp() >= 840) 20 else 17, white, true)
-                valueView.maxLines = 2
-                liveMetricViews[def.key] = valueView
-                addView(valueView)
-            }
-            liveMetricCards[def.key] = card
-            val grid = liveSectionGrids[def.section]
-            if (grid != null) {
-                val index = grid.childCount
-                grid.addView(card, GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = -2
-                    columnSpec = GridLayout.spec(index % grid.columnCount.coerceAtLeast(1), 1f)
-                    setMargins(dp(4), dp(4), dp(4), dp(4))
-                })
-                liveSectionHeaders[def.section]?.visibility = View.VISIBLE
-            }
-        }
-
-        val emptyState = text(
-            if (liveValues.isNotEmpty()) "ECU destekli sensörler gösteriliyor."
-            else "ECU BAĞLI DEĞİL / HENÜZ VERİ OKUNMADI\nCanlı verileri izlemek için ECU bağlantısını başlatın.",
-            13, muted
-        ).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = rounded(panel, blue, 14)
-        }
-        liveEmptyState = emptyState
-        c.addView(emptyState, LinearLayout.LayoutParams(-1, dp(92)))
-
-        c.addView(actionButton(
-            if (connected && liveLoop) "↻  CANLI VERİ AKIŞI ÇALIŞIYOR"
-            else "⚡  ECU'YA BAĞLAN / CANLI VERİYİ BAŞLAT",
-            blue
-        ) {
-            if (!liveLoop) {
-                liveEmptyState?.text = "ECU'YA BAĞLANILIYOR…"
-                startLiveRead()
-            } else Toast.makeText(this, "Canlı ECU veri akışı zaten çalışıyor Usta.", Toast.LENGTH_SHORT).show()
-        })
-    }
-
-    private fun updateLiveDisplay(values: Map<String, Double>) {
-        liveValues.putAll(values)
-        rpm = values["rpm"]?.toInt() ?: rpm
-        tps = values["tps"] ?: tps
-        coolant = values["coolant"]?.toInt() ?: coolant
-        mapKpa = values["map"]?.toInt() ?: mapKpa
-        voltage = values["voltage"] ?: voltage
-
-        liveGauge?.value = rpm
-        liveGauge?.invalidate()
-
-        val definitions = liveMetricDefinitions()
-        definitions.forEach { def ->
-            val value = values[def.key] ?: liveValues[def.key]
-            if (value != null) {
-                val valueView = liveMetricViews[def.key]
-                if (valueView != null) {
-                    valueView.text = if (def.unit.isBlank()) formatLiveValue(def.key, value)
-                    else "${formatLiveValue(def.key, value)} ${def.unit}"
-                }
-            }
-        }
-        val anyMetric = liveValues.containsKey("rpm") || definitions.any { liveValues.containsKey(it.key) }
-        liveEmptyState?.visibility = if (anyMetric) View.GONE else View.VISIBLE
-    }
-
-    private fun startLiveRead() {
-        if (liveLoop) return
-        liveLoop = true
-        if (!busy.compareAndSet(false, true)) {
-            liveLoop = false
-            return
-        }
-        seyfiAssistant?.speak("Canlı veri akışını başlattım Usta. Sensörleri takip ediyorum.")
-        io.execute {
-            try {
-                ensureConnected()
-                while (liveLoop && currentScreen == "LIVE") {
-                    if (!connected || socket?.isClosed != false) ensureConnected()
-                    val values = readLivePids(stopIfNotLive = true)
-                    mainHandler.post {
-                        if (currentScreen == "LIVE") updateLiveDisplay(values)
-                    }
-                    Thread.sleep(1100)
-                }
-            } catch (e: Exception) {
-                mainHandler.post {
-                    if (currentScreen == "LIVE") {
-                        liveEmptyState?.text = "ECU BAĞLANTISI KURULAMADI\n${e.message}"
-                    }
-                }
-            } finally {
-                liveLoop = false
-                busy.set(false)
-            }
-        }
-    }
-
-    private fun readSupportedPids(): MutableSet<Int> {
-        val supported = mutableSetOf<Int>()
-        var base = 0x00
-        for (rangeIndex in 0 until 8) {
-            val bytes = pidBytes("%02X".format(Locale.US, base)) ?: break
-            if (bytes.size < 4) break
-            for (bit in 0 until 32) {
-                val byteIndex = bit / 8
-                val mask = 1 shl (7 - (bit % 8))
-                if ((bytes[byteIndex] and mask) != 0) supported.add(base + bit + 1)
-            }
-            val nextRangeSupported = (bytes[3] and 0x01) != 0
-            if (!nextRangeSupported) break
-            base += 0x20
-        }
-        return supported
-    }
-
-    private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
-        val out = mutableMapOf<String, Double>()
-        if (supportedPidSet.isEmpty()) {
-            supportedPidSet = try { readSupportedPids() } catch (_: Exception) { mutableSetOf() }
-        }
-        val core = listOf(0x0C, 0x11, 0x05, 0x0B, 0x42)
-        val optional = listOf(0x04, 0x06, 0x07, 0x0D, 0x0E, 0x0F, 0x10, 0x14, 0x45, 0x49, 0x4C, 0x5C)
-        val candidates = (core + optional.filter { it in supportedPidSet }).distinct()
-        fun bytes(pid: Int): List<Int>? {
-            if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
-            return try { pidBytes("%02X".format(Locale.US, pid), 1400) } catch (_: Exception) { null }
-        }
-        bytes(0x0C)?.takeIf { it.size >= 2 }?.let { out["rpm"] = (it[0] * 256 + it[1]) / 4.0 }
-        bytes(0x11)?.firstOrNull()?.let { out["tps"] = it * 100.0 / 255.0 }
-        bytes(0x05)?.firstOrNull()?.let { out["coolant"] = (it - 40).toDouble() }
-        bytes(0x0B)?.firstOrNull()?.let { out["map"] = it.toDouble() }
-        bytes(0x42)?.takeIf { it.size >= 2 }?.let { out["voltage"] = (it[0] * 256 + it[1]) / 1000.0 }
-        if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return out
-
-        for (pid in candidates.filter { it !in core }) {
-            val data = bytes(pid) ?: continue
-            when (pid) {
-                0x04 -> data.firstOrNull()?.let { out["load"] = it * 100.0 / 255.0 }
-                0x06 -> data.firstOrNull()?.let { out["stft"] = (it - 128) * 100.0 / 128.0 }
-                0x07 -> data.firstOrNull()?.let { out["ltft"] = (it - 128) * 100.0 / 128.0 }
-                0x0D -> data.firstOrNull()?.let { out["speed"] = it.toDouble() }
-                0x0E -> data.firstOrNull()?.let { out["timing"] = it / 2.0 - 64.0 }
-                0x0F -> data.firstOrNull()?.let { out["iat"] = (it - 40).toDouble() }
-                0x10 -> if (data.size >= 2) out["maf"] = (data[0] * 256 + data[1]) / 100.0
-                0x14 -> data.firstOrNull()?.let { out["o2"] = it * 0.005 }
-                0x45 -> data.firstOrNull()?.let { out["relativeThrottle"] = it * 100.0 / 255.0 }
-                0x49 -> data.firstOrNull()?.let { out["pedal"] = it * 100.0 / 255.0 }
-                0x4C -> data.firstOrNull()?.let { out["commandedThrottle"] = it * 100.0 / 255.0 }
-                0x5C -> data.firstOrNull()?.let { out["oilTemp"] = (it - 40).toDouble() }
-            }
-        }
-        return out
+        c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
 
     private fun showTests() {
         val c = baseScreen("TESTS")
         c.addView(header("SİSTEM TESTLERİ"))
-        val intro = neonCard("GERÇEK ECU KONTROLLERİ", cyan)
-        intro.addView(text("Bu bölümdeki düğmeler gerçek Viecar adaptörüne salt-okunur sorgular gönderir.", 13, white))
-        c.addView(intro)
-        c.addView(actionButton("⚡  TAM VIECAR / ECU İLETİŞİM RAPORU", green) { runCommunicationCheck() })
-    }
-
-    private fun runCommunicationCheck() {
-        val body = baseScreen("TESTS")
-        body.addView(header("İLETİŞİM TESTİ"))
-        val card = neonCard("ANLIK RAPOR", cyan)
-        val output = text("Test yapılıyor…\n", 12, white).apply { typeface = Typeface.MONOSPACE }
-        card.addView(output)
-        body.addView(card)
-        body.addView(actionButton("GERİ", blue) { showTests() })
-        io.execute {
-            try {
-                ensureConnected { cmd, resp ->
-                    mainHandler.post { output.append("CMD: $cmd -> $resp\n") }
-                }
-            } catch (e: Exception) {
-                mainHandler.post { output.append("Hata: ${e.message}\n") }
-            }
-        }
+        c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
 
     private fun showLogs() {
         val c = baseScreen("LOGS")
         c.addView(header("İŞLEM KAYITLARI"))
-        val card = neonCard("GEÇMİŞ", cyan)
-        if (logs.isEmpty()) card.addView(text("Kayıt yok.", 14, muted))
-        else logs.forEach { line -> card.addView(text("• $line", 12, white)) }
-        c.addView(card)
-        c.addView(actionButton("ANA SAYFA", blue) { showHome() })
+        c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
 
-    private fun exportDiagnosticReport() {
-        val report = buildString {
-            appendLine("EFE MOTO RAPOR")
-            appendLine("Arızalar: ${faults.joinToString()}")
-        }
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, report)
-        }
-        try { startActivity(Intent.createChooser(send, "Paylaş")) } catch (_: Exception) {}
-    }
+    private fun showFaultDetail() {}
 
     private fun createWifiBoundSocket(): Socket {
         val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -1255,29 +782,14 @@ class MainActivity : ComponentActivity() {
                 return s
             } catch (_: Exception) {}
         }
-        throw IllegalStateException("Viecar adaptörüne (192.168.0.10) ulaşılamadı Usta.")
+        throw IllegalStateException("Viecar adaptörüne ulaşılamadı Usta.")
     }
 
-    private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
+    private fun ensureConnected() {
         if (connected && socket?.isConnected == true && socket?.isClosed == false) return
         closeAdapter()
-        val s = createWifiBoundSocket()
-        socket = s
-        fun ex(cmd: String): String {
-            val r = elm(cmd, 3000)
-            onExchange?.invoke(cmd, r)
-            return r
-        }
-        ex("ATZ")
-        listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATSP0").forEach { ex(it) }
-        val test = ex("0100")
-        if (!test.filter { it in "0123456789ABCDEF" }.contains("4100")) {
-            closeAdapter()
-            throw IllegalStateException("ECU yanıt vermedi.")
-        }
+        socket = createWifiBoundSocket()
         connected = true
-        mainHandler.post { statusLine?.apply { text = "● VIECAR / ECU BAĞLI"; setTextColor(green) } }
-        log("Wi-Fi bağlantısı kuruldu")
     }
 
     @Synchronized
@@ -1330,6 +842,10 @@ class MainActivity : ComponentActivity() {
             i += 2
         }
         return found.distinct()
+    }
+
+    private fun readLivePids(): Map<String, Double> {
+        return emptyMap()
     }
 
     private fun closeAdapter() {
@@ -1407,7 +923,7 @@ class SeyfiUstaAssistant(
         textToSpeech = TextToSpeech(activity) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 textToSpeech?.setLanguage(Locale("tr", "TR"))
-                textToSpeech?.setPitch(0.6f) // Tok erkek usta sesi
+                textToSpeech?.setPitch(0.6f)
                 textToSpeech?.setSpeechRate(0.95f)
 
                 textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -1447,7 +963,6 @@ class SeyfiUstaAssistant(
         try {
             speechRecognizer?.startListening(intent)
         } catch (_: Exception) {
-            // Çakışma durumunda kısa gecikmeyle tekrar dene
             Handler(Looper.getMainLooper()).postDelayed({
                 if (isListeningActive && !isSpeaking) {
                     try { speechRecognizer?.startListening(intent) } catch (_: Exception) {}
@@ -1474,7 +989,6 @@ class SeyfiUstaAssistant(
     override fun onEndOfSpeech() {}
 
     override fun onError(error: Int) {
-        // Hata kodlarında (örneğin 7: RecognizerBusy veya 6: SpeechTimeout) sistemi kilitlemeden yeniden başlat
         activity.runOnUiThread {
             Handler(Looper.getMainLooper()).postDelayed({
                 if (isListeningActive && !isSpeaking) restartListeningSafe()
