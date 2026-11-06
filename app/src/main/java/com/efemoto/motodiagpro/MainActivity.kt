@@ -41,6 +41,7 @@ import kotlin.math.min
 class MainActivity : ComponentActivity() {
     private val bg = Color.rgb(2, 7, 18)
     private val panel = Color.rgb(4, 15, 34)
+    private val blue = Color.rgb(0, 113, 255)
     private val cyan = Color.rgb(0, 220, 255)
     private val green = Color.rgb(0, 235, 95)
     private val red = Color.rgb(255, 35, 55)
@@ -57,7 +58,6 @@ class MainActivity : ComponentActivity() {
     
     // Canlı Veri Değişkenleri
     private var rpm = -1
-    private var tps = -1.0
     private var coolant = -999
     private var voltage = -1.0
     @Volatile private var liveLoop = false
@@ -627,8 +627,10 @@ class MainActivity : ComponentActivity() {
         
         val card = neonCard("ANLIK SENSÖR DEĞERLERİ", cyan)
         card.addView(text("Motor Devri (RPM): $rpm devir/dk", 15, white, true))
-        card.addView(text("Akü Voltajı: ${if (voltage >= 0) "$voltage V" : "Ölçülüyor..."}", 15, if (voltage in 0.1..11.8) red else green, true))
-        card.addView(text("Motor Suyu Sıcaklığı: ${if (coolant > -999) "$coolant °C" : "Okunuyor..."}", 15, white, true))
+        val voltStr = if (voltage >= 0) "$voltage V" else "Ölçülüyor..."
+        card.addView(text("Akü Voltajı: $voltStr", 15, if (voltage in 0.1..11.8) red else green, true))
+        val coolantStr = if (coolant > -999) "$coolant °C" else "Okunuyor..."
+        card.addView(text("Motor Suyu Sıcaklığı: $coolantStr", 15, white, true))
         c.addView(card)
         
         c.addView(actionButton("🔍 VERİLERİ USTA GİBİ YORUMLA", green) {
