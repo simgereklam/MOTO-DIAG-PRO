@@ -261,7 +261,6 @@ class MainActivity : ComponentActivity() {
                 "Seyfi Usta emrinde Usta. Arıza taraması yapabilir, canlı verileri yorumlayabilir veya akü ve hararet durumunu sana raporlayabilirim."
             }
             else -> {
-                // Yapay zeka esnek yönlendirme
                 "Söylediğini tam çıkaramadım Usta ama buradayım. Arıza taraması yapmamı ya da canlı verileri yorumlamamı isteyebilirsin."
             }
         }
@@ -593,7 +592,7 @@ class MainActivity : ComponentActivity() {
             side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 12, cyan, true).apply { gravity = Gravity.CENTER })
             addGap(side, 6)
             side.addView(text(
-                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK",
+                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞİ GEZİNME AÇIK",
                 10, if (connected) green else muted, true
             ).apply { gravity = Gravity.CENTER })
             addGap(side, 6)
@@ -699,7 +698,6 @@ class MainActivity : ComponentActivity() {
                     log("ECU taraması tamamlandı • ${faults.size} arıza • risk $currentRiskScore/100")
                     smartInsights.forEach { log("Akıllı teşhis: $it") }
 
-                    // Seyfi Usta sesli sonuç bildirimi
                     if (faults.isEmpty()) {
                         seyfiAssistant?.speak("Tarama bitti Usta. Hafızada kayıtlı arıza kodu yok, motor saat gibi.")
                     } else {
@@ -1201,28 +1199,6 @@ class MainActivity : ComponentActivity() {
         c.addView(actionButton("⚡  TAM VIECAR / ECU İLETİŞİM RAPORU", green) { runCommunicationCheck() })
     }
 
-    private fun runReadOnlyTest(title: String, subtitle: String, queries: List<Triple<String, String, String>>) {
-        if (!busy.compareAndSet(false, true)) return
-        io.execute {
-            val report = StringBuilder()
-            try {
-                ensureConnected()
-                report.appendLine(subtitle)
-                for ((label, command, marker) in queries) {
-                    val response = elm(command, 3000)
-                    report.append("✓ ").append(label).append("\n  Yanıt: ").append(response).append("\n\n")
-                }
-            } catch (e: Exception) {
-                report.append("Hata: ${e.message}")
-            } finally {
-                busy.set(false)
-                mainHandler.post {
-                    AlertDialog.Builder(this).setTitle(title).setMessage(report.toString()).setPositiveButton("TAMAM", null).show()
-                }
-            }
-        }
-    }
-
     private fun runCommunicationCheck() {
         val body = baseScreen("TESTS")
         body.addView(header("İLETİŞİM TESTİ"))
@@ -1247,7 +1223,7 @@ class MainActivity : ComponentActivity() {
         c.addView(header("İŞLEM KAYITLARI"))
         val card = neonCard("GEÇMİŞ", cyan)
         if (logs.isEmpty()) card.addView(text("Kayıt yok.", 14, muted))
-        else logs.forEach { card.addView(text("• $line", 12, white)) }
+        else logs.forEach { line -> card.addView(text("• $line", 12, white)) }
         c.addView(card)
         c.addView(actionButton("ANA SAYFA", blue) { showHome() })
     }
@@ -1312,7 +1288,7 @@ class MainActivity : ComponentActivity() {
         s.soTimeout = timeoutMs
         try { while (input.available() > 0) input.read() } catch (_: Exception) {}
         val res = ByteArrayOutputStream()
-        out.write((command.trim() + "\r").charset(Charsets.US_ASCII).let { command.trim() + "\r" }.toByteArray(Charsets.US_ASCII))
+        out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
         out.flush()
         val started = System.currentTimeMillis()
         while (System.currentTimeMillis() - started < timeoutMs) {
@@ -1408,7 +1384,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // ============================================================================
-// SEYFİ USTA KESİNTİSİZ YAPAY ZEKA MÜHENDİS DİNLEME SINIFI (HANDS-FREE)
+// SEYFİ USTA KESİNTİSİZ YAPAY ZEKA MÜHENDİS DİNLEME SINIFI (HANDS-FREE - GÜVENLİ)
 // ============================================================================
 class SeyfiUstaAssistant(
     private val activity: ComponentActivity,
@@ -1435,7 +1411,10 @@ class SeyfiUstaAssistant(
                 textToSpeech?.setSpeechRate(0.95f)
 
                 textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) { isSpeaking = true }
+                    override fun onStart(utteranceId: String?) { 
+                        isSpeaking = true 
+                        try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+                    }
                     override fun onDone(utteranceId: String?) {
                         isSpeaking = false
                         activity.runOnUiThread { restartListeningSafe() }
@@ -1467,7 +1446,14 @@ class SeyfiUstaAssistant(
         }
         try {
             speechRecognizer?.startListening(intent)
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+            // Çakışma durumunda kısa gecikmeyle tekrar dene
+            Handler(Looper.getMainLooper()).postDelayed({
+                if (isListeningActive && !isSpeaking) {
+                    try { speechRecognizer?.startListening(intent) } catch (_: Exception) {}
+                }
+            }, 1200)
+        }
     }
 
     fun speak(text: String) {
@@ -1488,11 +1474,11 @@ class SeyfiUstaAssistant(
     override fun onEndOfSpeech() {}
 
     override fun onError(error: Int) {
-        // Hata aldığında (sessizlik vb.) döngüyü koparmadan tekrar dinlemeye başla
+        // Hata kodlarında (örneğin 7: RecognizerBusy veya 6: SpeechTimeout) sistemi kilitlemeden yeniden başlat
         activity.runOnUiThread {
             Handler(Looper.getMainLooper()).postDelayed({
                 if (isListeningActive && !isSpeaking) restartListeningSafe()
-            }, 800)
+            }, 1500)
         }
     }
 
@@ -1504,7 +1490,7 @@ class SeyfiUstaAssistant(
         activity.runOnUiThread {
             Handler(Looper.getMainLooper()).postDelayed({
                 if (isListeningActive && !isSpeaking) restartListeningSafe()
-            }, 400)
+            }, 500)
         }
     }
 
