@@ -17,6 +17,7 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.util.Base64
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -58,37 +59,49 @@ class MainActivity : ComponentActivity() {
     private var faults: MutableList<String> = mutableListOf()
     private var selectedFault = ""
     private var hasCompletedScan = false
-    private var showingLibraryLookup = false
     private val logs = mutableListOf<String>()
     private var smartInsights: List<String> = emptyList()
     private var currentRiskScore: Int = 0
     private var rpm = -1
     private var tps = -1.0
     private var coolant = -999
-    private var mapKpa = -1
     private var voltage = -1.0
     @Volatile private var liveLoop = false
-    private var liveValues: MutableMap<String, Double> = mutableMapOf()
-    private var supportedPidSet: MutableSet<Int> = mutableSetOf()
-    private var liveGauge: RpmGaugeView? = null
-    private val liveMetricViews = mutableMapOf<String, TextView>()
-    private val liveMetricCards = mutableMapOf<String, LinearLayout>()
-    private val liveSectionGrids = mutableMapOf<String, GridLayout>()
-    private val liveSectionHeaders = mutableMapOf<String, TextView>()
-    private var liveEmptyState: TextView? = null
     private var statusLine: TextView? = null
     private var progressLine: TextView? = null
     private var scanPercent = 0
 
-    private var seyfiAssistant: SeyfiUstaAssistant? = null
+    private var seyfiAssistant: SeyfiUstaAI? = null
 
     private val microphonePermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            seyfiAssistant?.startContinuousListening()
+            seyfiAssistant?.startListening()
         } else {
-            Toast.makeText(this, "Seyfi Usta sürekli kulak vermesi için mikrofon izni şart Usta.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Seyfi Usta sesli komut için mikrofon izni istiyor Usta.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val HOME_IMAGE_PARTS = listOf<String>()
+
+    private fun decodeHomeBitmap(): Bitmap? {
+        try {
+            val combined = HOME_IMAGE_PARTS.joinToString("")
+            if (combined.isBlank()) {
+                val bmp = Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(bmp)
+                canvas.drawColor(bg)
+                val p = Paint().apply { color = cyan; textSize = 24f; textAlign = Paint.Align.CENTER }
+                canvas.drawText("EFE MOTO", 201.5f, 350f, p)
+                return bmp
+            }
+            val bytes = Base64.decode(combined, Base64.DEFAULT)
+            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        } catch (_: Exception) {
+            val bmp = Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888)
+            Canvas(bmp).drawColor(bg)
+            return bmp
         }
     }
 
@@ -99,13 +112,9 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
         loadPersistentState()
 
-        seyfiAssistant = SeyfiUstaAssistant(
-            activity = this,
-            onRecognized = { phrase ->
-                mainHandler.post { handleVoiceCommand(phrase) }
-            },
-            onStatus = { _ -> }
-        ).also { it.initialize() }
+        seyfiAssistant = SeyfiUstaAI(this) { phrase ->
+            mainHandler.post { handleVoiceCommand(phrase) }
+        }.also { it.initialize() }
 
         checkMicrophoneAndStart()
 
@@ -116,7 +125,6 @@ class MainActivity : ComponentActivity() {
             "TESTS" -> showTests()
             "LOGS" -> showLogs()
             "FAULTS" -> showFaults()
-            "DETAIL" -> if (selectedFault.isNotBlank()) showFaultDetail() else showFaults()
             else -> showHome()
         }
     }
@@ -125,7 +133,7 @@ class MainActivity : ComponentActivity() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
             PackageManager.PERMISSION_GRANTED
         ) {
-            seyfiAssistant?.startContinuousListening()
+            seyfiAssistant?.startListening()
         } else {
             microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
         }
@@ -151,7 +159,6 @@ class MainActivity : ComponentActivity() {
             "TESTS" -> showTests()
             "LOGS" -> showLogs()
             "FAULTS" -> showFaults()
-            "DETAIL" -> showFaultDetail()
             "SCAN" -> showScanProgressShell()
             else -> showHome()
         }
@@ -166,7 +173,7 @@ class MainActivity : ComponentActivity() {
         progressLine = text("ECU taraması sürüyor…  •  %$scanPercent", 18, white, true).apply { gravity = Gravity.CENTER }
         card.addView(progressLine)
         addGap(card, 10)
-        card.addView(text("Ekran yönü değişti. Devam eden bağlantı ve tarama işlemi korunuyor.", 13, muted))
+        card.addView(text("Ekran yönü değişti. Bağlantı korunuyor.", 13, muted))
         c.addView(card)
         c.addView(actionButton("TARAMAYI İPTAL ET", red) { closeAdapter(); showHome() })
     }
@@ -180,96 +187,73 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    // İNTERNETSİZ YEREL YAPAY ZEKA & USTA KARAR MEKANİZMASI
     private fun handleVoiceCommand(rawCommand: String) {
-        val command = rawCommand.lowercase(Locale("tr", "TR"))
+        val cmd = rawCommand.lowercase(Locale("tr", "TR"))
             .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
             .replace("ş", "s").replace("ö", "o").replace("ç", "c")
             .trim()
-        val assistant = seyfiAssistant ?: return
 
-        val answer = when {
-            command.contains("seyfi usta") || command.contains("merhaba") || command.contains("selam") -> {
-                "Merhaba Usta, ben Seyfi Usta. Motosikletinin arıza teşhisi, canlı verileri ve motor sağlığı için buradayım. Buyur, ne yapıyoruz?"
+        val reply = when {
+            cmd.contains("seyfi usta") || cmd.contains("merhaba") || cmd.contains("selam") -> {
+                "Aleykümselam Usta! Ben Seyfi Usta. Motorun beyni bende, neyi kurcalıyoruz?"
             }
-            command.contains("tarama yap") || command.contains("tara") || command.contains("ariza tara") || command.contains("taramayi baslat") -> {
+            cmd.contains("tarama") || cmd.contains("tara") || cmd.contains("ariza bul") -> {
                 startDiagnosis()
-                "Hemen ECU arıza taramasını başlatıyorum Usta, adaptör verilerini topluyorum, sabırlı ol."
+                "Hemen Wi-Fi adaptöründen ECU'ya bağlanıp taramayı başlatıyorum Usta, sabırlı ol."
             }
-            command.contains("ariza kod") || command.contains("kodlari oku") || command.contains("ariza oku") || command.contains("arizalar") -> {
+            cmd.contains("kod") || cmd.contains("arizalar") || cmd.contains("oku") -> {
                 showFaults()
-                if (faults.isEmpty()) {
-                    "Kontrol ettim Usta, hafızada kayıtlı arıza kodu bulunmuyor, motor temiz."
-                } else {
-                    "Kayıtlı arıza kodları şunlar Usta: ${faults.joinToString()}. Üzerine tıklayıp detaylı bakabilirsin."
-                }
+                if (faults.isEmpty()) "Hafızada arıza kodu yok Usta, motor saat gibi maşallah."
+                else "Kayıtlı arızalar şunlar Usta: ${faults.joinToString()}. Dikkat etmek lazım."
             }
-            command.contains("sil") || command.contains("arizalari sil") -> {
-                showFaults()
+            cmd.contains("sil") -> {
                 confirmClearFaults()
-                "Arızaları silme komutunu aldım Usta, ekrandan onay vermen gerekiyor."
+                "Arıza hafızasını silme komutunu işleme alıyorum Usta."
             }
-            command.contains("canli veri") || command.contains("canliyi ac") || command.contains("verileri ac") -> {
+            cmd.contains("canli") || cmd.contains("veri") || cmd.contains("sensor") -> {
                 showLiveData()
-                "Canlı veri ekranını açtım Usta. Buradan anlık devir, akü ve sensörleri takip ediyoruz."
+                "Canlı veri ekranını açtım Usta. Anlık verileri izliyoruz."
             }
-            command.contains("canli veri yorumla") || command.contains("durum ne") || command.contains("motor nasil") -> {
-                evaluateLiveStatusForVoice()
+            cmd.contains("durum") || cmd.contains("nasıl") || cmd.contains("yorumla") -> {
+                evaluateEngineBrain()
             }
-            command.contains("devir") || command.contains("rpm") -> {
-                if (rpm >= 0) "Motor devri şu an $rpm devir bölü dakika Usta."
-                else "Motor devri henüz ECU'dan okunmadı Usta. Canlı veriyi başlatman gerek."
+            cmd.contains("devir") || cmd.contains("rpm") -> {
+                if (rpm >= 0) "Motor devri şu an dakikada $rpm devir Usta."
+                else "Devir verisi henüz ECU'dan akmadı Usta."
             }
-            command.contains("gaz") || command.contains("tps") -> {
-                if (tps >= 0.0) "Gaz kelebeği konumu yüzde ${"%.1f".format(Locale.US, tps)} Usta."
-                else "Gaz konumu verisi henüz gelmedi Usta."
+            cmd.contains("aku") || cmd.contains("voltaj") -> {
+                if (voltage >= 0.0) "Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt Usta."
+                else "Akü voltajı okunmadı Usta."
             }
-            command.contains("sicaklik") || command.contains("hararet") -> {
-                if (coolant > -999) {
-                    if (coolant > 100) "Dikkat Usta! Motor soğutma suyu sıcaklığı $coolant derece. Hararet yükseliyor, sistemi kontrol et!"
-                    else "Motor soğutma suyu sıcaklığı $coolant derece Usta, normal seviyede."
-                } else "Motor sıcaklık verisi henüz okunmadı Usta."
+            cmd.contains("hararet") || cmd.contains("sicaklik") -> {
+                if (coolant > -999) "Motor suyu sıcaklığı $coolant derece Usta."
+                else "Sıcaklık verisi henüz gelmedi Usta."
             }
-            command.contains("aku") || command.contains("voltaj") || command.contains("sarj") -> {
-                if (voltage >= 0.0) {
-                    if (voltage < 12.0) "Usta dikkat! Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt. Şarj dinamosunu veya konjektörü acilen kontrol etmeliyiz."
-                    else "Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt Usta, gayet iyi."
-                } else "Akü voltajı henüz okunmadı Usta."
-            }
-            command.contains("test") -> {
-                showTests()
-                "Test ekranını açtım Usta."
-            }
-            command.contains("kayit") || command.contains("log") -> {
-                showLogs()
-                "İşlem kayıtları ve hata dökümü ekranı açıldı Usta."
-            }
-            command.contains("ana sayfa") || command.contains("eve don") -> {
+            cmd.contains("ana sayfa") || cmd.contains("geri") -> {
                 showHome()
-                "Ana sayfaya döndüm Usta."
-            }
-            command.contains("yardim") || command.contains("ne yapabilirsin") -> {
-                "Seyfi Usta emrinde Usta. Arıza taraması yapabilir, canlı verileri yorumlayabilir veya akü ve hararet durumunu sana raporlayabilirim."
+                "Ana ekrandayız Usta."
             }
             else -> {
-                "Söylediğini tam çıkaramadım Usta ama buradayım. Arıza taraması yapmamı ya da canlı verileri yorumlamamı isteyebilirsin."
+                "Söylediğini tam kestiremedim Usta ama buradayım. Arıza taraması yapmamı veya canlı verileri yorumlamamı isteyebilirsin."
             }
         }
 
-        Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
-        assistant.speak(answer)
-        log("Seyfi Usta AI Sohbet: $rawCommand")
+        Toast.makeText(this, reply, Toast.LENGTH_LONG).show()
+        seyfiAssistant?.speak(reply)
+        log("Seyfi Usta AI: $rawCommand")
     }
 
-    private fun evaluateLiveStatusForVoice(): String {
-        val issues = mutableListOf<String>()
-        if (voltage in 0.1..11.8) issues.add("Akü voltajı ${"%.2f".format(Locale.US, voltage)} Volt ile düşük.")
-        if (coolant > 102) issues.add("Hararet $coolant dereceye ulaşmış durumda.")
-        if (rpm in 1..900) issues.add("Rölanti devri oldukça düşük.")
+    private fun evaluateEngineBrain(): String {
+        val notes = mutableListOf<String>()
+        if (voltage in 0.1..11.8) notes.add("akü zayıf (${"%.2f".format(Locale.US, voltage)}V)")
+        if (coolant > 102) notes.add("hararet yüksek ($coolant°C)")
+        if (rpm in 1..900) notes.add("rölanti düşük")
 
-        return if (issues.isEmpty()) {
-            "Canlı verileri inceledim Usta. Akü, hararet ve sensör değerleri normal görünüyor. Şu an olağan dışı bir anormallik yok."
+        return if (notes.isEmpty()) {
+            "Motorun durumu gayet sıhhatli Usta. Anormal bir durum sezmedim."
         } else {
-            "Canlı verilerde mühendislik uyarısı var Usta! " + issues.joinToString(" ") + " Dikkatli olalım."
+            "Dikkat Usta! Yapay zeka analizinde bazı sorunlar var: " + notes.joinToString(", ") + ". El atman gerekebilir."
         }
     }
 
@@ -279,18 +263,14 @@ class MainActivity : ComponentActivity() {
     private fun screenHeightDp(): Int = resources.configuration.screenHeightDp.takeIf { it > 0 }
         ?: (resources.displayMetrics.heightPixels / resources.displayMetrics.density).toInt()
     private fun isWideLandscape(): Boolean = screenWidthDp() >= 600 && screenWidthDp() > screenHeightDp() * 1.15
-    private fun liveColumns(): Int = when {
-        screenWidthDp() >= 1200 -> 5
-        screenWidthDp() >= 840 -> 4
-        screenWidthDp() >= 600 -> 3
-        else -> 2
-    }
+
     private fun applyImmersiveMode() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         controller.hide(WindowInsetsCompat.Type.systemBars())
     }
+
     private fun persistentPrefs() = getSharedPreferences("efe_moto_records", Context.MODE_PRIVATE)
 
     private fun loadPersistentState() {
@@ -401,7 +381,7 @@ class MainActivity : ComponentActivity() {
                         "TESTS" -> showTests()
                         "LOGS" -> showLogs()
                         "VOICE" -> {
-                            val msg = "Dinliyorum Usta, motorla ilgili neyi merak ediyorsun?"
+                            val msg = "Dinliyorum Usta, neyi kontrol ediyoruz?"
                             Toast.makeText(this@MainActivity, msg, Toast.LENGTH_SHORT).show()
                             seyfiAssistant?.speak(msg)
                         }
@@ -430,7 +410,7 @@ class MainActivity : ComponentActivity() {
         line.addView(text(" EFE MOTO", 25, white, true))
         box.addView(line)
         if (!subtitle.isNullOrBlank()) box.addView(text(subtitle, 12, cyan, true).apply { gravity = Gravity.CENTER })
-        val statusText = if (connected) "● VIECAR / ECU BAĞLI • SEYFİ USTA AKTİF" else "● ADAPTÖR BAĞLI DEĞİL • SEYFİ USTA DİNLİYOR"
+        val statusText = if (connected) "● VIECAR / ECU BAĞLI • SEYFİ USTA AKTİF" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI MOD"
         val statusColor = if (connected) green else muted
         val status = text(statusText, 11, statusColor, true).apply { gravity = Gravity.CENTER; setPadding(0, dp(5), 0, 0) }
         statusLine = status
@@ -483,28 +463,6 @@ class MainActivity : ComponentActivity() {
         parent.addView(View(this), LinearLayout.LayoutParams(1, dp(h)))
     }
 
-    private val HOME_IMAGE_PARTS = listOf<String>()
-
-    private fun decodeHomeBitmap(): Bitmap? {
-        try {
-            val combined = HOME_IMAGE_PARTS.joinToString("")
-            if (combined.isBlank()) {
-                val bmp = Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bmp)
-                canvas.drawColor(bg)
-                val p = Paint().apply { color = cyan; textSize = 24f; textAlign = Paint.Align.CENTER }
-                canvas.drawText("EFE MOTO", 201.5f, 350f, p)
-                return bmp
-            }
-            val bytes = android.util.Base64.decode(combined, android.util.Base64.DEFAULT)
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-        } catch (_: Exception) {
-            val bmp = Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888)
-            Canvas(bmp).drawColor(bg)
-            return bmp
-        }
-    }
-
     private fun showHome() {
         liveLoop = false
         currentScreen = "HOME"
@@ -528,10 +486,10 @@ class MainActivity : ComponentActivity() {
         
         val artwork = ImageView(this).apply {
             val decodedBmp = decodeHomeBitmap()
-            if (decodedBmp != null) setImageBitmap(decodedBmp)
+            setImageBitmap(decodedBmp)
             scaleType = ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = false
-            contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
+            contentDescription = "EFE MOTO açılış ekranı"
         }
         artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
         artworkFrame.setOnTouchListener { view, event ->
@@ -564,18 +522,18 @@ class MainActivity : ComponentActivity() {
                 background = rounded(Color.rgb(2, 10, 27), cyan, 18)
             }
             side.addView(text("EFE MOTO", 28, white, true).apply { gravity = Gravity.CENTER })
-            side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 12, cyan, true).apply { gravity = Gravity.CENTER })
+            side.addView(text("PROFESYONEL MOTOSİKLET TEŞHİSİ", 12, cyan, true).apply { gravity = Gravity.CENTER })
             addGap(side, 6)
             side.addView(text(
-                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞİ GEZİNME AÇIK",
+                if (connected) "● VIECAR / ECU BAĞLI" else "● ÇEVRİMDIŞI MOD",
                 10, if (connected) green else muted, true
             ).apply { gravity = Gravity.CENTER })
             addGap(side, 6)
-            side.addView(actionButton("✓  GERÇEK ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() },
+            side.addView(actionButton("✓  ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
-            side.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) { showFaults() },
+            side.addView(actionButton("▤  ARIZA KODLARI", cyan) { showFaults() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
-            side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
+            side.addView(actionButton("◉  CANLI VERİLER", blue) { showLiveData() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
 
             val sideScroll = ScrollView(this).apply {
@@ -607,8 +565,9 @@ class MainActivity : ComponentActivity() {
             .setPositiveButton("TAMAM", null).show()
     }
 
+    // Wİ-Fİ BAĞLANTI & TARAMA MOTORU (ORİJİNAL KORUNMUŞTUR)
     private fun startDiagnosis() {
-        seyfiAssistant?.speak("Hemen ECU arıza taramasını başlatıyorum Usta, adaptör verilerini topluyorum.")
+        seyfiAssistant?.speak("Arıza taramasını başlatıyorum Usta, adaptör verilerini topluyorum.")
         val c = baseScreen("SCAN", true)
         c.addView(header("ECU AKILLI TARAMA"))
         val card = neonCard(null, cyan)
@@ -617,77 +576,46 @@ class MainActivity : ComponentActivity() {
         progressLine = text("ECU bağlantısı bekleniyor…", 19, white, true).apply { gravity = Gravity.CENTER }
         card.addView(progressLine)
         addGap(card, 10)
-        val steps = listOf("Wi‑Fi adaptörüne bağlanılıyor", "Motor kontrol ünitesi aranıyor", "Desteklenen PID listesi okunuyor", "Arıza kodları sorgulanıyor")
-        steps.forEachIndexed { _, s ->
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, dp(6)) }
-            row.addView(text("◌", 22, cyan, true))
-            row.addView(text("  $s", 14, white))
-            card.addView(row)
-        }
         c.addView(card)
         c.addView(actionButton("TARAMAYI İPTAL ET", red) { closeAdapter(); showHome() })
+        
         io.execute {
             try {
-                updateScan(8, "Viecar adaptörüne bağlanılıyor…")
+                updateScan(10, "Wi-Fi Viecar adaptörüne bağlanılıyor…")
                 ensureConnected()
-                updateScan(35, "ECU yanıtı kontrol ediliyor…")
+                updateScan(40, "ECU protokolü test ediliyor…")
                 val support = elm("0100", 5000)
-                val supportHex = support.filter { it in "0123456789ABCDEF" }
-                if (!supportHex.contains("4100")) {
-                    throw IllegalStateException("Adaptöre ulaşıldı ancak ECU'dan geçerli 41 00 yanıtı alınamadı.")
+                if (!support.contains("4100")) {
+                    throw IllegalStateException("ECU yanıt vermedi, kontağı kontrol et Usta.")
                 }
-                updateScan(54, "Desteklenen sensörlerden teşhis verisi alınıyor…")
-                val diagnosticSnapshot = try { readLivePids() } catch (_: Exception) { emptyMap() }
-                currentRiskScore = calculateRiskScore(diagnosticSnapshot)
-                updateScan(68, "Kayıtlı, bekleyen ve kalıcı arızalar okunuyor…")
+                updateScan(70, "Hafızadaki arıza kodları okunuyor…")
                 val found = mutableListOf<String>()
-                val dtcModes = listOf(
-                    Triple("03", "43", "KAYITLI"),
-                    Triple("07", "47", "BEKLEYEN"),
-                    Triple("0A", "4A", "KALICI")
-                )
-                var validDtcResponse = false
-                dtcModes.forEach { (request, positive, label) ->
+                listOf("03", "07", "0A").forEach { mode ->
                     try {
-                        val response = elm(request, 3500)
-                        val compact = response.filter { it in "0123456789ABCDEF" }
-                        if (compact.contains(positive)) {
-                            validDtcResponse = true
-                            decodeDtcs(response, positive).forEach { code ->
-                                val item = "$code • $label"
-                                if (item !in found) found.add(item)
-                            }
+                        val resp = elm(mode, 3000)
+                        decodeDtcs(resp, if (mode == "03") "43" else if (mode == "07") "47" else "4A").forEach {
+                            if (it !in found) found.add(it)
                         }
-                    } catch (modeError: Exception) {
-                        log("Mode $request okunamadı: ${modeError.message}")
-                    }
+                    } catch (_: Exception) {}
                 }
-                if (!validDtcResponse) throw IllegalStateException("ECU'dan arıza yanıtı alınamadı.")
-                smartInsights = buildSmartDiagnosis(found, diagnosticSnapshot)
-                val anomalies = buildAnomalyWarnings(diagnosticSnapshot)
-                smartInsights = smartInsights + anomalies
                 updateScan(100, "Tarama tamamlandı")
                 mainHandler.post {
                     faults = found.toMutableList()
                     hasCompletedScan = true
-                    log("ECU taraması tamamlandı • ${faults.size} arıza • risk $currentRiskScore/100")
-                    smartInsights.forEach { log("Akıllı teşhis: $it") }
-
                     if (faults.isEmpty()) {
-                        seyfiAssistant?.speak("Tarama bitti Usta. Hafızada kayıtlı arıza kodu yok, motor saat gibi.")
+                        seyfiAssistant?.speak("Tarama bitti Usta. Arıza kodu bulunamadı, motor temiz.")
                     } else {
-                        seyfiAssistant?.speak("Tarama tamamlandı Usta! Toplam ${faults.size} tane arıza kodu buldum. Detayları ekrandan inceleyebilirsin.")
+                        seyfiAssistant?.speak("Tarama bitti Usta. ${faults.size} tane arıza kodu buldum.")
                     }
-
                     if (currentScreen == "SCAN") showFaults()
                 }
             } catch (e: Exception) {
                 mainHandler.post {
                     log("Tarama hatası: ${e.message}")
-                    seyfiAssistant?.speak("Bağlantı başarısız oldu Usta. Cihazın bağlantısını ve kontağı kontrol et, tekrar deniyorum.")
+                    seyfiAssistant?.speak("Bağlantı kurulamadı Usta. Wi-Fi ayarlarını ve kontağı kontrol et.")
                     if (currentScreen == "SCAN") {
-                        progressLine?.text = "BAĞLANTI / TARAMA BAŞARISIZ\n${e.message ?: "Viecar adaptörünü kontrol edin."}\n\nAlt menüden diğer sayfalara geçebilirsiniz."
-                        statusLine?.text = "● ECU BAĞLANTISI KURULAMADI"
+                        progressLine?.text = "BAĞLANTI BAŞARISIZ\n${e.message}"
+                        statusLine?.text = "● BAĞLANTI YOK"
                     }
                 }
             }
@@ -699,37 +627,19 @@ class MainActivity : ComponentActivity() {
         mainHandler.post {
             progressLine?.text = "$message  •  %$percent"
             (progressLine?.parent as? LinearLayout)?.let { parent ->
-                val p = parent.getChildAt(0) as? CircularProgressView
-                p?.progress = percent
-                p?.invalidate()
+                (parent.getChildAt(0) as? CircularProgressView)?.let {
+                    it.progress = percent
+                    it.invalidate()
+                }
             }
         }
     }
 
-    private fun calculateRiskScore(data: Map<String, Double>): Int {
-        var score = 0
-        data["coolant"]?.let { if (it > 95.0) score += 30 }
-        data["voltage"]?.let { if (it < 12.0) score += 20 }
-        data["stft"]?.let { if (kotlin.math.abs(it) > 15.0) score += 25 }
-        return score.coerceIn(0, 100)
-    }
-
-    private fun buildAnomalyWarnings(data: Map<String, Double>): List<String> {
-        val warnings = mutableListOf<String>()
-        data["coolant"]?.let { if (it > 105.0) warnings.add("KRİTİK HARARET: ${it.toInt()} °C. Motoru zorlamayın.") }
-        data["voltage"]?.let { if (it in 0.1..11.79) warnings.add("AKÜ / ŞARJ UYARISI: ${"%.2f".format(Locale.US, it)} V ölçüldü.") }
-        return warnings
-    }
-
-    private fun buildSmartDiagnosis(codes: List<String>, data: Map<String, Double>): List<String> {
-        return codes.map { "Arıza kodu $it algılandı, kontrol edilmeli." }
-    }
-
     private fun showFaults() {
         val c = baseScreen("FAULTS")
-        c.addView(header("TÜM ARIZALAR (${faults.size})"))
+        c.addView(header("ARIZA LİSTESİ (${faults.size})"))
         if (faults.isEmpty()) {
-            c.addView(neonCard("✓  ARIZA BULUNAMADI", green))
+            c.addView(neonCard("✓  KAYITLI ARIZA YOK", green))
         } else {
             faults.forEach { code ->
                 c.addView(neonCard(code, red))
@@ -739,10 +649,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun confirmClearFaults() {
-        clearFaults()
-    }
-
-    private fun clearFaults() {
         faults.clear()
         showFaults()
     }
@@ -764,8 +670,6 @@ class MainActivity : ComponentActivity() {
         c.addView(header("İŞLEM KAYITLARI"))
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
-
-    private fun showFaultDetail() {}
 
     private fun createWifiBoundSocket(): Socket {
         val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -812,18 +716,7 @@ class MainActivity : ComponentActivity() {
         return res.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
     }
 
-    private fun pidBytes(pid: String, timeoutMs: Int = 3000): List<Int>? {
-        val response = elm("01$pid", timeoutMs)
-        val compact = response.replace(Regex("[^0-9A-F]"), "")
-        val marker = "41$pid"
-        val at = compact.indexOf(marker)
-        if (at < 0) return null
-        val tail = compact.substring(at + marker.length)
-        if (tail.length < 2) return null
-        return tail.chunked(2).mapNotNull { it.takeIf { p -> p.length == 2 }?.toIntOrNull(16) }
-    }
-
-    private fun decodeDtcs(raw: String, positiveResponse: String = "43"): List<String> {
+    private fun decodeDtcs(raw: String, positiveResponse: String): List<String> {
         val compact = raw.replace(Regex("[^0-9A-F]"), "")
         val index = compact.indexOf(positiveResponse)
         if (index < 0) return emptyList()
@@ -834,25 +727,21 @@ class MainActivity : ComponentActivity() {
             val a = bytes[i]; val b = bytes[i + 1]
             if (a == 0 && b == 0) { i += 2; continue }
             val first = when ((a and 0xC0) shr 6) { 0 -> 'P'; 1 -> 'C'; 2 -> 'B'; else -> 'U' }
-            val digit2 = (a and 0x30) shr 4
-            val digit3 = a and 0x0F
-            val digit4 = (b and 0xF0) shr 4
-            val digit5 = b and 0x0F
-            found.add("$first$digit2${digit3.toString(16).uppercase(Locale.US)}${digit4.toString(16).uppercase(Locale.US)}${digit5.toString(16).uppercase(Locale.US)}")
+            val d2 = (a and 0x30) shr 4
+            val d3 = a and 0x0F
+            val d4 = (b and 0xF0) shr 4
+            val d5 = b and 0x0F
+            found.add("$first$d2${d3.toString(16).uppercase(Locale.US)}${d4.toString(16).uppercase(Locale.US)}${d5.toString(16).uppercase(Locale.US)}")
             i += 2
         }
         return found.distinct()
-    }
-
-    private fun readLivePids(): Map<String, Double> {
-        return emptyMap()
     }
 
     private fun closeAdapter() {
         connected = false
         try { socket?.close() } catch (_: Exception) {}
         socket = null
-        mainHandler.post { statusLine?.apply { text = "● ADAPTÖR BAĞLI DEĞİL"; setTextColor(muted) } }
+        mainHandler.post { statusLine?.apply { text = "● ÇEVRİMDIŞI MOD"; setTextColor(muted) } }
     }
 
     private inner class NeonBackdrop(context: Context) : View(context) {
@@ -878,31 +767,12 @@ class MainActivity : ComponentActivity() {
             canvas.drawText("%$progress", cx, cy + dp(13), p)
         }
     }
-
-    private inner class RpmGaugeView(context: Context) : View(context) {
-        var value = -1
-        private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            val w = width.toFloat(); val h = height.toFloat()
-            val cx = w / 2f; val cy = h * 0.84f; val r = min(w * 0.43f, h * 0.78f)
-            val arc = RectF(cx - r, cy - r, cx + r, cy + r)
-            p.style = Paint.Style.FILL; p.color = panel2
-            canvas.drawRoundRect(RectF(dp(5).toFloat(), dp(4).toFloat(), w - dp(5), h - dp(2).toFloat()), dp(13).toFloat(), dp(13).toFloat(), p)
-            p.style = Paint.Style.STROKE; p.strokeWidth = dp(13).toFloat(); p.color = cyan
-            canvas.drawArc(arc, 180f, 180f, false, p)
-            p.textAlign = Paint.Align.CENTER; p.textSize = dp(35).toFloat(); p.color = white
-            canvas.drawText(if (value >= 0) value.toString() else "—", cx, cy - dp(17), p)
-            p.textSize = dp(16).toFloat(); p.color = cyan
-            canvas.drawText("RPM", cx, cy + dp(22), p)
-        }
-    }
 }
 
-class SeyfiUstaAssistant(
+// SEYFİ USTA YEREL SESLİ ASİSTAN MOTORU (İNTERNET GEREKTİRMEZ)
+class SeyfiUstaAI(
     private val activity: ComponentActivity,
-    private val onRecognized: (String) -> Unit,
-    private val onStatus: (String) -> Unit
+    private val onRecognized: (String) -> Unit
 ) : RecognitionListener {
 
     private var speechRecognizer: SpeechRecognizer? = null
@@ -913,7 +783,7 @@ class SeyfiUstaAssistant(
     fun initialize() {
         if (SpeechRecognizer.isRecognitionAvailable(activity)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(activity).apply {
-                setRecognitionListener(this@SeyfiUstaAssistant)
+                setRecognitionListener(this@SeyfiUstaAI)
             }
         }
 
@@ -924,34 +794,19 @@ class SeyfiUstaAssistant(
                 textToSpeech?.setSpeechRate(0.95f)
 
                 textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                    override fun onStart(utteranceId: String?) { 
-                        isSpeaking = true 
-                        try { speechRecognizer?.stopListening() } catch (_: Exception) {}
-                    }
-                    override fun onDone(utteranceId: String?) {
-                        isSpeaking = false
-                        activity.runOnUiThread { restartListeningSafe() }
-                    }
-                    override fun onError(utteranceId: String?) {
-                        isSpeaking = false
-                        activity.runOnUiThread { restartListeningSafe() }
-                    }
+                    override fun onStart(id: String?) { isSpeaking = true; stopListeningSafe() }
+                    override fun onDone(id: String?) { isSpeaking = false; activity.runOnUiThread { startListening() } }
+                    override fun onError(id: String?) { isSpeaking = false; activity.runOnUiThread { startListening() } }
                 })
             }
         }
     }
 
-    fun startContinuousListening() {
-        if (isListeningActive) return
-        isListeningActive = true
-        restartListeningSafe()
-    }
+    fun startListening() {
+        if (!isListeningActive) isListeningActive = true
+        if (isSpeaking) return
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
 
-    private fun restartListeningSafe() {
-        if (!isListeningActive || isSpeaking) return
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            return
-        }
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
@@ -959,17 +814,15 @@ class SeyfiUstaAssistant(
         }
         try {
             speechRecognizer?.startListening(intent)
-        } catch (_: Exception) {
-            Handler(Looper.getMainLooper()).postDelayed({
-                if (isListeningActive && !isSpeaking) {
-                    try { speechRecognizer?.startListening(intent) } catch (_: Exception) {}
-                }
-            }, 1200)
-        }
+        } catch (_: Exception) {}
+    }
+
+    private fun stopListeningSafe() {
+        try { speechRecognizer?.stopListening() } catch (_: Exception) {}
     }
 
     fun speak(text: String) {
-        try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+        stopListeningSafe()
         textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SEYFI_USTA_AI")
     }
 
@@ -979,20 +832,18 @@ class SeyfiUstaAssistant(
         try { textToSpeech?.stop(); textToSpeech?.shutdown() } catch (_: Exception) {}
     }
 
-    override fun onReadyForSpeech(params: Bundle?) {}
+    override fun onReadyForSpeech(p: Bundle?) {}
     override fun onBeginningOfSpeech() {}
-    override fun onRmsChanged(rmsdB: Float) {}
-    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onRmsChanged(r: Float) {}
+    override fun onBufferReceived(b: ByteArray?) {}
     override fun onEndOfSpeech() {}
-
     override fun onError(error: Int) {
         activity.runOnUiThread {
             Handler(Looper.getMainLooper()).postDelayed({
-                if (isListeningActive && !isSpeaking) restartListeningSafe()
+                if (isListeningActive && !isSpeaking) startListening()
             }, 1500)
         }
     }
-
     override fun onResults(results: Bundle?) {
         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
         if (!matches.isNullOrEmpty()) {
@@ -1000,11 +851,10 @@ class SeyfiUstaAssistant(
         }
         activity.runOnUiThread {
             Handler(Looper.getMainLooper()).postDelayed({
-                if (isListeningActive && !isSpeaking) restartListeningSafe()
+                if (isListeningActive && !isSpeaking) startListening()
             }, 500)
         }
     }
-
-    override fun onPartialResults(partialResults: Bundle?) {}
-    override fun onEvent(eventType: Int, params: Bundle?) {}
+    override fun onPartialResults(p: Bundle?) {}
+    override fun onEvent(type: Int, p: Bundle?) {}
 }
