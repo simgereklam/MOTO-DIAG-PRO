@@ -899,9 +899,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ============================================================================
-// SEYFİ USTA KESİNTİSİZ YAPAY ZEKA MÜHENDİS DİNLEME SINIFI (HANDS-FREE - GÜVENLİ)
-// ============================================================================
 class SeyfiUstaAssistant(
     private val activity: ComponentActivity,
     private val onRecognized: (String) -> Unit,
