@@ -1,6 +1,8 @@
 package com.efemoto.motodiagpro
 
 import android.app.AlertDialog
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.*
 import android.content.Context
 import android.content.Intent
@@ -16,6 +18,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -81,6 +85,18 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
 
+    // Türkçe çevrimdışı sesli asistan
+    private var voiceAssistant: OfflineVoiceAssistant? = null
+    private val microphonePermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            voiceAssistant?.startListening()
+        } else {
+            Toast.makeText(this, "Sesli komut için mikrofon izni gerekli.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private val homeScreenBitmap: Bitmap by lazy {
         val bytes = Base64.decode(HOME_IMAGE_PARTS.joinToString(""), Base64.DEFAULT)
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
@@ -99,7 +115,35 @@ class MainActivity : ComponentActivity() {
         window.navigationBarColor = bg
         applyImmersiveMode()
         loadPersistentState()
-        showHome()
+        voiceAssistant = OfflineVoiceAssistant(
+            activity = this,
+            onRecognized = { phrase ->
+                mainHandler.post { handleVoiceCommand(phrase) }
+            },
+            onStatus = { message ->
+                mainHandler.post {
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                }
+            }
+        ).also { it.initialize() }
+        val restoredScreen = savedInstanceState?.getString("efe_screen") ?: "HOME"
+        selectedFault = savedInstanceState?.getString("efe_selected_fault").orEmpty()
+        when (restoredScreen) {
+            "LIVE" -> showLiveData()
+            "TESTS" -> showTests()
+            "LOGS" -> showLogs()
+            "FAULTS" -> showFaults()
+            "DETAIL" -> if (selectedFault.isNotBlank()) showFaultDetail() else showFaults()
+            // A running scan cannot safely survive Activity recreation; return to
+            // the home screen rather than showing a progress screen with no worker.
+            else -> showHome()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString("efe_screen", currentScreen)
+        outState.putString("efe_selected_fault", selectedFault)
+        super.onSaveInstanceState(outState)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -138,9 +182,84 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         liveLoop = false
+        voiceAssistant?.release()
+        voiceAssistant = null
         closeAdapter()
         io.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun requestVoiceCommand() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            voiceAssistant?.startListening()
+                ?: Toast.makeText(this, "Sesli asistan başlatılamadı.", Toast.LENGTH_SHORT).show()
+        } else {
+            microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun handleVoiceCommand(rawCommand: String) {
+        val command = rawCommand.lowercase(Locale("tr", "TR"))
+            .replace("ı", "i").replace("ğ", "g").replace("ü", "u")
+            .replace("ş", "s").replace("ö", "o").replace("ç", "c")
+            .trim()
+        val assistant = voiceAssistant
+        val answer = when {
+            listOf("ana sayfa", "anasayfa", "eve don").any { command.contains(it) } -> {
+                showHome()
+                "Ana sayfa açıldı."
+            }
+            listOf("canli veri", "canli ekran", "canli degerler").any { command.contains(it) } -> {
+                showLiveData()
+                "Canlı veri ekranı açıldı."
+            }
+            listOf("test", "sistem testi").any { command.contains(it) } -> {
+                showTests()
+                "Sistem testleri açıldı."
+            }
+            listOf("hata dokumu", "islem kayitlari", "loglar").any { command.contains(it) } -> {
+                showLogs()
+                "İşlem kayıtları açıldı."
+            }
+            listOf("ariza", "hata kodu").any { command.contains(it) } -> {
+                showFaults()
+                if (faults.isEmpty()) "Ekran açıldı. Henüz okunmuş arıza kodu bulunmuyor."
+                else "Kayıtlı arızalar: ${faults.joinToString()}"
+            }
+            command.contains("motor devri") || command.contains("devir") || command.contains("rpm") -> {
+                if (rpm >= 0) "Motor devri ${rpm} devir dakika."
+                else "Motor devri henüz ECU'dan okunmadı. Önce Viecar bağlantısını kurup canlı veri taramasını başlatın."
+            }
+            command.contains("gaz") || command.contains("tps") -> {
+                if (tps >= 0.0) "Gaz kelebeği yüzde ${"%.1f".format(Locale.US, tps)}."
+                else "Gaz kelebeği verisi henüz ECU'dan okunmadı."
+            }
+            command.contains("sicaklik") || command.contains("hararet") -> {
+                if (coolant > -999) "Motor soğutma suyu sıcaklığı ${coolant} derece."
+                else "Motor sıcaklığı verisi henüz ECU'dan okunmadı."
+            }
+            command.contains("aku") || command.contains("voltaj") || command.contains("sarj") -> {
+                if (voltage >= 0.0) "Akü voltajı ${"%.2f".format(Locale.US, voltage)} volt."
+                else "Akü voltajı henüz ECU'dan okunmadı."
+            }
+            command.contains("emme") || command.contains("map") || command.contains("basinc") -> {
+                if (mapKpa >= 0) "Emme manifoldu basıncı ${mapKpa} kilopaskal."
+                else "Emme basıncı verisi henüz ECU'dan okunmadı."
+            }
+            command.contains("baglanti") || command.contains("adaptör") || command.contains("adaptoru") -> {
+                if (connected) "Viecar adaptörü ve ECU bağlı."
+                else "Viecar adaptörü şu anda bağlı değil."
+            }
+            command.contains("yardim") || command.contains("ne yapabilirsin") -> {
+                "Motor devrini, gaz kelebeğini, motor sıcaklığını, akü voltajını, emme basıncını ve bağlantı durumunu sorabilirsiniz. Ayrıca canlı veri, arıza, testler ve ana sayfa ekranlarını açabilirim."
+            }
+            else -> "Komutu anlayamadım. Motor devri, motor sıcaklığı, akü voltajı, arıza kodları veya canlı veri diyebilirsiniz."
+        }
+        Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
+        assistant?.speak(answer)
+        log("Sesli komut: $rawCommand")
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
@@ -262,7 +381,8 @@ class MainActivity : ComponentActivity() {
             Triple("HOME", "⌂", "Ana Sayfa"),
             Triple("LIVE", "◉", "Canlı Veri"),
             Triple("TESTS", "⚒", "Test"),
-            Triple("LOGS", "▤", "Hata Dökümü")
+            Triple("LOGS", "▤", "Hata Dökümü"),
+            Triple("VOICE", "🎙", "Sesli Komut")
         )
         entries.forEach { (key, symbol, label) ->
             val selected = active == key || (key == "HOME" && active in listOf("FAULTS", "DETAIL", "SCAN"))
@@ -284,6 +404,7 @@ class MainActivity : ComponentActivity() {
                         "LIVE" -> showLiveData()
                         "TESTS" -> showTests()
                         "LOGS" -> showLogs()
+                        "VOICE" -> requestVoiceCommand()
                     }
                 }
             }
@@ -1010,6 +1131,7 @@ class MainActivity : ComponentActivity() {
             try {
                 ensureConnected()
                 while (liveLoop && currentScreen == "LIVE") {
+                    if (!connected || socket?.isClosed != false) ensureConnected()
                     val values = readLivePids(stopIfNotLive = true)
                     mainHandler.post {
                         if (currentScreen == "LIVE") updateLiveDisplay(values)
@@ -1488,24 +1610,53 @@ class MainActivity : ComponentActivity() {
         val manager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         @Suppress("DEPRECATION")
         val candidates = (listOfNotNull(manager.activeNetwork) + manager.allNetworks.toList()).distinct()
-        val wifiNetwork = candidates.firstOrNull { network ->
-            manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-        } ?: throw IllegalStateException(
-            "Wi‑Fi ağı bulunamadı. Önce telefonun Wi‑Fi ayarlarından Viecar adaptörünün ağına bağlanın."
+            .filter { network ->
+                manager.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }
+            // A direct adapter hotspot commonly has no internet. Prefer it over
+            // a household Wi-Fi network when both are visible to Android.
+            .sortedBy { network ->
+                manager.getNetworkCapabilities(network)
+                    ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            }
+        if (candidates.isEmpty()) throw IllegalStateException(
+            "Wi‑Fi ağı bulunamadı. Telefon/tableti Viecar adaptörünün Wi‑Fi ağına bağlayın."
         )
-        return wifiNetwork.socketFactory.createSocket()
+
+        var lastError: Exception? = null
+        for (network in candidates) {
+            val candidate = try { network.socketFactory.createSocket() }
+                catch (e: Exception) { lastError = e; continue }
+            try {
+                candidate.tcpNoDelay = true
+                candidate.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
+                candidate.soTimeout = 3500
+                return candidate
+            } catch (e: Exception) {
+                lastError = e
+                try { candidate.close() } catch (_: Exception) { }
+            }
+        }
+        throw IllegalStateException(
+            "Viecar Wi‑Fi ağları üzerinden 192.168.0.10:35000 bağlantısı kurulamadı. " +
+                (lastError?.message ?: "Adaptörün Wi‑Fi ağına bağlı olduğunuzu kontrol edin.")
+        )
     }
 
     private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
-        if (connected && socket?.isConnected == true && socket?.isClosed == false) return
+        if (connected && socket?.isConnected == true && socket?.isClosed == false) {
+            // TCP can remain locally "connected" after the adapter has disappeared.
+            // A positive Mode 01 response is the actual ECU/adapter health check.
+            val health = try { elm("0100", 3000) } catch (_: Exception) { "" }
+            val healthHex = health.filter { it in "0123456789ABCDEF" }
+            if (healthHex.contains("4100")) return
+            closeAdapter()
+        }
         closeAdapter()
         supportedPidSet.clear()
-        // Bind the TCP socket to the phone's Wi-Fi network so Android does not route
-        // the connection through mobile data when the Viecar hotspot has no internet.
+        // Socket is explicitly bound to each Wi-Fi candidate; mobile data is never
+        // used as a fallback for the adapter's private 192.168.0.10 address.
         val s = createWifiBoundSocket()
-        s.tcpNoDelay = true
-        s.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
-        s.soTimeout = 3500
         socket = s
 
         fun exchange(command: String, timeoutMs: Int = 3000): String {
@@ -1519,13 +1670,20 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // ELM327 initialization. Commands are reported to the communication test when requested.
-        exchange("ATZ", 5000)
-        exchange("ATE0")
-        exchange("ATL0")
-        exchange("ATS0")
-        exchange("ATH0")
-        exchange("ATSP0")
+        // ELM327 initialization. Reject explicit adapter errors, but do not assume
+        // a TCP connection alone means that the ECU is reachable.
+        val reset = exchange("ATZ", 5000)
+        if (reset.isBlank() || reset.contains("ERROR") || reset.contains("?")) {
+            closeAdapter()
+            throw IllegalStateException("Viecar ELM başlatma yanıtı geçersiz: ${reset.ifBlank { "YANIT YOK" }}")
+        }
+        listOf("ATE0", "ATL0", "ATS0", "ATH0", "ATSP0").forEach { command ->
+            val response = exchange(command, 3000)
+            if (response.contains("ERROR") || response.contains("?")) {
+                closeAdapter()
+                throw IllegalStateException("Viecar komutu kabul etmedi: $command → $response")
+            }
+        }
         val test = exchange("0100", 7000)
         val testHex = test.filter { it in "0123456789ABCDEF" }
         if (!testHex.contains("4100")) {
@@ -1548,21 +1706,35 @@ class MainActivity : ComponentActivity() {
         try {
             while (input.available() > 0) input.read()
         } catch (_: Exception) { }
-        out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
-        out.flush()
         val result = ByteArrayOutputStream()
-        val started = System.currentTimeMillis()
         try {
+            out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
+            out.flush()
+            val started = System.currentTimeMillis()
+            var promptReceived = false
             while (System.currentTimeMillis() - started < timeoutMs) {
                 val b = input.read()
-                if (b < 0) break
-                if (b == '>'.code) break
+                if (b < 0) throw java.io.IOException("Viecar bağlantısı karşı uç tarafından kapatıldı")
+                if (b == '>'.code) { promptReceived = true; break }
                 result.write(b)
             }
-        } catch (_: SocketTimeoutException) { }
-        val response = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
-        lastRaw = response
-        return response
+            val response = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
+            lastRaw = response
+            if (response.isBlank() && !promptReceived) {
+                throw SocketTimeoutException("$command komutuna Viecar yanıt vermedi (${timeoutMs} ms)")
+            }
+            return response
+        } catch (e: SocketTimeoutException) {
+            // A partial ELM response can still be useful; an entirely empty timeout
+            // is surfaced so callers never treat silence as a successful response.
+            val partial = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
+            lastRaw = partial
+            if (partial.isNotBlank()) return partial
+            throw e
+        } catch (e: Exception) {
+            closeAdapter()
+            throw e
+        }
     }
 
     private fun pidBytes(pid: String, timeoutMs: Int = 3000): List<Int>? {
