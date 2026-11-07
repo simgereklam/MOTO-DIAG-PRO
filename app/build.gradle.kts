@@ -24,7 +24,6 @@ android {
         release {
             isMinifyEnabled = false
         }
-
         debug {
             isDebuggable = true
         }
@@ -46,4 +45,7 @@ dependencies {
     implementation("com.google.android.material:material:1.13.0")
     implementation("androidx.activity:activity-ktx:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
+
+    // SEYFİ USTA - TELEFONDA ÇALIŞAN YEREL YAPAY ZEKÂ
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
 }
