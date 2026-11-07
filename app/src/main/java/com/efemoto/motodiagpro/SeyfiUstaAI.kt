@@ -21,14 +21,12 @@ class SeyfiUstaAI(
     private val handler = Handler(Looper.getMainLooper())
 
     fun initialize() {
-        // Ses Sentezleyici (Text-to-Speech) Başlatma
         textToSpeech = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 textToSpeech?.language = Locale("tr", "TR")
             }
         }
 
-        // Ses Tanıma (Speech-to-Text) Başlatma
         if (SpeechRecognizer.isRecognitionAvailable(context)) {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
                 setRecognitionListener(object : RecognitionListener {
@@ -38,7 +36,6 @@ class SeyfiUstaAI(
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
                     override fun onError(error: Int) {
-                        // Hata alsa bile dinlemeyi koparmadan tekrar başlat
                         handler.postDelayed({ restartListening() }, 1500)
                     }
                     override fun onResults(results: Bundle?) {
@@ -52,6 +49,7 @@ class SeyfiUstaAI(
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
             }
+            startListening()
         }
     }
 
