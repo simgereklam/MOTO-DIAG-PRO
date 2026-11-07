@@ -100,9 +100,9 @@ class SeyfiBrain(context: Context) {
                         "Yapay zekâ henüz başlatılmadı."
                     )
 
-                val answer = activeConversation
-                    .sendMessage(question)
-                    .text
+               val answer = activeConversation
+    .sendMessage(question)
+    .toString()
 
                 mainHandler.post {
                     onResponse(answer)
