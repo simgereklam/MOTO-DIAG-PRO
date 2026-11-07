@@ -47,5 +47,4 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
 
     // SEYFİ USTA - TELEFONDA ÇALIŞAN YEREL YAPAY ZEKÂ
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
-}
+implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
