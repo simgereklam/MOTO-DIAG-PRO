@@ -12,7 +12,7 @@ class SeyfiUstaAI(
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     
-    // SeyfiBrain entegrasyonu
+    // Doğrudan erisilebilen brain nesnesi
     val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
@@ -44,21 +44,21 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin aradığı chat metodu eksiksiz eklendi
+    // MainActivity'nin aradığı chat metodu
     fun chat(message: String): String {
         return try {
             brain.chat(message)
         } catch (e: Exception) {
-            "Usta şu an yapay zeka beyni meşgul, bağlantıyı kontrol et."
+            "Usta sistem şu an meşgul, bağlantıyı kontrol et."
         }
     }
 
-    // MainActivity'nin aradığı updateEcuData metodu eksiksiz eklendi
+    // MainActivity'nin aradığı updateEcuData metodu
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
         try {
             brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
         } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "ECU veri güncelleme hatası: ${e.message}")
+            Log.e("SeyfiUstaAI", "ECU veri aktarım hatası: ${e.message}")
         }
     }
 
