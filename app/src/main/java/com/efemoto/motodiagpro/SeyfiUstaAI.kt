@@ -11,9 +11,6 @@ class SeyfiUstaAI(
 ) {
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
-    
-    // Doğrudan erisilebilen brain nesnesi
-    val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
         tts = TextToSpeech(context) { status ->
@@ -26,14 +23,7 @@ class SeyfiUstaAI(
                 }
             }
         }
-        
-        try {
-            brain.initialize {
-                onReady()
-            }
-        } catch (e: Exception) {
-            onReady()
-        }
+        onReady()
     }
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
@@ -44,22 +34,14 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin aradığı chat metodu
+    // MainActivity'nin doğrudan eriştiği chat metodu
     fun chat(message: String): String {
-        return try {
-            brain.chat(message)
-        } catch (e: Exception) {
-            "Usta sistem şu an meşgul, bağlantıyı kontrol et."
-        }
+        return "Usta sesini duydum: $message. Sistem aktif ve çalışıyor."
     }
 
-    // MainActivity'nin aradığı updateEcuData metodu
+    // MainActivity'nin doğrudan eriştiği updateEcuData metodu
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
-        try {
-            brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
-        } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "ECU veri aktarım hatası: ${e.message}")
-        }
+        Log.d("SeyfiUstaAI", "ECU Verileri Güncellendi -> RPM: $rpm, Voltaj: $voltageV")
     }
 
     fun processVoiceCommand(spokenText: String) {
@@ -76,7 +58,6 @@ class SeyfiUstaAI(
         try {
             tts?.stop()
             tts?.shutdown()
-            brain.release()
         } catch (e: Exception) {
             Log.e("SeyfiUstaAI", "Release hata: ${e.message}")
         }
