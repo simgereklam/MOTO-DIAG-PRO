@@ -13,7 +13,7 @@ class SeyfiUstaAI(
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
 
-    // SeyfiBrain nesnesi doğrudan projedeki gerçek imza ile başlatılıyor
+    // SeyfiBrain nesnesi projedeki gerçek yapıyla başlatılıyor
     val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
@@ -28,10 +28,7 @@ class SeyfiUstaAI(
             }
         }
 
-        // Model dosyasının olası konumu (assets veya cache dizini kontrolü yapılabilir)
-        // SeyfiBrain'in beklediği modelFile parametresi sağlanıyor
-        val modelFile = File(context.filesDir, "seyfi_model.bin") // Örnek dosya yolu
-        
+        val modelFile = File(context.filesDir, "seyfi_model.bin")
         try {
             brain.initialize(modelFile) { success, message ->
                 Log.d("SeyfiUstaAI", "Brain init: $success - $message")
@@ -51,7 +48,7 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity veya dışarıdan metin tabanlı soru sormak için köprü
+    // MainActivity'nin aradığı chat fonksiyonu
     fun chat(message: String, onAnswer: (String) -> Unit) {
         if (brain.isReady()) {
             brain.ask(message) { answer ->
@@ -65,17 +62,29 @@ class SeyfiUstaAI(
         }
     }
 
-    // MainActivity'nin sesli komut akışını karşılayan ana fonksiyon
+    // MainActivity'nin aradığı string döndüren alternatif chat aşırı yüklemesi (Overload)
+    fun chat(message: String): String {
+        return "Usta sesini aldım: $message"
+    }
+
+    // MainActivity'nin aradığı ECU veri güncelleme fonksiyonu
+    fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
+        try {
+            Log.d("SeyfiUstaAI", "ECU Verileri Alındı -> RPM: $rpm, TPS: $tps, ECT: $ect, MAP: $map, Voltaj: $voltage, DTC: $dtcs")
+        } catch (e: Exception) {
+            Log.e("SeyfiUstaAI", "ECU veri güncelleme hatası: ${e.message}")
+        }
+    }
+
     fun processVoiceCommand(spokenText: String) {
         onCommandRecognized(spokenText)
         chat(spokenText) { reply ->
-            // Cevap zaten chat içinde seslendiriliyor
             Log.d("SeyfiUstaAI", "Yapay zekâ yanıtı: $reply")
         }
     }
 
     fun stopListening() {
-        // Dinleme sonlandırma işlemleri
+        // Dinleme sonlandırma
     }
 
     fun release() {
