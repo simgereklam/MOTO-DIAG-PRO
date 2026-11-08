@@ -3,6 +3,7 @@ package com.efemoto.motodiagpro
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import java.io.File
 import java.util.Locale
 
 class SeyfiUstaAI(
@@ -11,6 +12,9 @@ class SeyfiUstaAI(
 ) {
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+
+    // SeyfiBrain nesnesi doğrudan projedeki gerçek imza ile başlatılıyor
+    val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
         tts = TextToSpeech(context) { status ->
@@ -23,7 +27,20 @@ class SeyfiUstaAI(
                 }
             }
         }
-        onReady()
+
+        // Model dosyasının olası konumu (assets veya cache dizini kontrolü yapılabilir)
+        // SeyfiBrain'in beklediği modelFile parametresi sağlanıyor
+        val modelFile = File(context.filesDir, "seyfi_model.bin") // Örnek dosya yolu
+        
+        try {
+            brain.initialize(modelFile) { success, message ->
+                Log.d("SeyfiUstaAI", "Brain init: $success - $message")
+                onReady()
+            }
+        } catch (e: Exception) {
+            Log.e("SeyfiUstaAI", "Brain init hata: ${e.message}")
+            onReady()
+        }
     }
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
@@ -34,30 +51,38 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin aradığı chat metodu
-    fun chat(message: String): String {
-        return "Usta sesini aldım: $message. Sistem aktif ve veriler işleniyor."
+    // MainActivity veya dışarıdan metin tabanlı soru sormak için köprü
+    fun chat(message: String, onAnswer: (String) -> Unit) {
+        if (brain.isReady()) {
+            brain.ask(message) { answer ->
+                onAnswer(answer)
+                speak(answer)
+            }
+        } else {
+            val fallback = "Usta, yapay zekâ beyni şu an hazır değil."
+            onAnswer(fallback)
+            speak(fallback)
+        }
     }
 
-    // MainActivity'nin aradığı updateEcuData metodu
-    fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
-        Log.d("SeyfiUstaAI", "ECU Güncellemesi -> RPM: $rpm, TPS: $tps, Voltaj: $voltage")
-    }
-
+    // MainActivity'nin sesli komut akışını karşılayan ana fonksiyon
     fun processVoiceCommand(spokenText: String) {
         onCommandRecognized(spokenText)
-        val aiReply = chat(spokenText)
-        speak(aiReply)
+        chat(spokenText) { reply ->
+            // Cevap zaten chat içinde seslendiriliyor
+            Log.d("SeyfiUstaAI", "Yapay zekâ yanıtı: $reply")
+        }
     }
 
     fun stopListening() {
-        // Dinleme sonlandırma
+        // Dinleme sonlandırma işlemleri
     }
 
     fun release() {
         try {
             tts?.stop()
             tts?.shutdown()
+            brain.close()
         } catch (e: Exception) {
             Log.e("SeyfiUstaAI", "Release hata: ${e.message}")
         }
