@@ -48,21 +48,7 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin aradığı tek parametreli ve String döndüren chat metodu
-    fun chat(message: String): String {
-        return try {
-            if (brain.isReady()) {
-                // Senkron / bloklayıcı veya anlık yanıt gerektiğinde
-                "Usta, analiz ediyorum: $message"
-            } else {
-                "Usta, yapay zekâ beyni henüz hazır değil."
-            }
-        } catch (e: Exception) {
-            "Usta sistem meşgul: ${e.message}"
-        }
-    }
-
-    // MainActivity'nin aradığı callback'li alternatif chat metodu (İhtiyaca göre)
+    // MainActivity'nin 301. satırındaki çağrıya tam uyan callback'li chat metodu
     fun chat(message: String, onAnswer: (String) -> Unit) {
         if (brain.isReady()) {
             brain.ask(message) { answer ->
