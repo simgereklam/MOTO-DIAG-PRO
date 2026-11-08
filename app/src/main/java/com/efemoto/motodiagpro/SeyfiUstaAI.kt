@@ -12,7 +12,7 @@ class SeyfiUstaAI(
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     
-    // Beyin modülü
+    // SeyfiBrain nesnesi projedeki standart yapıya uygun olarak başlatılıyor
     val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
@@ -26,7 +26,14 @@ class SeyfiUstaAI(
                 }
             }
         }
-        brain.initialize {
+        
+        // SeyfiBrain başlatma metodu (imza uyumsuzluklarını önlemek için güvenli çağrı)
+        try {
+            brain.initialize {
+                onReady()
+            }
+        } catch (e: Exception) {
+            Log.e("SeyfiUstaAI", "Brain init hata: ${e.message}")
             onReady()
         }
     }
@@ -39,29 +46,41 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin doğrudan eriştiği chat metodu sarmalandı
+    // MainActivity'nin eriştiği chat metodu
     fun chat(message: String): String {
-        return brain.chat(message)
+        return try {
+            brain.chat(message)
+        } catch (e: Exception) {
+            "Usta şu an beyin modülünde bir yoğunluk var, bağlantıyı kontrol et."
+        }
     }
 
-    // MainActivity'nin çağırdığı ECU veri güncelleme köprüsü eklendi
+    // MainActivity'nin eriştiği ECU veri güncelleme köprüsü
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
-        brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
+        try {
+            brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
+        } catch (e: Exception) {
+            Log.e("SeyfiUstaAI", "ECU veri aktarım hatası: ${e.message}")
+        }
     }
 
     fun processVoiceCommand(spokenText: String) {
         onCommandRecognized(spokenText)
-        val aiReply = brain.chat(spokenText)
+        val aiReply = chat(spokenText)
         speak(aiReply)
     }
 
     fun stopListening() {
-        // Dinleme oturumu sonlandırma
+        // Dinleme sonlandırma
     }
 
     fun release() {
-        tts?.stop()
-        tts?.shutdown()
-        brain.release()
+        try {
+            tts?.stop()
+            tts?.shutdown()
+            brain.release()
+        } catch (e: Exception) {
+            Log.e("SeyfiUstaAI", "Release hata: ${e.message}")
+        }
     }
 }
