@@ -12,17 +12,8 @@ class SeyfiUstaAI(
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     
-    // SeyfiBrain nesnesi güvenli başlatma bloğu
-    val brain: SeyfiBrain? = try {
-        SeyfiBrain(context)
-    } catch (e: Exception) {
-        try {
-            // Alternatif constructor denemesi
-            null
-        } catch (ex: Exception) {
-            null
-        }
-    }
+    // SeyfiBrain entegrasyonu
+    val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
         tts = TextToSpeech(context) { status ->
@@ -35,11 +26,11 @@ class SeyfiUstaAI(
                 }
             }
         }
-
-        // Brain başlatma adımı
+        
         try {
-            // Eğer brain reflection veya özel başlatma gerektiriyorsa güvenli çağrı
-            onReady()
+            brain.initialize {
+                onReady()
+            }
         } catch (e: Exception) {
             onReady()
         }
@@ -53,23 +44,21 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin aradığı chat fonksiyonu köprüsü
+    // MainActivity'nin aradığı chat metodu eksiksiz eklendi
     fun chat(message: String): String {
         return try {
-            // Eğer brain sınıfında chat metodu varsa çağrılır, yoksa güvenli yanıt döner
-            "Usta sesini duydum, analiz ediyorum: $message"
+            brain.chat(message)
         } catch (e: Exception) {
-            "Usta şu an sistem meşgul."
+            "Usta şu an yapay zeka beyni meşgul, bağlantıyı kontrol et."
         }
     }
 
-    // MainActivity'nin aradığı ECU veri güncelleme köprüsü
+    // MainActivity'nin aradığı updateEcuData metodu eksiksiz eklendi
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
         try {
-            // Veriler güvenle işlenir
-            Log.d("SeyfiUstaAI", "ECU Verileri alındı -> RPM: $rpm, Voltaj: $voltage")
+            brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
         } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "ECU veri aktarım hatası: ${e.message}")
+            Log.e("SeyfiUstaAI", "ECU veri güncelleme hatası: ${e.message}")
         }
     }
 
@@ -87,6 +76,7 @@ class SeyfiUstaAI(
         try {
             tts?.stop()
             tts?.shutdown()
+            brain.release()
         } catch (e: Exception) {
             Log.e("SeyfiUstaAI", "Release hata: ${e.message}")
         }
