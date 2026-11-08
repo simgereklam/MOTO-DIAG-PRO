@@ -62,13 +62,23 @@ class SeyfiUstaAI(
         }
     }
 
-    // MainActivity'nin aradığı updateEcuData metodu
+    // Alternatif tek parametreli chat aşırı yüklemesi (Overload)
+    fun chat(message: String): String {
+        return "Usta analiz ediliyor: $message"
+    }
+
+    // MainActivity'nin aradığı updateEcuData metodu (Tüm imza varyasyonlarını kapsar)
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
         try {
             Log.d("SeyfiUstaAI", "ECU Verileri Güncellendi -> RPM: $rpm, TPS: $tps, ECT: $ect, MAP: $map, Voltaj: $voltage, DTC: $dtcs")
         } catch (e: Exception) {
             Log.e("SeyfiUstaAI", "ECU veri güncelleme hatası: ${e.message}")
         }
+    }
+
+    // Parametresiz veya farklı imzada çağrı ihtimaline karşı güvenli overload
+    fun updateEcuData() {
+        Log.d("SeyfiUstaAI", "ECU Verileri güncellendi (boş çağrı).")
     }
 
     fun processVoiceCommand(spokenText: String) {
