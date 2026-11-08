@@ -32,6 +32,9 @@ class SeyfiBrain(context: Context) {
     @Volatile
     private var closed = false
 
+    @Volatile
+    private var ecuContext = "Henüz ECU verisi alınmadı."
+
     private val initializing = AtomicBoolean(false)
 
     private val systemPrompt = """
@@ -39,24 +42,24 @@ class SeyfiBrain(context: Context) {
         Profesyonel bir motosiklet dijital tamir asistanısın.
 
         Türkçe konuş.
-        Kullanıcıyla doğal, samimi ve karşılıklı sohbet et.
+        Kullanıcıyla doğal ve karşılıklı sohbet et.
         Motosiklet mekanik ve elektronik sistemlerini açıkla.
         ECU arıza kodlarını teknik olarak değerlendir.
         Gerçek sensör verilerini yorumla.
-        Eksik bilgi varsa kullanıcıya soru sor.
+        Eksik bilgi varsa soru sor.
         Teşhisleri olasılık sırasına göre açıkla.
-        Kontrol ve ölçüm adımlarını anlaşılır biçimde anlat.
+        Kontrol ve ölçüm adımlarını anlaşılır anlat.
 
-        ÖNEMLİ GÜVENLİK KURALLARI:
+        GÜVENLİK:
         Okunmamış ECU verisini okunmuş gibi gösterme.
         Yapılmamış testi yapılmış gibi anlatma.
-        Bilmediğin teknik bilgiyi uydurma.
+        Bilmediğin bilgiyi uydurma.
         Tahmini teşhisi kesin arıza gibi sunma.
         ECU'ya komut gönderdiğini iddia etme.
-        Arıza silme veya tehlikeli işlemleri kendiliğinden yapma.
-        Kullanıcıya tehlikeli işlemlerden önce uyarı ver.
+        Arıza silme işlemini kendiliğinden yapma.
+        Tehlikeli işlemlerden önce uyar.
 
-        Cevapların doğal Türkçe, anlaşılır ve ustaca olsun.
+        Cevapların doğal, anlaşılır ve teknik Türkçe olsun.
     """.trimIndent()
 
     fun initialize(
@@ -70,9 +73,14 @@ class SeyfiBrain(context: Context) {
             return
         }
 
-        if (!initializing.compareAndSet(false, true)) {
+        if (ready) {
+            mainHandler.post {
+                onResult(true, "SEYFİ USTA hazır.")
+            }
             return
         }
+
+        if (!initializing.compareAndSet(false, true)) return
 
         executor.execute {
             try {
@@ -80,7 +88,7 @@ class SeyfiBrain(context: Context) {
 
                 if (!modelFile.exists() || modelFile.length() == 0L) {
                     throw IllegalStateException(
-                        "Yapay zekâ model dosyası bulunamadı."
+                        "Yapay zekâ model dosyası bulunamadı: ${modelFile.absolutePath}"
                     )
                 }
 
@@ -117,10 +125,7 @@ class SeyfiBrain(context: Context) {
                 ready = true
 
                 mainHandler.post {
-                    onResult(
-                        true,
-                        "SEYFİ USTA yapay zekâ motoru hazır."
-                    )
+                    onResult(true, "SEYFİ USTA yerel yapay zekâ motoru hazır.")
                 }
 
             } catch (e: Exception) {
@@ -132,11 +137,48 @@ class SeyfiBrain(context: Context) {
                         "Yapay zekâ başlatılamadı: ${e.message}"
                     )
                 }
-
             } finally {
                 initializing.set(false)
             }
         }
+    }
+
+    // MainActivity'den gelen gerçek ECU verilerini saklar.
+    fun updateEcuData(
+        rpm: Number,
+        tps: Number,
+        ect: Number,
+        map: Number,
+        voltage: Number,
+        dtcs: List<String>,
+        connected: Boolean
+    ) {
+        ecuContext = buildString {
+            appendLine("GERÇEK ECU DURUMU:")
+            appendLine("Viecar bağlantısı: ${if (connected) "Bağlı" else "Bağlı değil"}")
+            appendLine("Motor devri: $rpm RPM")
+            appendLine("Gaz konumu (TPS): $tps")
+            appendLine("Motor sıcaklığı: $ect derece")
+            appendLine("Manifold basıncı (MAP): $map")
+            appendLine("Akü voltajı: $voltage volt")
+            appendLine(
+                "Okunan arıza kodları: ${
+                    dtcs.joinToString().ifBlank { "Kayıtlı kod bildirilmedi" }
+                }"
+            )
+            appendLine(
+                "Not: Bu bilgiler uygulamanın ECU veri katmanından aktarılmıştır. " +
+                    "Okunmamış değerler ayrıca doğrulanmalıdır."
+            )
+        }
+    }
+
+    // Ana ekrandaki sohbet isteği için asenkron cevap.
+    fun chat(
+        question: String,
+        onResponse: (String) -> Unit
+    ) {
+        ask(question, onResponse)
     }
 
     fun ask(
@@ -163,12 +205,22 @@ class SeyfiBrain(context: Context) {
 
                 if (!ready || activeConversation == null) {
                     throw IllegalStateException(
-                        "Yapay zekâ henüz hazır değil."
+                        "Yerel yapay zekâ henüz hazır değil. Model dosyasını kontrol edin."
                     )
                 }
 
+                val contextualQuestion = """
+                    $ecuContext
+
+                    KULLANICININ SORUSU:
+                    $question
+
+                    ECU verileri yetersizse bunu açıkça belirt.
+                    Gerçek ölçüm ile tahmini birbirinden ayır.
+                """.trimIndent()
+
                 val answer = activeConversation
-                    .sendMessage(question)
+                    .sendMessage(contextualQuestion)
                     .toString()
                     .trim()
 
