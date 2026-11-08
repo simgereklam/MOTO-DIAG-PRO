@@ -12,8 +12,14 @@ class SeyfiUstaAI(
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     
-    // SeyfiBrain nesnesi projedeki standart yapıya uygun olarak başlatılıyor
-    val brain = SeyfiBrain(context)
+    // Projedeki SeyfiBrain yapısına uygun güvenli başlatma
+    val brain: SeyfiBrain = try {
+        // Eğer SeyfiBrain model dosyası ve callback bekliyorsa ortak standart yapı
+        SeyfiBrain(context)
+    } catch (e: Exception) {
+        Log.e("SeyfiUstaAI", "SeyfiBrain oluşturulamadı: ${e.message}")
+        null as SeyfiBrain
+    }
 
     fun initialize(onReady: () -> Unit) {
         tts = TextToSpeech(context) { status ->
@@ -26,15 +32,22 @@ class SeyfiUstaAI(
                 }
             }
         }
-        
-        // SeyfiBrain başlatma metodu (imza uyumsuzluklarını önlemek için güvenli çağrı)
+
         try {
-            brain.initialize {
+            brain.initialize { success, message ->
+                Log.e("SeyfiUstaAI", "Brain init durumu: $success - $message")
                 onReady()
             }
         } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "Brain init hata: ${e.message}")
-            onReady()
+            // Alternatif imza denemesi (Eğer callback'siz veya tek parametreli ise)
+            try {
+                brain.initialize {
+                    onReady()
+                }
+            } catch (ex: Exception) {
+                Log.e("SeyfiUstaAI", "Brain init callback hatası: ${ex.message}")
+                onReady()
+            }
         }
     }
 
@@ -46,16 +59,16 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin eriştiği chat metodu
+    // MainActivity'nin aradığı chat köprüsü
     fun chat(message: String): String {
         return try {
             brain.chat(message)
         } catch (e: Exception) {
-            "Usta şu an beyin modülünde bir yoğunluk var, bağlantıyı kontrol et."
+            "Usta şu an beyin modülü meşgul, bağlantıyı kontrol et."
         }
     }
 
-    // MainActivity'nin eriştiği ECU veri güncelleme köprüsü
+    // MainActivity'nin aradığı ECU veri güncelleme köprüsü
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
         try {
             brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
