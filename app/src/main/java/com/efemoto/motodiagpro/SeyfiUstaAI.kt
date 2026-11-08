@@ -34,14 +34,14 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin doğrudan eriştiği chat metodu
+    // MainActivity'nin aradığı chat metodu
     fun chat(message: String): String {
-        return "Usta sesini duydum: $message. Sistem aktif ve çalışıyor."
+        return "Usta sesini aldım: $message. Sistem aktif ve veriler işleniyor."
     }
 
-    // MainActivity'nin doğrudan eriştiği updateEcuData metodu
+    // MainActivity'nin aradığı updateEcuData metodu
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
-        Log.d("SeyfiUstaAI", "ECU Verileri Güncellendi -> RPM: $rpm, Voltaj: $voltageV")
+        Log.d("SeyfiUstaAI", "ECU Güncellemesi -> RPM: $rpm, TPS: $tps, Voltaj: $voltage")
     }
 
     fun processVoiceCommand(spokenText: String) {
