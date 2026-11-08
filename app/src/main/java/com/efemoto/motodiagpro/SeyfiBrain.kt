@@ -12,6 +12,7 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 class SeyfiBrain(context: Context) {
 
@@ -19,32 +20,64 @@ class SeyfiBrain(context: Context) {
     private val executor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    @Volatile
     private var engine: Engine? = null
+
+    @Volatile
     private var conversation: Conversation? = null
+
+    @Volatile
+    private var ready = false
+
+    @Volatile
+    private var closed = false
+
+    private val initializing = AtomicBoolean(false)
 
     private val systemPrompt = """
         Sen SEYFİ USTA'sın.
         Profesyonel bir motosiklet dijital tamir asistanısın.
 
         Türkçe konuş.
-        Kullanıcıyla doğal ve karşılıklı sohbet et.
-        Motosiklet arızalarını mantıklı şekilde değerlendir.
-        Eksik bilgi varsa soru sor.
-        ECU arıza kodlarını açıkla.
+        Kullanıcıyla doğal, samimi ve karşılıklı sohbet et.
+        Motosiklet mekanik ve elektronik sistemlerini açıkla.
+        ECU arıza kodlarını teknik olarak değerlendir.
         Gerçek sensör verilerini yorumla.
-        Test sonuçlarını açıkla.
-        Bilmediğin bilgiyi uydurma.
+        Eksik bilgi varsa kullanıcıya soru sor.
+        Teşhisleri olasılık sırasına göre açıkla.
+        Kontrol ve ölçüm adımlarını anlaşılır biçimde anlat.
+
+        ÖNEMLİ GÜVENLİK KURALLARI:
         Okunmamış ECU verisini okunmuş gibi gösterme.
-        Tehlikeli işlemler için kullanıcıdan onay al.
-        Cevaplarını anlaşılır ve ustaca ver.
+        Yapılmamış testi yapılmış gibi anlatma.
+        Bilmediğin teknik bilgiyi uydurma.
+        Tahmini teşhisi kesin arıza gibi sunma.
+        ECU'ya komut gönderdiğini iddia etme.
+        Arıza silme veya tehlikeli işlemleri kendiliğinden yapma.
+        Kullanıcıya tehlikeli işlemlerden önce uyarı ver.
+
+        Cevapların doğal Türkçe, anlaşılır ve ustaca olsun.
     """.trimIndent()
 
     fun initialize(
         modelFile: File,
         onResult: (Boolean, String) -> Unit
     ) {
+        if (closed) {
+            mainHandler.post {
+                onResult(false, "SEYFİ USTA motoru kapatılmış.")
+            }
+            return
+        }
+
+        if (!initializing.compareAndSet(false, true)) {
+            return
+        }
+
         executor.execute {
             try {
+                ready = false
+
                 if (!modelFile.exists() || modelFile.length() == 0L) {
                     throw IllegalStateException(
                         "Yapay zekâ model dosyası bulunamadı."
@@ -66,25 +99,42 @@ class SeyfiBrain(context: Context) {
                 )
 
                 newEngine.initialize()
+
+                if (closed) {
+                    newEngine.close()
+                    return@execute
+                }
+
                 engine = newEngine
 
-                conversation = newEngine.createConversation(
+                val newConversation = newEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemPrompt)
                     )
                 )
 
+                conversation = newConversation
+                ready = true
+
                 mainHandler.post {
-                    onResult(true, "Seyfi Usta yapay zekâ motoru hazır.")
+                    onResult(
+                        true,
+                        "SEYFİ USTA yapay zekâ motoru hazır."
+                    )
                 }
 
             } catch (e: Exception) {
+                ready = false
+
                 mainHandler.post {
                     onResult(
                         false,
                         "Yapay zekâ başlatılamadı: ${e.message}"
                     )
                 }
+
+            } finally {
+                initializing.set(false)
             }
         }
     }
@@ -93,19 +143,41 @@ class SeyfiBrain(context: Context) {
         question: String,
         onResponse: (String) -> Unit
     ) {
+        if (closed) {
+            mainHandler.post {
+                onResponse("SEYFİ USTA şu anda kapalı.")
+            }
+            return
+        }
+
+        if (question.isBlank()) {
+            mainHandler.post {
+                onResponse("Usta, sorunuzu anlayamadım. Tekrar söyler misiniz?")
+            }
+            return
+        }
+
         executor.execute {
             try {
                 val activeConversation = conversation
-                    ?: throw IllegalStateException(
-                        "Yapay zekâ henüz başlatılmadı."
-                    )
 
-               val answer = activeConversation
-    .sendMessage(question)
-    .toString()
+                if (!ready || activeConversation == null) {
+                    throw IllegalStateException(
+                        "Yapay zekâ henüz hazır değil."
+                    )
+                }
+
+                val answer = activeConversation
+                    .sendMessage(question)
+                    .toString()
+                    .trim()
+
+                val finalAnswer = answer.ifBlank {
+                    "Usta, şu anda cevap oluşturamadım. Tekrar sorar mısınız?"
+                }
 
                 mainHandler.post {
-                    onResponse(answer)
+                    onResponse(finalAnswer)
                 }
 
             } catch (e: Exception) {
@@ -118,7 +190,16 @@ class SeyfiBrain(context: Context) {
         }
     }
 
+    fun isReady(): Boolean {
+        return ready && !closed
+    }
+
     fun close() {
+        if (closed) return
+
+        closed = true
+        ready = false
+
         executor.execute {
             try {
                 conversation?.close()
