@@ -297,9 +297,11 @@ class MainActivity : ComponentActivity() {
             }
 
             else -> {
-                // Yerel yapay zeka (SeyfiBrain) entegrasyonu
-                val aiReply = assistant.brain.chat(q)
-                assistant.speak(aiReply)
+    // Gerçek yerel yapay zekâ sohbeti
+    assistant.brain.chat(q) { aiReply ->
+        assistant.speak(aiReply)
+    }
+}
             }
         }
     }
