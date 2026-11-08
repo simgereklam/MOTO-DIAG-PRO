@@ -48,7 +48,21 @@ class SeyfiUstaAI(
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
     }
 
-    // MainActivity'nin aradığı chat fonksiyonu
+    // MainActivity'nin aradığı tek parametreli ve String döndüren chat metodu
+    fun chat(message: String): String {
+        return try {
+            if (brain.isReady()) {
+                // Senkron / bloklayıcı veya anlık yanıt gerektiğinde
+                "Usta, analiz ediyorum: $message"
+            } else {
+                "Usta, yapay zekâ beyni henüz hazır değil."
+            }
+        } catch (e: Exception) {
+            "Usta sistem meşgul: ${e.message}"
+        }
+    }
+
+    // MainActivity'nin aradığı callback'li alternatif chat metodu (İhtiyaca göre)
     fun chat(message: String, onAnswer: (String) -> Unit) {
         if (brain.isReady()) {
             brain.ask(message) { answer ->
@@ -62,15 +76,10 @@ class SeyfiUstaAI(
         }
     }
 
-    // MainActivity'nin aradığı string döndüren alternatif chat aşırı yüklemesi (Overload)
-    fun chat(message: String): String {
-        return "Usta sesini aldım: $message"
-    }
-
-    // MainActivity'nin aradığı ECU veri güncelleme fonksiyonu
+    // MainActivity'nin aradığı updateEcuData metodu
     fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
         try {
-            Log.d("SeyfiUstaAI", "ECU Verileri Alındı -> RPM: $rpm, TPS: $tps, ECT: $ect, MAP: $map, Voltaj: $voltage, DTC: $dtcs")
+            Log.d("SeyfiUstaAI", "ECU Verileri Güncellendi -> RPM: $rpm, TPS: $tps, ECT: $ect, MAP: $map, Voltaj: $voltage, DTC: $dtcs")
         } catch (e: Exception) {
             Log.e("SeyfiUstaAI", "ECU veri güncelleme hatası: ${e.message}")
         }
