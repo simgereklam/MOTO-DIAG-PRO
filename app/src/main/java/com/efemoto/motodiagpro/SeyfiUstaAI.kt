@@ -12,7 +12,7 @@ class SeyfiUstaAI(
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
     
-    // Hatanın sebebi olan 'brain' dışarıdan doğrudan erişilebilir hale getirildi
+    // Beyin modülü
     val brain = SeyfiBrain(context)
 
     fun initialize(onReady: () -> Unit) {
@@ -37,6 +37,16 @@ class SeyfiUstaAI(
             return
         }
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
+    }
+
+    // MainActivity'nin doğrudan eriştiği chat metodu sarmalandı
+    fun chat(message: String): String {
+        return brain.chat(message)
+    }
+
+    // MainActivity'nin çağırdığı ECU veri güncelleme köprüsü eklendi
+    fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
+        brain.updateEcuData(rpm, tps, ect, map, voltage, dtcs)
     }
 
     fun processVoiceCommand(spokenText: String) {
