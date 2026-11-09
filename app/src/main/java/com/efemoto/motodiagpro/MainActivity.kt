@@ -225,6 +225,11 @@ class MainActivity : ComponentActivity() {
                 speakFaultSummary()
             }
 
+            SeyfiAction.EXPLAIN_FAULTS -> {
+                showFaults()
+                speakFaultDetails()
+            }
+
             SeyfiAction.CLEAR_FAULTS -> {
                 confirmClearFaults()
                 assistant.speak(
@@ -250,9 +255,21 @@ class MainActivity : ComponentActivity() {
             SeyfiAction.SHOW_TPS ->
                 speakLiveValue("tps", "Gaz kelebeği konumu", "yüzde")
 
+            SeyfiAction.SHOW_MAP ->
+                speakLiveValue("map", "Emme manifoldu basıncı", "kilopaskal")
+
+            SeyfiAction.SHOW_CONNECTION_STATUS -> {
+                if (connected && socket?.isConnected == true && socket?.isClosed == false) {
+                    assistant.speak("Viecar Wi-Fi adaptörü ve ECU bağlantısı açık görünüyor.")
+                } else {
+                    assistant.speak("Şu anda ECU bağlantısı yok. Gerçek bağlantıyı doğrulamak için taramaya başla komutunu verebilirsiniz.")
+                }
+            }
+
             SeyfiAction.SHOW_HELP -> assistant.speak(
-                "Taramaya başla, arızaları oku, arızaları sil, canlı veri, motor devri, " +
-                    "hararet, akü voltajı, gaz konumu, test yap, rapor hazırla veya ana sayfa diyebilirsiniz."
+                "Taramaya başla, arızaları oku veya açıkla, arızaları sil, canlı verileri oku, motor devri, " +
+                    "hararet, akü voltajı, gaz konumu, manifold basıncı, bağlantı durumu, test yap, " +
+                    "rapor hazırla veya ana sayfa diyebilirsiniz."
             )
 
             SeyfiAction.GO_HOME -> {
