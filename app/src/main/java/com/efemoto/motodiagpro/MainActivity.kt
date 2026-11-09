@@ -146,11 +146,24 @@ class MainActivity : ComponentActivity() {
                 // Mikrofon/model hatalarını yalnızca Logcat'te bırakma.
                 // Normal dinleme durumlarında ekrana bildirim basma.
                 val isProblem = listOf(
-                    "hata", "açılamadı", "başlatılamadı", "izin gerekli",
-                    "hazır değil", "bulunamadı", "kullanılamıyor"
+                    "hata", "açılamadı", "başlatılamadı", "indirilemedi",
+                    "izin gerekli", "hazır değil", "bulunamadı", "kullanılamıyor",
+                    "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
-                if (isProblem) {
-                    Toast.makeText(this, status, Toast.LENGTH_LONG).show()
+                val isModelProgress = status.contains(
+                    "Seyfi Usta yapay zekâ modeli indiriliyor",
+                    ignoreCase = true
+                )
+                val isModelReady = status.contains(
+                    "Seyfi Usta yerel yapay zekâsı hazır",
+                    ignoreCase = true
+                )
+                if (isProblem || isModelProgress || isModelReady) {
+                    Toast.makeText(
+                        this,
+                        status,
+                        if (isProblem) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
         )
