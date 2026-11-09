@@ -30,7 +30,11 @@ class SeyfiBrain(context: Context) {
         Motosiklet sistemlerini, motor yönetimini, sensörleri, OBD/ELM327 iletişimini ve arıza teşhis mantığını açıkla.
         ECU verilerini yalnızca GÜNCEL ECU DURUMU bölümünde gerçekten bulunan değerlerden yorumla.
         Bir sensör değeri "Okunmadı" ise değer uydurma; kullanıcıya neden okunmamış olabileceğini anlat.
+        SORUYA EKLENEN SERVİS REFERANSI bölümündeki DTC bilgilerini öncelikli kullan; referansın model/yıl uyumunu kesin kabul etme.
         Arıza kodu açıklamasını olası nedenlerden ayır; tek bir parçayı kesin arızalı ilan etme.
+        Teşhis yaklaşımın: şikâyeti netleştir, arıza kodu ve canlı veriyi karşılaştır, besleme/şase/soket/kabloyu kontrol ettir, sensör sinyalini servis ölçümleriyle doğrulat, ancak bundan sonra parça ihtimalini değerlendir.
+        Her ölçümde kontak açık/kapalı ve motor soğuk/sıcak koşulunu belirt; değer aralığını yalnızca üretici servis verisiyle doğrulanmışsa ver.
+        ECU'nun desteklemediği PID, ABS erişimi, aktüatör testi veya özel protokolü varmış gibi gösterme.
         Önce basit ve güvenli kontrolleri öner; parça değişimini ölçüm ve doğrulama olmadan önermemeye çalış.
         Kullanıcıya teşhis adımlarını, beklenen ölçümleri ve sonuçların nasıl yorumlanacağını sırayla açıkla.
         ECU taraması, arıza silme veya başka bir fiziksel işlem yaptığını ASLA iddia etme; bu işlemleri yalnızca uygulamanın gerçek komut yöneticisi yapar.
@@ -142,6 +146,38 @@ class SeyfiBrain(context: Context) {
         }
     }
 
+    private fun buildServiceReference(question: String): String {
+        val code = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
+            .find(question)?.value?.uppercase()
+            ?: return "Soruda açık bir standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak."
+
+        val yamaha = YamahaFaultCodes.find(code)
+        if (yamaha != null) {
+            return buildString {
+                appendLine("Kod: ${yamaha.code}")
+                appendLine("Başlık: ${yamaha.title}")
+                appendLine("Açıklama: ${yamaha.description}")
+                appendLine("Olası nedenler: ${yamaha.possibleCauses.joinToString("; ")}")
+                appendLine("Kontroller: ${yamaha.checks.joinToString("; ")}")
+                append("Kaynak: uygulamadaki Yamaha referans kaydı; model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
+            }
+        }
+
+        val title = DtcDatabase.title(code)
+        if (title.startsWith("Üreticiye özel")) {
+            return "Kod: $code. Yerel DTC kütüphanesinde doğrulanmış açıklama bulunamadı."
+        }
+
+        return buildString {
+            appendLine("Kod: $code")
+            appendLine("Genel açıklama: $title")
+            appendLine("Teknik not: ${DtcDatabase.description(code)}")
+            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
+            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
+            append("Kaynak: uygulamadaki genel SAE/OBD referansı; motosiklet üreticisi ve ECU varyantı ile teyit edilmeli.")
+        }
+    }
+
     fun ask(
         question: String,
         onResponse: (String) -> Unit
@@ -153,15 +189,19 @@ class SeyfiBrain(context: Context) {
                         "Yapay zekâ henüz başlatılmadı. Model dosyasını kontrol edin."
                     )
 
+                val serviceReference = buildServiceReference(question)
                 val fullQuestion = """
                     GÜNCEL ECU DURUMU:
                     $ecuContext
 
+                    SORUYA EKLENEN SERVİS REFERANSI:
+                    $serviceReference
+
                     KULLANICININ SORUSU:
                     $question
 
-                    Yalnızca yukarıdaki gerçek ECU verilerine dayan.
-                    Eksik verileri tahmin etme.
+                    Gerçek ECU verileri ile servis referansını birbirinden ayır.
+                    Eksik verileri tahmin etme. Servis referansı yoksa bunu açıkça söyle.
                 """.trimIndent()
 
                 val rawAnswer = activeConversation
