@@ -45,10 +45,14 @@ class SeyfiAppTools(
             if (action.isBlank()) {
                 "İşlem adı gelmedi; hiçbir uygulama işlemi yapılmadı."
             } else {
-                executeAction(action)
+                JSONObject()
+                    .put("result", executeAction(action))
+                    .toString()
             }
         } catch (e: Exception) {
-            "Uygulama aracı parametre hatası: ${e.message}"
+            JSONObject()
+                .put("error", "Uygulama aracı parametre hatası: ${e.message}")
+                .toString()
         }
     }
 }
