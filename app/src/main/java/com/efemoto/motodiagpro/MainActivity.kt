@@ -119,32 +119,47 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupSeyfiAssistant() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
+        val hasMicrophonePermission =
+            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+
+        // Yerel yapay zekâ modeli mikrofon izninden bağımsız başlatılır.
+        initializeSeyfiAssistant(startVoice = hasMicrophonePermission)
+
+        if (!hasMicrophonePermission) {
             ActivityCompat.requestPermissions(
                 this,
                 arrayOf(Manifest.permission.RECORD_AUDIO),
                 seyfiPermissionRequestCode
             )
-            return
         }
-        initializeSeyfiAssistant()
     }
 
-    private fun initializeSeyfiAssistant() {
+    private fun initializeSeyfiAssistant(startVoice: Boolean = true) {
         seyfiUstaAI?.release()
         val assistant = SeyfiUstaAI(this) { recognized ->
             handleSeyfiCommand(recognized)
         }
         seyfiUstaAI = assistant
         assistant.initialize {
-            assistant.speak(
-                "Merhaba, ben Seyfi Usta. Efe Moto dijital teşhis asistanınızım. " +
-                    "Beni çağırmak için Seyfi Usta deyin. Dinliyorum."
-            ) {
-                assistant.startListening()
+            if (startVoice) {
+                assistant.speak(
+                    "Merhaba, ben Seyfi Usta. Efe Moto dijital teşhis asistanınızım. " +
+                        "Beni çağırmak için Seyfi Usta deyin. Dinliyorum."
+                ) {
+                    assistant.startListening()
+                }
             }
+        }
+    }
+
+    private fun greetAndListen() {
+        val assistant = seyfiUstaAI ?: return
+        assistant.speak(
+            "Merhaba, ben Seyfi Usta. Efe Moto dijital teşhis asistanınızım. " +
+                "Beni çağırmak için Seyfi Usta deyin. Dinliyorum."
+        ) {
+            assistant.startListening()
         }
     }
 
@@ -159,7 +174,8 @@ class MainActivity : ComponentActivity() {
             if (grantResults.isNotEmpty() &&
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
             ) {
-                initializeSeyfiAssistant()
+                if (seyfiUstaAI == null) initializeSeyfiAssistant(startVoice = false)
+                greetAndListen()
             } else {
                 Toast.makeText(
                     this,
