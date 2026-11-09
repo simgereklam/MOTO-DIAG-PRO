@@ -36,6 +36,7 @@ class OfflineVoiceAssistant(
     private var listening = false
     private var listeningEnabled = false
     @Volatile private var speakingRequested = false
+    @Volatile private var processingRequested = false
 
     fun initialize(onInitialized: (() -> Unit)? = null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
@@ -118,7 +119,19 @@ class OfflineVoiceAssistant(
 
     fun startListening() {
         listeningEnabled = true
+        processingRequested = false
         startListeningInternal()
+    }
+
+    /** Uyandırma sözü tanındı; komut/AI yanıtı bitene kadar mikrofon döngüsünü beklet. */
+    fun pauseForProcessing() {
+        processingRequested = true
+        listening = false
+        mainHandler.removeCallbacks(restartListening)
+        try {
+            recognizer?.cancel()
+        } catch (_: Exception) {
+        }
     }
 
     private fun startListeningInternal() {
@@ -189,6 +202,7 @@ class OfflineVoiceAssistant(
             return
         }
 
+        processingRequested = false
         listening = false
         try {
             recognizer?.cancel()
@@ -245,8 +259,8 @@ class OfflineVoiceAssistant(
             val text = words?.firstOrNull()?.trim()
             if (!text.isNullOrBlank()) {
                 onRecognized(text)
-                if (listeningEnabled && !speakingRequested) scheduleListening(700)
-            } else if (listeningEnabled) {
+                if (listeningEnabled && !speakingRequested && !processingRequested) scheduleListening(700)
+            } else if (listeningEnabled && !processingRequested) {
                 scheduleListening(500)
             }
         }
