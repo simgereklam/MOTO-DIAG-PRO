@@ -247,6 +247,7 @@ class MainActivity : ComponentActivity() {
         if (!seyfiAwaitingCommand) {
             val wakeDetected = Regex("\\bseyfi\\b").containsMatchIn(normalizedSpeech)
             if (!wakeDetected) return
+            assistant.pauseForProcessing()
 
             commandInput = normalizedSpeech
                 .replace(Regex("\\bseyfi\\s+usta\\b"), " ")
@@ -260,6 +261,7 @@ class MainActivity : ComponentActivity() {
                 return
             }
         } else {
+            assistant.pauseForProcessing()
             commandInput = normalizedSpeech
         }
 
