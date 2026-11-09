@@ -1,104 +1,114 @@
 package com.efemoto.motodiagpro
 
-import android.content.Context
-import android.speech.tts.TextToSpeech
+import android.app.Activity
 import android.util.Log
 import java.io.File
-import java.util.Locale
 
+/**
+ * Seyfi Usta'nın tek giriş noktası:
+ * - OfflineVoiceAssistant: mikrofon, sürekli dinleme ve Türkçe TTS
+ * - SeyfiBrain: model dosyası varsa yerel LLM yanıtları
+ * - MainActivity: gerçek ECU komutlarını çalıştırır
+ */
 class SeyfiUstaAI(
-    private val context: Context,
+    private val activity: Activity,
     private val onCommandRecognized: (String) -> Unit
 ) {
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
+    private val voice = OfflineVoiceAssistant(
+        activity = activity,
+        onRecognized = { text -> onCommandRecognized(text) },
+        onStatus = { status -> Log.d("SeyfiUstaAI", status) }
+    )
 
-    // SeyfiBrain nesnesi projedeki gerçek yapıyla başlatılıyor
-    val brain = SeyfiBrain(context)
+    val brain = SeyfiBrain(activity.applicationContext)
+
+    @Volatile private var initialized = false
 
     fun initialize(onReady: () -> Unit) {
-        tts = TextToSpeech(context) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                val result = tts?.setLanguage(Locale("tr", "TR"))
-                if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    Log.e("SeyfiUstaAI", "Türkçe dil desteği TTS için eksik.")
-                } else {
-                    isTtsReady = true
-                }
-            }
+        if (initialized) {
+            onReady()
+            return
+        }
+        initialized = true
+
+        // Sesli komut sistemi model dosyasından bağımsız çalışır.
+        voice.initialize {
+            onReady()
         }
 
-        val modelFile = File(context.filesDir, "seyfi_model.bin")
-        try {
-            brain.initialize(modelFile) { success, message ->
-                Log.d("SeyfiUstaAI", "Brain init: $success - $message")
-                onReady()
+        // Yerel üretken yapay zekâ yalnızca gerçek model dosyası varsa açılır.
+        val modelFile = File(activity.filesDir, "seyfi_model.bin")
+        brain.initialize(modelFile) { success, message ->
+            if (success) {
+                Log.i("SeyfiUstaAI", message)
+            } else {
+                Log.w("SeyfiUstaAI", "$message Komut tabanlı çevrimdışı işlevler kullanılabilir.")
             }
-        } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "Brain init hata: ${e.message}")
-            onReady()
         }
     }
 
     fun speak(text: String, onDone: (() -> Unit)? = null) {
-        if (!isTtsReady) {
-            onDone?.invoke()
-            return
-        }
-        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "SeyfiUtterance")
+        voice.speak(text, onDone)
     }
 
-    // MainActivity'nin 301. satırındaki çağrıya tam uyan callback'li chat metodu
+    fun startListening() {
+        voice.startListening()
+    }
+
+    fun stopListening() {
+        voice.stopListening()
+    }
+
+    fun isListening(): Boolean = voice.isListening()
+
     fun chat(message: String, onAnswer: (String) -> Unit) {
         if (brain.isReady()) {
-            brain.ask(message) { answer ->
+            brain.chat(message) { answer ->
                 onAnswer(answer)
                 speak(answer)
             }
         } else {
-            val fallback = "Usta, yapay zekâ beyni şu an hazır değil."
+            val fallback =
+                "Yerel yapay zekâ modeli henüz yüklenmedi. Gerçek ECU taraması, arıza kodları ve canlı sensör verileriyle ilgili komutları kullanabilirim."
             onAnswer(fallback)
             speak(fallback)
         }
     }
 
-    // Alternatif tek parametreli chat aşırı yüklemesi (Overload)
     fun chat(message: String): String {
-        return "Usta analiz ediliyor: $message"
-    }
-
-    // MainActivity'nin aradığı updateEcuData metodu (Tüm imza varyasyonlarını kapsar)
-    fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) {
-        try {
-            Log.d("SeyfiUstaAI", "ECU Verileri Güncellendi -> RPM: $rpm, TPS: $tps, ECT: $ect, MAP: $map, Voltaj: $voltage, DTC: $dtcs")
-        } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "ECU veri güncelleme hatası: ${e.message}")
+        return if (brain.isReady()) {
+            "Sorunuzu yerel yapay zekâya iletiyorum: $message"
+        } else {
+            "Yerel yapay zekâ modeli henüz yüklenmedi."
         }
     }
 
-    // Parametresiz veya farklı imzada çağrı ihtimaline karşı güvenli overload
-    fun updateEcuData() {
-        Log.d("SeyfiUstaAI", "ECU Verileri güncellendi (boş çağrı).")
+    fun updateEcuData(
+        rpm: Int,
+        tps: Float,
+        ect: Int,
+        map: Float,
+        voltage: Float,
+        dtcs: List<String>
+    ) {
+        brain.updateEcuData(
+            rpm = rpm,
+            tps = tps.toInt(),
+            coolant = ect,
+            mapKpa = map.toInt(),
+            voltage = voltage.toDouble(),
+            faults = dtcs,
+            connected = true
+        )
     }
 
     fun processVoiceCommand(spokenText: String) {
         onCommandRecognized(spokenText)
-        chat(spokenText) { reply ->
-            Log.d("SeyfiUstaAI", "Yapay zekâ yanıtı: $reply")
-        }
-    }
-
-    fun stopListening() {
-        // Dinleme sonlandırma
     }
 
     fun release() {
-        try {
-            tts?.stop()
-            tts?.shutdown()
-            brain.close()
-        } catch (e: Exception) {
-            Log.e("SeyfiUstaAI", "Release hata: ${e.message}")
-        }
+        voice.release()
+        brain.close()
+        initialized = false
     }
 }
