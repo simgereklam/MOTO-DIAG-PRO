@@ -259,13 +259,16 @@ class MainActivity : ComponentActivity() {
 
     private fun handleSeyfiCommand(rawCommand: String) {
         val assistant = seyfiUstaAI ?: return
+        if (rawCommand.isNotBlank()) {
+            log("Seyfi Usta mikrofon duydu: $rawCommand")
+            Toast.makeText(this, "Mikrofon duydu: $rawCommand", Toast.LENGTH_SHORT).show()
+        }
 
-        // Arka plan konuşmaları ve yanlış tanınan kelimeler komut çalıştırmasın.
-        // Kullanıcı önce "Seyfi Usta" demeli; ardından gelen tek cümle işlenir.
+        // Türkçe konuşma modelinin sık yaptığı uyandırma sözü yazım hatalarını düzelt.
         val normalizedSpeech = rawCommand
             .lowercase(java.util.Locale("tr", "TR"))
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
-            .replace(Regex("\\b(şeyfi|sefi|seifi)\\b"), "seyfi")
+            .replace(Regex("\\b(şeyfi|sefi|seifi|seyfı)\\b"), "seyfi")
             .replace(Regex("\\bseyfiusta\\b"), "seyfi usta")
             .replace(Regex("\\s+"), " ")
             .trim()
