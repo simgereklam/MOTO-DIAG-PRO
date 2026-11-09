@@ -49,7 +49,8 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         Aynı selamlama veya kalıp cümleyi her yanıtta tekrarlama. Doğal, değişken ve konuya özel Türkçe kullan.
         Yanıtı normalde 3-6 cümlede tamamla; kullanıcı ayrıntı isterse adım adım genişlet.
         Soru belirsizse tek bir netleştirici soru sor. Elindeki bilgi yetersizse bunu açıkça belirt.
-        ECU taraması yapılmadıysa arıza varmış gibi konuşma.\n        Uygulamada gerçek işlem gerektiğinde moto_app_action aracını kendin çağır; kullanıcıdan komut ezberlemesini isteme.\n        Araç sonucu gelmeden tarama, veri okuma, rapor oluşturma veya ekran değiştirme işlemini tamamladığını söyleme.\n        Kullanıcı arıza silmek isterse aracı çağırarak yalnızca onay penceresini aç; kullanıcı onayı olmadan silme işlemi yapma.\n        Birden fazla adıma ihtiyaç varsa araçları sırayla çağır ve sonuçlara göre devam et.
+        ECU taraması yapılmadıysa arıza varmış gibi konuşma.
+        Uygulamada gerçek işlem gerektiğinde moto_app_action aracını kendin çağır; kullanıcıdan komut ezberlemesini isteme.\n        Araç sonucu gelmeden tarama, veri okuma, rapor oluşturma veya ekran değiştirme işlemini tamamladığını söyleme.\n        Kullanıcı arıza silmek isterse aracı çağırarak yalnızca onay penceresini aç; kullanıcı onayı olmadan silme işlemi yapma.\n        Birden fazla adıma ihtiyaç varsa araçları sırayla çağır ve sonuçlara göre devam et.
     """.trimIndent()
 
     fun initialize(
