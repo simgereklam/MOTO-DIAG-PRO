@@ -280,15 +280,21 @@ class MainActivity : ComponentActivity() {
         }
 
         // Türkçe konuşma modelinin sık yaptığı uyandırma sözü yazım hatalarını düzelt.
-        val normalizedSpeech = rawCommand
-            .lowercase(java.util.Locale("tr", "TR"))
+        // Vosk küçük Türkçe modelinde "Seyfi Usta" farklı yazımlarla çıkabiliyor.
+        // Önce Türkçe karakterleri sadeleştir, sonra sık görülen fonetik hataları düzelt.
+        val normalizedSpeech = java.text.Normalizer.normalize(
+            rawCommand.lowercase(java.util.Locale("tr", "TR")),
+            java.text.Normalizer.Form.NFD
+        )
+            .replace(Regex("\\p{Mn}+"), "")
+            .replace("ı", "i")
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
-            .replace(Regex("\\b(şeyfi|sefi|seifi|seyfı)\\b"), "seyfi")
-            .replace(Regex("\\bseyfiusta\\b"), "seyfi usta")
+            .replace(Regex("\\b(on kinal|on kanal|sey fusta|seyf usta|seyfiusta|sefi usta|seifi usta)\\b"), "seyfi usta")
+            .replace(Regex("\\b(seyfi|seyf|sefi|seifi)\\b"), "seyfi")
             .replace(Regex("\\s+"), " ")
             .trim()
 
-        val wakeDetected = Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b")
+        val wakeDetected = Regex("\\bseyfi\\b")
             .containsMatchIn(normalizedSpeech)
         val commandInput: String
 
