@@ -144,6 +144,8 @@ class SeyfiUstaAI(
 
     fun getModelStatus(): String = modelStatus
 
+    fun getVoiceStatus(): String = voice.getStatus()
+
     fun speak(text: String, onDone: (() -> Unit)? = null) {
         voice.speak(text, onDone)
     }
