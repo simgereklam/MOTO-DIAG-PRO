@@ -217,9 +217,17 @@ class SeyfiUstaAI(
     }
 
     private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
+        publishModelStatus("Seyfi Usta düşünüyor ve yanıt hazırlıyor.")
+        Log.i(TAG, "Sohbet isteği Qwen'e gönderildi: ${message.take(240)}")
         brain.chat(message) { answer ->
-            onAnswer(answer)
-            speak(answer)
+            Log.i(TAG, "Qwen yanıtı alındı: ${answer.take(600)}")
+            try {
+                onAnswer(answer)
+            } catch (e: Exception) {
+                Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
+            } finally {
+                speak(answer)
+            }
         }
     }
 
