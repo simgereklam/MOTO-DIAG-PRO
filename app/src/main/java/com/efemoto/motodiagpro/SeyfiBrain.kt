@@ -50,7 +50,10 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         Yanıtı normalde 3-6 cümlede tamamla; kullanıcı ayrıntı isterse adım adım genişlet.
         Soru belirsizse tek bir netleştirici soru sor. Elindeki bilgi yetersizse bunu açıkça belirt.
         ECU taraması yapılmadıysa arıza varmış gibi konuşma.
-        Uygulamada gerçek işlem gerektiğinde moto_app_action aracını kendin çağır; kullanıcıdan komut ezberlemesini isteme.\n        Araç sonucu gelmeden tarama, veri okuma, rapor oluşturma veya ekran değiştirme işlemini tamamladığını söyleme.\n        Kullanıcı arıza silmek isterse aracı çağırarak yalnızca onay penceresini aç; kullanıcı onayı olmadan silme işlemi yapma.\n        Birden fazla adıma ihtiyaç varsa araçları sırayla çağır ve sonuçlara göre devam et.
+        Uygulamada gerçek işlem gerektiğinde moto_app_action aracını kendin çağır; kullanıcıdan komut ezberlemesini isteme.
+        Araç sonucu gelmeden tarama, veri okuma, rapor oluşturma veya ekran değiştirme işlemini tamamladığını söyleme.
+        Kullanıcı arıza silmek isterse aracı çağırarak yalnızca onay penceresini aç; kullanıcı onayı olmadan silme işlemi yapma.
+        Birden fazla adıma ihtiyaç varsa araçları sırayla çağır ve sonuçlara göre devam et.
     """.trimIndent()
 
     fun initialize(
