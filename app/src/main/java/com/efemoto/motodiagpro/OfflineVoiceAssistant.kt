@@ -319,16 +319,11 @@ class OfflineVoiceAssistant(
                     mainHandler.post {
                         if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
                             reportStatus("Seyfi Usta duyuyor: $partial")
-                            // Uyandırma sözünü kısmi tanımada da yakala; sessizlik
-                            // beklemek zorunda kalmadan "Dinliyorum" yanıtını verebilir.
-                            val wakeWord = Regex(
-                                "\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b",
-                                RegexOption.IGNORE_CASE
-                            )
-                            if (wakeWord.containsMatchIn(partial)) {
-                                reportStatus("Seyfi Usta uyandırma sözünü algıladı.")
-                                onRecognized(partial)
-                            }
+                            // Kısmi metin yalnızca ekranda gösterilir.
+                            // Burada komut çalıştırmak mikrofonu erken durdurur:
+                            // "seyfi" algılanınca "usta" ve komutun geri kalanı kesilir.
+                            // Uyandırma sözü ve komut, Vosk onResult kesin metni verdiğinde
+                            // MainActivity'ye tek seferde aktarılır.
                         }
                     }
                 }
