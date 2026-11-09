@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class SeyfiUstaAI(
     private val activity: Activity,
     private val onCommandRecognized: (String) -> Unit,
-    private val onVoiceStatusChanged: (String) -> Unit = {}
+    private val onVoiceStatusChanged: (String) -> Unit = {},
+    private val onAppAction: (String) -> String = { "Uygulama işlem köprüsü hazır değil." }
 ) {
     companion object {
         private const val TAG = "SeyfiUstaAI"
@@ -40,7 +41,10 @@ class SeyfiUstaAI(
         }
     )
 
-    val brain = SeyfiBrain(activity.applicationContext)
+    val brain = SeyfiBrain(
+        activity.applicationContext,
+        com.google.ai.edge.litertlm.tool(SeyfiAppTools(onAppAction))
+    )
     private val modelExecutor = Executors.newSingleThreadExecutor()
     private val modelTaskStarted = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
