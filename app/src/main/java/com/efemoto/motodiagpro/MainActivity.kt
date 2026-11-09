@@ -285,32 +285,38 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\s+"), " ")
             .trim()
 
+        val wakeDetected = Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b")
+            .containsMatchIn(normalizedSpeech)
         val commandInput: String
-        if (!seyfiAwaitingCommand) {
-            val wakeDetected = Regex("\\bseyfi\\b").containsMatchIn(normalizedSpeech)
-            if (!wakeDetected) return
-            assistant.pauseForProcessing()
 
-            commandInput = normalizedSpeech
-                .replace(Regex("\\bseyfi\\s+usta\\b"), " ")
-                .replace(Regex("\\bseyfi\\b"), " ")
+        // Uyandırma kelimesi söylendiyse yalnızca onu çıkar.
+        // Uyandırma kelimesi kaçırılmış olsa bile bilinen temel komutları
+        // (ör. "ana sayfa", "canlı veri", "taramaya başla") çalıştır.
+        assistant.pauseForProcessing()
+        commandInput = if (wakeDetected) {
+            normalizedSpeech
+                .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\s+usta\\b"), " ")
+                .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b"), " ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
-
-            if (commandInput.isBlank()) {
-                seyfiAwaitingCommand = true
-                assistant.speak("Dinliyorum.")
-                return
-            }
+        } else if (seyfiAwaitingCommand) {
+            normalizedSpeech
         } else {
-            assistant.pauseForProcessing()
-            commandInput = normalizedSpeech
+            normalizedSpeech
+        }
+
+        if (commandInput.isBlank() && wakeDetected) {
+            seyfiAwaitingCommand = true
+            Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
+            assistant.speak("Dinliyorum.")
+            return
         }
 
         seyfiAwaitingCommand = false
         val command = seyfiCommandHandler.handle(commandInput)
 
         log("Seyfi Usta komutu: $rawCommand → ${command.action}")
+        Toast.makeText(this, "SEYFİ USTA komutu: ${command.action}", Toast.LENGTH_SHORT).show()
 
         when (command.action) {
             SeyfiAction.WAKE_WORD -> {
