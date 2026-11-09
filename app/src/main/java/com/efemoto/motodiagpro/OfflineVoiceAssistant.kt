@@ -288,6 +288,16 @@ class OfflineVoiceAssistant(
                     mainHandler.post {
                         if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
                             reportStatus("Seyfi Usta duyuyor: $partial")
+                            // Uyandırma sözünü kısmi tanımada da yakala; sessizlik
+                            // beklemek zorunda kalmadan "Dinliyorum" yanıtını verebilir.
+                            val wakeWord = Regex(
+                                "\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b",
+                                RegexOption.IGNORE_CASE
+                            )
+                            if (wakeWord.containsMatchIn(partial)) {
+                                reportStatus("Seyfi Usta uyandırma sözünü algıladı.")
+                                onRecognized(partial)
+                            }
                         }
                     }
                 }
@@ -358,6 +368,9 @@ class OfflineVoiceAssistant(
         processingRequested = false
         val service = speechService
         if (service != null) {
+            // Önceki uyandırma/komut parçasını temizle; yeniden açıldığında
+            // aynı kelimeyi ikinci kez tetiklemesin.
+            service.reset()
             service.setPause(false)
             reportStatus("Seyfi Usta çevrimdışı dinliyor...")
         } else {
