@@ -52,26 +52,6 @@ jobs:
           test "$MODEL_BYTES" -gt 300000000
           test "$MODEL_BYTES" -lt 400000000
 
-      - name: Türkçe çevrimdışı konuşma modelini ekle
-        run: |
-          mkdir -p /tmp/vosk-tr app/src/main/assets/model-tr
-          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
-            "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip" \
-            --output /tmp/vosk-tr/model.zip
-          echo "8c8d07cec1bce31add14967c16891c84152cdf76d391e33c08278119b9ea96e5  /tmp/vosk-tr/model.zip" | sha256sum --check
-          unzip -q /tmp/vosk-tr/model.zip -d /tmp/vosk-tr
-          MODEL_FILE="$(find /tmp/vosk-tr -type f -name final.mdl -print -quit)"
-          test -n "$MODEL_FILE"
-          MODEL_ROOT="$(dirname "$MODEL_FILE")"
-          test -f "$MODEL_ROOT/Gr.fst"
-          test -f "$MODEL_ROOT/HCLr.fst"
-          test -f "$MODEL_ROOT/word_boundary.int"
-          cp -a "$MODEL_ROOT"/. app/src/main/assets/model-tr/
-          printf '%s\n' "$GITHUB_SHA" > app/src/main/assets/model-tr/uuid
-          test -f app/src/main/assets/model-tr/uuid
-          echo "Türkçe Vosk model assets hazır."
-          du -sh app/src/main/assets/model-tr
-
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace
 
