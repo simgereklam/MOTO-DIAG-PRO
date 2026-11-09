@@ -3,6 +3,7 @@ package com.efemoto.motodiagpro
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -113,9 +114,18 @@ class OfflineVoiceAssistant(
                 val engine = tts
                 if (status == TextToSpeech.SUCCESS && engine != null) {
                     try {
-                        val offlineTurkish = engine.voices.orEmpty().filter {
-                            it.locale.language.equals("tr", ignoreCase = true) &&
-                                !it.isNetworkConnectionRequired
+                        // Önce dili ayarla. Android setLanguage() çağrısı varsayılan sesi
+                        // yeniden seçtiği için özel sesi bundan SONRA seçmek gerekir.
+                        val languageResult = engine.setLanguage(turkish)
+                        val languageSupported =
+                            languageResult != TextToSpeech.LANG_MISSING_DATA &&
+                                languageResult != TextToSpeech.LANG_NOT_SUPPORTED
+
+                        val turkishVoices = engine.voices.orEmpty().filter {
+                            it.locale.language.equals("tr", ignoreCase = true)
+                        }
+                        val offlineTurkish = turkishVoices.filter {
+                            !it.isNetworkConnectionRequired
                         }
                         val selected = offlineTurkish.firstOrNull { voice ->
                             val details = (voice.name + " " +
@@ -124,44 +134,65 @@ class OfflineVoiceAssistant(
                             details.contains("male") || details.contains("erkek")
                         } ?: offlineTurkish.firstOrNull()
 
-                        if (selected != null) engine.voice = selected
-                        val languageResult = engine.setLanguage(turkish)
-                        ttsReady = languageResult != TextToSpeech.LANG_MISSING_DATA &&
-                            languageResult != TextToSpeech.LANG_NOT_SUPPORTED
+                        if (selected != null) {
+                            val voiceResult = engine.setVoice(selected)
+                            if (voiceResult == TextToSpeech.ERROR) {
+                                reportStatus("Türkçe ses seçilemedi: ${selected.name}")
+                            }
+                        }
 
+                        // Medya ses seviyesini kullan; telefonun medya sesi kapalıysa
+                        // kullanıcı bunu telefonun ses tuşlarıyla kontrol edebilir.
+                        val audioResult = engine.setAudioAttributes(
+                            AudioAttributes.Builder()
+                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                .build()
+                        )
+
+                        ttsReady = languageSupported
+                        engine.setSpeechRate(0.92f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
                                 mainHandler.post {
-                                    if (!released) reportStatus("Seyfi Usta konuşuyor...")
+                                    if (!released) reportStatus("SEYFİ TTS: konuşma başladı.")
                                 }
                             }
 
                             override fun onDone(utteranceId: String?) {
-                                finishUtterance(utteranceId, "Seyfi Usta dinliyor.")
+                                finishUtterance(utteranceId, "SEYFİ TTS: konuşma tamamlandı.")
                             }
 
                             override fun onStop(utteranceId: String?, interrupted: Boolean) {
                                 finishUtterance(
                                     utteranceId,
-                                    if (interrupted) "Sesli yanıt kesildi." else "Seyfi Usta dinliyor."
+                                    if (interrupted) "SEYFİ TTS: konuşma kesildi."
+                                    else "SEYFİ TTS: konuşma durdu."
                                 )
                             }
 
                             @Deprecated("Deprecated by Android")
                             override fun onError(utteranceId: String?) {
-                                finishUtterance(utteranceId, "Sesli yanıt tamamlanamadı.")
+                                finishUtterance(utteranceId, "SEYFİ TTS HATASI: ses üretilemedi.")
                             }
 
                             override fun onError(utteranceId: String?, errorCode: Int) {
-                                finishUtterance(utteranceId, "Sesli yanıt hatası: $errorCode")
+                                finishUtterance(
+                                    utteranceId,
+                                    "SEYFİ TTS HATASI: kod $errorCode."
+                                )
                             }
                         })
 
                         reportStatus(
                             when {
                                 !ttsReady -> "Türkçe metin okuma dili telefonda yüklü değil."
-                                offlineTurkish.isNotEmpty() -> "Türkçe çevrimdışı ses çıkışı hazır."
-                                else -> "Türkçe TTS hazır; çevrimdışı ses paketi doğrulanamadı."
+                                selected != null ->
+                                    "SEYFİ TTS HAZIR: ${selected.name}; medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
+                                offlineTurkish.isEmpty() && turkishVoices.isEmpty() ->
+                                    "Türkçe TTS sesi bulunamadı. Telefona Türkçe ses paketi yüklenmeli."
+                                else ->
+                                    "Türkçe TTS hazır; çevrimdışı Türkçe ses bulunamadı."
                             }
                         )
                     } catch (e: Exception) {
@@ -412,14 +443,17 @@ class OfflineVoiceAssistant(
         activeUtteranceId = id
         if (onDone != null) pendingSpeechCallbacks[id] = onDone
 
+        reportStatus("SEYFİ TTS: ses isteği gönderiliyor.")
         val result = engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, id)
         if (result == TextToSpeech.ERROR) {
             pendingSpeechCallbacks.remove(id)
             activeUtteranceId = null
             speakingRequested = false
-            reportStatus("Sesli yanıt başlatılamadı.")
+            reportStatus("SEYFİ TTS HATASI: speak() isteği reddedildi.")
             onDone?.invoke()
             resumeRecognition()
+        } else {
+            reportStatus("SEYFİ TTS: ses isteği kabul edildi.")
         }
     }
 
