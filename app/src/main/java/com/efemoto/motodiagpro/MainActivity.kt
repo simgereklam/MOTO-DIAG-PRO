@@ -144,8 +144,8 @@ class MainActivity : ComponentActivity() {
         assistant.initialize {
             if (startVoice) {
                 assistant.speak(
-                    "Merhaba, ben Seyfi Usta. Efe Moto dijital teşhis asistanınızım. " +
-                        "Beni çağırmak için Seyfi Usta deyin. Dinliyorum."
+                    "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
+                        "Bana Seyfi Usta diye seslenin."
                 ) {
                     assistant.startListening()
                 }
@@ -156,8 +156,8 @@ class MainActivity : ComponentActivity() {
     private fun greetAndListen() {
         val assistant = seyfiUstaAI ?: return
         assistant.speak(
-            "Merhaba, ben Seyfi Usta. Efe Moto dijital teşhis asistanınızım. " +
-                "Beni çağırmak için Seyfi Usta deyin. Dinliyorum."
+            "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
+                "Bana Seyfi Usta diye seslenin."
         ) {
             assistant.startListening()
         }
@@ -1667,6 +1667,16 @@ class MainActivity : ComponentActivity() {
         })
         c.addView(statusCard)
 
+        // Model indirme yüzdesi ve hata durumu ekranda kendiliğinden güncellensin.
+        val statusRefresh = object : Runnable {
+            override fun run() {
+                if (!status.isAttachedToWindow) return
+                status.text = seyfiUstaAI?.getModelStatus() ?: "Asistan başlatılıyor."
+                status.postDelayed(this, 700L)
+            }
+        }
+        status.post(statusRefresh)
+
         val chatCard = neonCard("SEYFİ USTA İLE SOHBET", cyan)
         val transcript = text(
             seyfiChatHistory.toString().ifBlank {
@@ -1707,7 +1717,7 @@ class MainActivity : ComponentActivity() {
                 question.setText("")
                 val assistant = seyfiUstaAI
                 if (assistant == null) {
-                    seyfiChatHistory.append("SEYFİ USTA: Asistan henüz başlatılmadı. Uygulamayı yeniden açıp mikrofon iznini kontrol edin.\\n\\n")
+                    seyfiChatHistory.append("SEYFİ USTA: Asistan henüz başlatılmadı. Uygulamayı yeniden açıp bağlantıyı kontrol edin.\n\n")
                     transcript.text = seyfiChatHistory.toString()
                 } else {
                     status.text = assistant.getModelStatus()
