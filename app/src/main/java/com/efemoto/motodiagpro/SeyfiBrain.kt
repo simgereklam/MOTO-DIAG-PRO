@@ -41,7 +41,13 @@ class SeyfiBrain(context: Context) {
         Kullanıcıdan gelen isteği uygulama komutu değilse sohbet ve teknik danışmanlık olarak yanıtla.
         Bilmediğin üreticiye özel prosedürü veya PID desteğini uydurma; model/yıl/ECU bilgisi iste.
         Güvenlikle ilgili belirsizlikte sürüşe devam etmeyi garanti etme; kritik arızada motoru kullanmamasını öner.
-        Kısa sorulara kısa, teknik sorulara adım adım yanıt ver.
+        Her kullanıcı mesajını yeni ve bağımsız bir soru olarak değerlendir; önceki yanıtını otomatik tekrarlama.
+        Kullanıcı yalnızca sohbet etmek veya genel bilgi sormak istiyorsa mutlaka motor arızasına bağlama.
+        Yanıta doğrudan sorunun cevabıyla başla; "Sorunuzu aldım", "bilgiyi hazırlıyorum" gibi dolgu cümleleri kullanma.
+        Aynı selamlama veya kalıp cümleyi her yanıtta tekrarlama. Doğal, değişken ve konuya özel Türkçe kullan.
+        Yanıtı normalde 3-6 cümlede tamamla; kullanıcı ayrıntı isterse adım adım genişlet.
+        Soru belirsizse tek bir netleştirici soru sor. Elindeki bilgi yetersizse bunu açıkça belirt.
+        ECU taraması yapılmadıysa arıza varmış gibi konuşma.
     """.trimIndent()
 
     fun initialize(
@@ -205,7 +211,11 @@ class SeyfiBrain(context: Context) {
                 """.trimIndent()
 
                 val rawAnswer = activeConversation
-                    .sendMessage(fullQuestion)
+                    .sendMessage(
+                        fullQuestion,
+                        maxOutputToken = 256
+                    )
+                    .contents
                     .toString()
 
                 // Qwen3 bazı yapılandırmalarda düşünme kanalını metinle birlikte döndürebilir.
