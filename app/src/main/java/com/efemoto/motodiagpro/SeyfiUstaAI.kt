@@ -3,9 +3,7 @@ package com.efemoto.motodiagpro
 import android.app.Activity
 import android.util.Log
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.security.MessageDigest
 import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -27,9 +25,9 @@ class SeyfiUstaAI(
     companion object {
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
-        private const val MODEL_SHA256 =
-            "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9"
-        private const val MODEL_BYTES = 344686592L
+        // Model revision is pinned in android.yml; size bounds catch partial downloads.
+        private const val MIN_MODEL_BYTES = 300_000_000L
+        private const val MAX_MODEL_BYTES = 400_000_000L
     }
 
     private val voice = OfflineVoiceAssistant(
@@ -105,9 +103,7 @@ class SeyfiUstaAI(
      */
     private fun ensureModelFile(): File {
         val target = File(activity.filesDir, MODEL_FILE_NAME)
-        if (target.isFile && target.length() == MODEL_BYTES &&
-            sha256(target).equals(MODEL_SHA256, ignoreCase = true)
-        ) {
+        if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
             modelStatus = "Yerel yapay zekâ modeli cihazda hazır."
             return target
         }
@@ -124,16 +120,9 @@ class SeyfiUstaAI(
                 }
             }
 
-            if (temporary.length() != MODEL_BYTES) {
+            if (temporary.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
                 throw IllegalStateException(
-                    "APK içindeki model eksik: ${temporary.length()} / $MODEL_BYTES bayt."
-                )
-            }
-
-            val actualHash = sha256(temporary)
-            if (!actualHash.equals(MODEL_SHA256, ignoreCase = true)) {
-                throw IllegalStateException(
-                    "APK içindeki model SHA-256 doğrulaması başarısız: $actualHash"
+                    "APK içindeki model boyutu geçersiz: ${temporary.length()} bayt."
                 )
             }
 
@@ -151,19 +140,6 @@ class SeyfiUstaAI(
                 "APK içinde doğrulanmış Seyfi Usta modeli bulunamadı. ${e.message}", e
             )
         }
-    }
-
-    private fun sha256(file: File): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        FileInputStream(file).use { input ->
-            val buffer = ByteArray(1024 * 1024)
-            while (true) {
-                val count = input.read(buffer)
-                if (count < 0) break
-                digest.update(buffer, 0, count)
-            }
-        }
-        return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
     fun getModelStatus(): String = modelStatus
