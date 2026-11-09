@@ -106,12 +106,8 @@ val downloadSeyfiModel by tasks.registering {
                     "Hugging Face HTTP $status: ${activeConnection.responseMessage}"
                 }
 
-                val advertisedLength = activeConnection.contentLengthLong
-                if (advertisedLength > 0L) {
-                    check(advertisedLength == expectedBytes) {
-                        "Sunucu beklenmeyen dosya boyutu bildirdi: $advertisedLength bayt; beklenen: $expectedBytes"
-                    }
-                }
+                // CDN Content-Length başlığı bazen gerçek LFS dosya boyutunu yanlış bildiriyor.
+                // İndirme tamamlandıktan sonra gerçek bayt sayısı ve SHA-256 kesin olarak doğrulanır.
 
                 activeConnection.inputStream.use { input ->
                     FileOutputStream(partial).use { output ->
