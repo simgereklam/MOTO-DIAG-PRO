@@ -139,9 +139,21 @@ class MainActivity : ComponentActivity() {
 
     private fun initializeSeyfiAssistant(startVoice: Boolean = true) {
         seyfiUstaAI?.release()
-        val assistant = SeyfiUstaAI(this) { recognized ->
-            handleSeyfiCommand(recognized)
-        }
+        val assistant = SeyfiUstaAI(
+            activity = this,
+            onCommandRecognized = { recognized -> handleSeyfiCommand(recognized) },
+            onVoiceStatusChanged = { status ->
+                // Mikrofon/model hatalarını yalnızca Logcat'te bırakma.
+                // Normal dinleme durumlarında ekrana bildirim basma.
+                val isProblem = listOf(
+                    "hata", "açılamadı", "başlatılamadı", "izin gerekli",
+                    "hazır değil", "bulunamadı", "kullanılamıyor"
+                ).any { status.contains(it, ignoreCase = true) }
+                if (isProblem) {
+                    Toast.makeText(this, status, Toast.LENGTH_LONG).show()
+                }
+            }
+        )
         seyfiUstaAI = assistant
         assistant.initialize {
             if (startVoice) {
@@ -240,6 +252,8 @@ class MainActivity : ComponentActivity() {
         val normalizedSpeech = rawCommand
             .lowercase(java.util.Locale("tr", "TR"))
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
+            .replace(Regex("\\b(şeyfi|sefi|seifi)\\b"), "seyfi")
+            .replace(Regex("\\bseyfiusta\\b"), "seyfi usta")
             .replace(Regex("\\s+"), " ")
             .trim()
 
