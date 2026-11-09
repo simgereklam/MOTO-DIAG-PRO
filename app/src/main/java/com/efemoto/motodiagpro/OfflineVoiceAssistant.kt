@@ -78,7 +78,7 @@ class OfflineVoiceAssistant(
                     override fun onDone(utteranceId: String?) {
                         mainHandler.post {
                             speakingRequested = false
-                            pendingDone.remove(utteranceId)?.invoke()
+                            utteranceId?.let { pendingDone.remove(it)?.invoke() }
                             onStatus("Seyfi Usta dinlemeye hazır.")
                             if (listeningEnabled) scheduleListening(350)
                         }
@@ -88,7 +88,7 @@ class OfflineVoiceAssistant(
                     override fun onError(utteranceId: String?) {
                         mainHandler.post {
                             speakingRequested = false
-                            pendingDone.remove(utteranceId)?.invoke()
+                            utteranceId?.let { pendingDone.remove(it)?.invoke() }
                             if (listeningEnabled) scheduleListening(500)
                         }
                     }
@@ -96,7 +96,7 @@ class OfflineVoiceAssistant(
                     override fun onError(utteranceId: String?, errorCode: Int) {
                         mainHandler.post {
                             speakingRequested = false
-                            pendingDone.remove(utteranceId)?.invoke()
+                            utteranceId?.let { pendingDone.remove(it)?.invoke() }
                             onStatus("Sesli yanıt tamamlanamadı.")
                             if (listeningEnabled) scheduleListening(500)
                         }
