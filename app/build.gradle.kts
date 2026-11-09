@@ -89,7 +89,8 @@ val downloadSeyfiModel by tasks.registering {
                 output.fd.sync()
             } }
             check(partial.length() >= 300L * 1024L * 1024L) { "Seyfi Usta model dosyası eksik." }
-            check(hash(partial) == expected) { "Seyfi Usta model SHA-256 doğrulaması başarısız." }
+            val actualHash = hash(partial)
+            check(actualHash == expected) { "Seyfi Usta model SHA-256 doğrulaması başarısız. Beklenen: $expected / Gelen: $actualHash / Boyut: ${partial.length()}" }
             check(partial.renameTo(target)) { "Seyfi Usta model dosyası hedefe taşınamadı." }
             logger.lifecycle("Seyfi Usta yerel modeli APK assets içine eklendi (" + target.length() + " bayt).")
         } finally { connection.disconnect(); if (partial.exists()) partial.delete() }
