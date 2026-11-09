@@ -41,11 +41,17 @@ class OfflineVoiceAssistant(
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
             SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
         ) {
-            recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(activity).also {
-                it.setRecognitionListener(listener)
+            try {
+                recognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(activity).also {
+                    it.setRecognitionListener(listener)
+                }
+                onStatus("Çevrimdışı Türkçe konuşma tanıma hazır.")
+            } catch (e: Exception) {
+                recognizer = null
+                onStatus("Çevrimdışı konuşma servisi açılamadı: ${e.message}")
             }
-            onStatus("Çevrimdışı Türkçe konuşma tanıma hazır.")
         } else {
+            recognizer = null
             onStatus("Bu cihazda Android çevrimdışı konuşma tanıma servisi bulunamadı.")
         }
 
