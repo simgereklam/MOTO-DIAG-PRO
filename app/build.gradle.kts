@@ -89,7 +89,7 @@ val downloadSeyfiModel by tasks.registering {
             var connection: HttpURLConnection? = null
             try {
                 logger.lifecycle("Seyfi Usta modeli indiriliyor (deneme $attempt/3)...")
-                connection = (URL(modelUrl).openConnection() as HttpURLConnection).apply {
+                val activeConnection = (URL(modelUrl).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 30000
                     readTimeout = 240000
                     instanceFollowRedirects = true
@@ -99,8 +99,8 @@ val downloadSeyfiModel by tasks.registering {
                     setRequestProperty("Cache-Control", "no-cache")
                     setRequestProperty("Pragma", "no-cache")
                 }
+                connection = activeConnection
 
-                val activeConnection = connection
                 val status = activeConnection.responseCode
                 check(status in 200..299) {
                     "Hugging Face HTTP $status: ${activeConnection.responseMessage}"
