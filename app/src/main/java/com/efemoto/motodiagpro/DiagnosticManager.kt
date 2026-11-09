@@ -4,9 +4,9 @@ package com.efemoto.motodiagpro
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class DiagnosticManager {
-
-    private val connection = ViecarConnection()
+class DiagnosticManager(
+    private val connection: ViecarConnection = ViecarConnection()
+) {
     private val obd = ObdCommands(connection)
 
     data class OperationResult(
