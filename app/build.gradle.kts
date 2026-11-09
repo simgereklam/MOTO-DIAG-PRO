@@ -100,19 +100,20 @@ val downloadSeyfiModel by tasks.registering {
                     setRequestProperty("Pragma", "no-cache")
                 }
 
-                val status = connection.responseCode
+                val activeConnection = connection
+                val status = activeConnection.responseCode
                 check(status in 200..299) {
-                    "Hugging Face HTTP $status: ${connection.responseMessage}"
+                    "Hugging Face HTTP $status: ${activeConnection.responseMessage}"
                 }
 
-                val advertisedLength = connection.contentLengthLong
+                val advertisedLength = activeConnection.contentLengthLong
                 if (advertisedLength > 0L) {
                     check(advertisedLength == expectedBytes) {
                         "Sunucu beklenmeyen dosya boyutu bildirdi: $advertisedLength bayt; beklenen: $expectedBytes"
                     }
                 }
 
-                connection.inputStream.use { input ->
+                activeConnection.inputStream.use { input ->
                     FileOutputStream(partial).use { output ->
                         val buffer = ByteArray(1024 * 1024)
                         while (true) {
