@@ -58,26 +58,7 @@ class SeyfiUstaAI(
 
         // Model hazırlığını konuşma servisinden bağımsız başlat.
         // Cihazda konuşma servisi yoksa da sohbet modeli yüklenebilsin.
-        if (modelTaskStarted.compareAndSet(false, true)) {
-            modelExecutor.execute {
-                try {
-                    modelStatus = "Yerel yapay zekâ modeli kontrol ediliyor."
-                    val modelFile = ensureModelFile()
-                    modelStatus = "Yerel yapay zekâ yükleniyor."
-                    brain.initialize(modelFile) { success, message ->
-                        modelStatus = if (success) {
-                            "Yerel yapay zekâ hazır."
-                        } else {
-                            "Yerel yapay zekâ başlatılamadı: $message"
-                        }
-                        if (success) Log.i(TAG, message) else Log.e(TAG, modelStatus)
-                    }
-                } catch (e: Exception) {
-                    modelStatus = "Yerel yapay zekâ kullanılamıyor: ${e.message}"
-                    Log.e(TAG, modelStatus, e)
-                }
-            }
-        }
+        startModelLoading()
 
         try {
             // Sesli komutlar model indirilirken de kullanılabilir.
@@ -85,6 +66,30 @@ class SeyfiUstaAI(
         } catch (e: Exception) {
             Log.e(TAG, "Ses sistemi başlatılamadı", e)
             onReady()
+        }
+    }
+
+    private fun startModelLoading() {
+        if (!modelTaskStarted.compareAndSet(false, true)) return
+        modelExecutor.execute {
+            try {
+                modelStatus = "Yerel yapay zekâ modeli kontrol ediliyor."
+                val modelFile = ensureModelFile()
+                modelStatus = "Yerel yapay zekâ yükleniyor."
+                brain.initialize(modelFile) { success, message ->
+                    modelStatus = if (success) {
+                        "Yerel yapay zekâ hazır."
+                    } else {
+                        modelTaskStarted.set(false)
+                        "Yerel yapay zekâ başlatılamadı: $message"
+                    }
+                    if (success) Log.i(TAG, message) else Log.e(TAG, modelStatus)
+                }
+            } catch (e: Exception) {
+                modelTaskStarted.set(false)
+                modelStatus = "Yerel yapay zekâ kullanılamıyor: ${e.message}"
+                Log.e(TAG, modelStatus, e)
+            }
         }
     }
 
@@ -188,6 +193,11 @@ class SeyfiUstaAI(
     fun isListening(): Boolean = voice.isListening()
 
     fun chat(message: String, onAnswer: (String) -> Unit) {
+        if (!brain.isReady() && !modelTaskStarted.get()) {
+            // İlk açılışta internet yoksa model indirilememiş olabilir.
+            // Sonraki sohbet isteğinde bağlantı yeniden denenir.
+            startModelLoading()
+        }
         if (brain.isReady()) {
             brain.chat(message) { answer ->
                 onAnswer(answer)
