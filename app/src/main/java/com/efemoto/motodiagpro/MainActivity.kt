@@ -578,80 +578,83 @@ class MainActivity : ComponentActivity() {
         val wide = isWideLandscape()
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(bg)
+            setBackgroundColor(Color.BLACK)
             layoutParams = ViewGroup.LayoutParams(-1, -1)
         }
 
-        val panelContent = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(dp(16), dp(18), dp(16), dp(14))
-            background = rounded(Color.rgb(2, 10, 27), cyan, 18)
+        val content = LinearLayout(this).apply {
+            orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        val artworkFrame = FrameLayout(this).apply {
+            setBackgroundColor(Color.BLACK)
+            isClickable = true
+        }
+        val artwork = ImageView(this).apply {
+            setImageBitmap(homeScreenBitmap)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = false
+            contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
+        }
+        artworkFrame.addView(artwork, FrameLayout.LayoutParams(-1, -1))
+        artworkFrame.setOnTouchListener { view, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                val vw = view.width.toFloat().coerceAtLeast(1f)
+                val vh = view.height.toFloat().coerceAtLeast(1f)
+                val scale = minOf(vw / 403f, vh / 728f)
+                val drawW = 403f * scale
+                val drawH = 728f * scale
+                val offX = (vw - drawW) / 2f
+                val offY = (vh - drawH) / 2f
+                val x = (event.x - offX) / drawW
+                val y = (event.y - offY) / drawH
+                if (x in 0f..1f && y in 0f..1f) {
+                    when {
+                        y in 0.905f..0.995f && x in 0.035f..0.495f -> startDiagnosis()
+                        y in 0.905f..0.995f && x in 0.515f..0.975f -> showExitMessage()
+                        y in 0.795f..0.905f && x in 0.05f..0.95f -> startDiagnosis()
+                    }
+                }
+            }
+            true
         }
 
-        panelContent.addView(text("EFE MOTO PRO", if (wide) 30 else 27, white, true).apply {
-            gravity = Gravity.CENTER
-        })
-        panelContent.addView(text(
-            "PROFESYONEL MOTOSİKLET ARIZA TEŞHİS SİSTEMİ",
-            11, cyan, true
-        ).apply { gravity = Gravity.CENTER })
-        addGap(panelContent, 12)
+        if (wide) {
+            val side = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(16), dp(10), dp(16), dp(10))
+                background = rounded(Color.rgb(2, 10, 27), cyan, 18)
+            }
+            side.addView(text("EFE MOTO", 28, white, true).apply { gravity = Gravity.CENTER })
+            side.addView(text("PROFESYONEL MOTOSİKLET ARIZA TEŞHİSİ", 12, cyan, true).apply { gravity = Gravity.CENTER })
+            addGap(side, 6)
+            side.addView(text(
+                if (connected) "● VIECAR / ECU BAĞLI" else "● ADAPTÖR BAĞLI DEĞİL • ÇEVRİMDIŞI GEZİNME AÇIK",
+                10, if (connected) green else muted, true
+            ).apply { gravity = Gravity.CENTER })
+            addGap(side, 6)
+            side.addView(actionButton("✓  GERÇEK ARIZA TARAMASI BAŞLAT", green) { startDiagnosis() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
+            side.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) { showFaults() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
+            side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
 
-        val status = if (connected && viecarConnection.isConnected()) {
-            "● VIECAR / ECU BAĞLI"
+            val sideScroll = ScrollView(this).apply {
+                isFillViewport = false
+                overScrollMode = View.OVER_SCROLL_NEVER
+                addView(side, ViewGroup.LayoutParams(-1, -2))
+            }
+            content.addView(artworkFrame, LinearLayout.LayoutParams(0, -1, 1.05f))
+            content.addView(sideScroll, LinearLayout.LayoutParams(0, -1, 0.95f).apply {
+                setMargins(dp(8), dp(8), dp(8), dp(8))
+            })
         } else {
-            "● ADAPTÖR BAĞLI DEĞİL"
+            content.addView(artworkFrame, LinearLayout.LayoutParams(-1, -1))
         }
-        panelContent.addView(text(
-            status, 12, if (connected && viecarConnection.isConnected()) green else yellow, true
-        ).apply { gravity = Gravity.CENTER })
-        addGap(panelContent, 14)
 
-        panelContent.addView(actionButton("✓  GERÇEK ECU ARIZA TARAMASI", green) {
-            startDiagnosis()
-        }, LinearLayout.LayoutParams(-1, dp(62)).apply {
-            setMargins(0, 0, 0, dp(9))
-        })
-        panelContent.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) {
-            showFaults()
-        }, LinearLayout.LayoutParams(-1, dp(54)).apply {
-            setMargins(0, 0, 0, dp(8))
-        })
-        panelContent.addView(actionButton("◉  CANLI MOTOR VERİLERİ", blue) {
-            showLiveData()
-        }, LinearLayout.LayoutParams(-1, dp(54)).apply {
-            setMargins(0, 0, 0, dp(8))
-        })
-        panelContent.addView(actionButton("⚙  SİSTEM TESTLERİ", cyan) {
-            showTests()
-        }, LinearLayout.LayoutParams(-1, dp(54)).apply {
-            setMargins(0, 0, 0, dp(8))
-        })
-        panelContent.addView(actionButton("☰  TEŞHİS KAYITLARI", blue) {
-            showLogs()
-        }, LinearLayout.LayoutParams(-1, dp(54)).apply {
-            setMargins(0, 0, 0, dp(8))
-        })
-
-        addGap(panelContent, 8)
-        panelContent.addView(text(
-            "Seyfi Usta sesli komutları hazır. Gerçek ECU verisi alınmadan arıza veya sensör değeri üretilmez.",
-            12, muted
-        ).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-        })
-
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(panelContent, ViewGroup.LayoutParams(-1, -2))
-        }
-        root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f).apply {
-            setMargins(dp(8), dp(8), dp(8), dp(4))
-        })
-
+        root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         val navHeight = when {
             screenHeightDp() < 480 -> 70
             screenWidthDp() >= 840 -> 98
