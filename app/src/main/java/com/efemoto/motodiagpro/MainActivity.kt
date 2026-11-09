@@ -1686,7 +1686,7 @@ class MainActivity : ComponentActivity() {
             if (prompt.isBlank()) {
                 Toast.makeText(this, "Önce bir soru yazın.", Toast.LENGTH_SHORT).show()
             } else {
-                seyfiChatHistory.append("SİZ: ").append(prompt).append("\\n\\n")
+                seyfiChatHistory.append("SİZ: ").append(prompt).append("\n\n")
                 transcript.text = seyfiChatHistory.toString()
                 question.setText("")
                 val assistant = seyfiUstaAI
@@ -1696,7 +1696,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     status.text = assistant.getModelStatus()
                     assistant.chat(prompt) { answer ->
-                        seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\\n\\n")
+                        seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
                         transcript.text = seyfiChatHistory.toString()
                         status.text = assistant.getModelStatus()
                         transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
