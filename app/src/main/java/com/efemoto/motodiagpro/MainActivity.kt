@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
+    private val scanRunning = AtomicBoolean(false)
     @Volatile private var socket: Socket? = null
     @Volatile private var connected = false
     @Volatile private var lastRaw = ""
@@ -645,6 +646,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startDiagnosis() {
+        if (!scanRunning.compareAndSet(false, true)) {
+            seyfiUstaAI?.speak("Usta, ECU taraması zaten devam ediyor.")
+            return
+        }
         val c = baseScreen("SCAN", true)
         c.addView(header("ECU AKILLI TARAMA"))
         val card = neonCard(null, cyan)
@@ -735,6 +740,8 @@ class MainActivity : ComponentActivity() {
                         Toast.makeText(this, "ECU bağlantısı kurulamadı. Diğer sayfaları kullanmaya devam edebilirsiniz.", Toast.LENGTH_LONG).show()
                     }
                 }
+            } finally {
+                scanRunning.set(false)
             }
         }
     }
