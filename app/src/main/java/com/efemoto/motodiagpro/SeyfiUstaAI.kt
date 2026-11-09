@@ -53,7 +53,8 @@ class SeyfiUstaAI(
             return
         }
         initialized = true
-        startModelLoading()
+        // Büyük Qwen modeli açılışta indirilmez/yüklenmez.
+        // Mikrofon ve uyandırma sözü hazır olduktan sonra, ilk sohbet sorusunda yüklenir.
         try {
             voice.initialize(onReady)
         } catch (e: Exception) {
