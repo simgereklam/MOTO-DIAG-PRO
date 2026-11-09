@@ -89,7 +89,6 @@ class SeyfiBrain(context: Context) {
                         // gösterilecek son yanıt boş kalabiliyor. Seyfi Usta sohbetinde
                         // düşünmeyi kapatıp doğrudan yanıt üretmesini sağla.
                         thinkingConfig = ThinkingConfig(enableThinking = false),
-                        maxOutputToken = 512
                     )
                 )
 
@@ -219,7 +218,6 @@ class SeyfiBrain(context: Context) {
 
                 val response = activeConversation.sendMessage(
                     fullQuestion,
-                    maxOutputToken = 512,
                     thinkingConfig = ThinkingConfig(enableThinking = false)
                 )
                 val rawAnswer = response.contents.toString()
