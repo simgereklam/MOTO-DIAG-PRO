@@ -197,6 +197,13 @@ class SeyfiUstaAI(
                             if (count < 0) break
                             output.write(buffer, 0, count)
                             received += count
+                            val totalReceived = start + received
+                            val percent = totalReceived.toDouble() * 100.0 / MODEL_BYTES.toDouble()
+                            modelStatus = "Seyfi Usta modeli indiriliyor: " +
+                                String.format(java.util.Locale.US, "%.1f", percent) + "% (" +
+                                String.format(java.util.Locale.US, "%.1f", totalReceived / 1048576.0) +
+                                " / " + String.format(java.util.Locale.US, "%.1f", MODEL_BYTES / 1048576.0) +
+                                " MB)"
                         }
                         output.fd.sync()
                     }
