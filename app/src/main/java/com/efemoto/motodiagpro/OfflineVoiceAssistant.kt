@@ -78,6 +78,7 @@ class OfflineVoiceAssistant(
                     override fun onDone(utteranceId: String?) {
                         mainHandler.post {
                             speakingRequested = false
+                            pendingDone.remove(utteranceId)?.invoke()
                             onStatus("Seyfi Usta dinlemeye hazır.")
                             if (listeningEnabled) scheduleListening(350)
                         }
@@ -87,6 +88,7 @@ class OfflineVoiceAssistant(
                     override fun onError(utteranceId: String?) {
                         mainHandler.post {
                             speakingRequested = false
+                            pendingDone.remove(utteranceId)?.invoke()
                             if (listeningEnabled) scheduleListening(500)
                         }
                     }
@@ -94,6 +96,7 @@ class OfflineVoiceAssistant(
                     override fun onError(utteranceId: String?, errorCode: Int) {
                         mainHandler.post {
                             speakingRequested = false
+                            pendingDone.remove(utteranceId)?.invoke()
                             onStatus("Sesli yanıt tamamlanamadı.")
                             if (listeningEnabled) scheduleListening(500)
                         }
@@ -188,15 +191,13 @@ class OfflineVoiceAssistant(
 
         speakingRequested = true
         val id = "SEYFI_${utteranceIds.incrementAndGet()}"
+        if (onDone != null) pendingDone[id] = onDone
         val result = tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, id)
         if (result == TextToSpeech.ERROR) {
             speakingRequested = false
+            pendingDone.remove(id)?.invoke()
             onStatus("Sesli yanıt başlatılamadı.")
-            onDone?.invoke()
             if (listeningEnabled) scheduleListening(500)
-        } else if (onDone != null) {
-            // onDone, ilgili konuşma tamamlandığında tek sefer çalışır.
-            pendingDone[id] = onDone
         }
     }
 
