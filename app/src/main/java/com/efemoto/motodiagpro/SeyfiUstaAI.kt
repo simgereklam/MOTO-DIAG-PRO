@@ -20,7 +20,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class SeyfiUstaAI(
     private val activity: Activity,
-    private val onCommandRecognized: (String) -> Unit
+    private val onCommandRecognized: (String) -> Unit,
+    private val onVoiceStatusChanged: (String) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "SeyfiUstaAI"
@@ -33,7 +34,14 @@ class SeyfiUstaAI(
     private val voice = OfflineVoiceAssistant(
         activity = activity,
         onRecognized = { text -> onCommandRecognized(text) },
-        onStatus = { status -> Log.d(TAG, status) }
+        onStatus = { status ->
+            Log.d(TAG, status)
+            activity.runOnUiThread {
+                if (!activity.isFinishing && !activity.isDestroyed) {
+                    onVoiceStatusChanged(status)
+                }
+            }
+        }
     )
 
     val brain = SeyfiBrain(activity.applicationContext)
