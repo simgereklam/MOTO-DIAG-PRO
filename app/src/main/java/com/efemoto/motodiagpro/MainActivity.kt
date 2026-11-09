@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
     private var statusLine: TextView? = null
     private var progressLine: TextView? = null
     private var scanPercent = 0
+    private val seyfiChatHistory = StringBuilder()
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -179,6 +180,7 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
         when (currentScreen) {
             "HOME" -> showHome()
+            "SEYFI" -> showSeyfiChat()
             "LIVE" -> showLiveData()
             "TESTS" -> showTests()
             "LOGS" -> showLogs()
@@ -470,7 +472,8 @@ class MainActivity : ComponentActivity() {
             Triple("HOME", "⌂", "Ana Sayfa"),
             Triple("LIVE", "◉", "Canlı Veri"),
             Triple("TESTS", "⚒", "Test"),
-            Triple("LOGS", "▤", "Hata Dökümü")
+            Triple("LOGS", "▤", "Hata Dökümü"),
+            Triple("SEYFI", "✦", "Seyfi Usta")
         )
         entries.forEach { (key, symbol, label) ->
             val selected = active == key || (key == "HOME" && active in listOf("FAULTS", "DETAIL", "SCAN"))
@@ -492,6 +495,7 @@ class MainActivity : ComponentActivity() {
                         "LIVE" -> showLiveData()
                         "TESTS" -> showTests()
                         "LOGS" -> showLogs()
+                        "SEYFI" -> showSeyfiChat()
                     }
                 }
             }
@@ -639,6 +643,8 @@ class MainActivity : ComponentActivity() {
             side.addView(actionButton("▤  ARIZA KODLARINI İNCELE", cyan) { showFaults() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
             side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
+                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
+            side.addView(actionButton("✦  SEYFİ USTA / YEREL YAPAY ZEKÂ", cyan) { showSeyfiChat() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
 
             val sideScroll = ScrollView(this).apply {
@@ -1625,6 +1631,84 @@ class MainActivity : ComponentActivity() {
                 busy.set(false)
             }
         }
+    }
+
+    private fun showSeyfiChat() {
+        val c = baseScreen("SEYFI")
+        c.addView(header("SEYFİ USTA • YEREL YAPAY ZEKÂ"))
+
+        val statusCard = neonCard("YEREL MODEL DURUMU", cyan)
+        val status = text(
+            seyfiUstaAI?.getModelStatus()
+                ?: "Asistan başlatılıyor. Mikrofon izni bekleniyor olabilir.",
+            13, white
+        )
+        status.setPadding(dp(4), dp(6), dp(4), dp(6))
+        statusCard.addView(status)
+        statusCard.addView(actionButton("MODEL DURUMUNU YENİLE", blue) {
+            status.text = seyfiUstaAI?.getModelStatus()
+                ?: "Asistan henüz başlatılmadı."
+        })
+        c.addView(statusCard)
+
+        val chatCard = neonCard("SEYFİ USTA İLE SOHBET", cyan)
+        val transcript = text(
+            seyfiChatHistory.toString().ifBlank {
+                "Merhaba, ben Seyfi Usta. Yerel model hazır olduğunda motosikletin hakkında teknik sorularını yanıtlayacağım.\n\n"
+            },
+            14, white
+        ).apply {
+            gravity = Gravity.TOP
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            minHeight = dp(220)
+            background = rounded(panel2, blue, 10)
+        }
+        val transcriptScroll = ScrollView(this).apply {
+            isFillViewport = false
+            addView(transcript, ViewGroup.LayoutParams(-1, -2))
+        }
+        chatCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(280)))
+
+        val question = EditText(this).apply {
+            hint = "Seyfi Usta'ya soru sor..."
+            setTextColor(white)
+            setHintTextColor(muted)
+            minLines = 2
+            maxLines = 4
+            gravity = Gravity.TOP
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(panel2, cyan, 10)
+        }
+        addGap(chatCard, 8)
+        chatCard.addView(question)
+        chatCard.addView(actionButton("SORUYU GÖNDER", green) {
+            val prompt = question.text.toString().trim()
+            if (prompt.isBlank()) {
+                Toast.makeText(this, "Önce bir soru yazın.", Toast.LENGTH_SHORT).show()
+            } else {
+                seyfiChatHistory.append("SİZ: ").append(prompt).append("\\n\\n")
+                transcript.text = seyfiChatHistory.toString()
+                question.setText("")
+                val assistant = seyfiUstaAI
+                if (assistant == null) {
+                    seyfiChatHistory.append("SEYFİ USTA: Asistan henüz başlatılmadı. Uygulamayı yeniden açıp mikrofon iznini kontrol edin.\\n\\n")
+                    transcript.text = seyfiChatHistory.toString()
+                } else {
+                    status.text = assistant.getModelStatus()
+                    assistant.chat(prompt) { answer ->
+                        seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\\n\\n")
+                        transcript.text = seyfiChatHistory.toString()
+                        status.text = assistant.getModelStatus()
+                        transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
+                    }
+                }
+            }
+        })
+        chatCard.addView(actionButton("SOHBETİ TEMİZLE", blue) {
+            seyfiChatHistory.clear()
+            showSeyfiChat()
+        })
+        c.addView(chatCard)
     }
 
     private fun showLogs() {
