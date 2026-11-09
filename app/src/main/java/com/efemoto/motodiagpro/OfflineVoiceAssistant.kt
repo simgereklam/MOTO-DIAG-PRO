@@ -119,6 +119,7 @@ class OfflineVoiceAssistant(
                             override fun onDone(utteranceId: String?) {
                                 mainHandler.post {
                                     speakingRequested = false
+                                    pendingSpeechCallback?.also { pendingSpeechCallback = null }?.invoke()
                                     reportStatus("Seyfi Usta dinlemeye hazır.")
                                     resumeRecognition()
                                 }
@@ -128,7 +129,8 @@ class OfflineVoiceAssistant(
                             override fun onError(utteranceId: String?) {
                                 mainHandler.post {
                                     speakingRequested = false
-                                    reportStatus("Sesli yanıt tamamlanamadı.")
+                                pendingSpeechCallback?.also { pendingSpeechCallback = null }?.invoke()
+                                reportStatus("Sesli yanıt tamamlanamadı.")
                                     resumeRecognition()
                                 }
                             }
@@ -136,7 +138,8 @@ class OfflineVoiceAssistant(
                             override fun onError(utteranceId: String?, errorCode: Int) {
                                 mainHandler.post {
                                     speakingRequested = false
-                                    reportStatus("Sesli yanıt hatası: $errorCode")
+                                pendingSpeechCallback?.also { pendingSpeechCallback = null }?.invoke()
+                                reportStatus("Sesli yanıt hatası: $errorCode")
                                     resumeRecognition()
                                 }
                             }
@@ -277,9 +280,11 @@ class OfflineVoiceAssistant(
                 ?.firstOrNull()?.trim()
 
             if (!recognized.isNullOrBlank() && listeningEnabled && !processingRequested) {
-                processingRequested = true
-                try { onRecognized(recognized) }
-                catch (e: Exception) {
+                try {
+                    onRecognized(recognized)
+                    // MainActivity pauses only after the wake word is detected.
+                    if (!processingRequested) scheduleRestart()
+                } catch (e: Exception) {
                     reportStatus("Komut işlenemedi: ${e.message}")
                     processingRequested = false
                     scheduleRestart()
