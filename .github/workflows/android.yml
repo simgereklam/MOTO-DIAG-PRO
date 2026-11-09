@@ -65,7 +65,7 @@ jobs:
           MODEL_ROOT="$(dirname "$MODEL_FILE")"
           test -f "$MODEL_ROOT/Gr.fst"
           test -f "$MODEL_ROOT/HCLr.fst"
-          test -f "$MODEL_ROOT/mfcc.conf"
+          test -f "$MODEL_ROOT/word_boundary.int"
           cp -a "$MODEL_ROOT"/. app/src/main/assets/model-tr/
           printf '%s\n' "$GITHUB_SHA" > app/src/main/assets/model-tr/uuid
           test -f app/src/main/assets/model-tr/uuid
