@@ -227,10 +227,17 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                     fullQuestion,
                     thinkingConfig = ThinkingConfig(enableThinking = false)
                 )
-                val rawAnswer = response.contents.toString()
-                android.util.Log.d(
+                // Bazı LiteRT-LM model şablonları metni contents yerine
+                // final/answer kanalında döndürebilir. İkisini de kontrol et.
+                val contentAnswer = response.contents.toString().trim()
+                val channelAnswer = sequenceOf("final", "answer", "response", "output")
+                    .mapNotNull { response.channels[it] }
+                    .firstOrNull { it.isNotBlank() }
+                    .orEmpty()
+                val rawAnswer = contentAnswer.ifBlank { channelAnswer }
+                android.util.Log.i(
                     "SeyfiBrain",
-                    "Qwen yanıtı: ${rawAnswer.take(1200)} | kanallar=${response.channels.keys}"
+                    "Qwen yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
                 )
 
                 // Qwen3 bazı yapılandırmalarda düşünme kanalını metinle birlikte döndürebilir.
