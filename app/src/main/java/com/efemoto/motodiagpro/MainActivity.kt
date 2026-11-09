@@ -89,6 +89,8 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
     private val seyfiChatHistory = StringBuilder()
+    // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
+    @Volatile private var seyfiAwaitingCommand = false
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -232,12 +234,43 @@ class MainActivity : ComponentActivity() {
 
     private fun handleSeyfiCommand(rawCommand: String) {
         val assistant = seyfiUstaAI ?: return
-        val command = seyfiCommandHandler.handle(rawCommand)
 
-        log("Seyfi Usta komutu: ${command.originalText} → ${command.action}")
+        // Arka plan konuşmaları ve yanlış tanınan kelimeler komut çalıştırmasın.
+        // Kullanıcı önce "Seyfi Usta" demeli; ardından gelen tek cümle işlenir.
+        val normalizedSpeech = rawCommand
+            .lowercase(java.util.Locale("tr", "TR"))
+            .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+
+        val commandInput: String
+        if (!seyfiAwaitingCommand) {
+            val wakeDetected = Regex("\\bseyfi\\b").containsMatchIn(normalizedSpeech)
+            if (!wakeDetected) return
+
+            commandInput = normalizedSpeech
+                .replace(Regex("\\bseyfi\\s+usta\\b"), " ")
+                .replace(Regex("\\bseyfi\\b"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+
+            if (commandInput.isBlank()) {
+                seyfiAwaitingCommand = true
+                assistant.speak("Dinliyorum.")
+                return
+            }
+        } else {
+            commandInput = normalizedSpeech
+        }
+
+        seyfiAwaitingCommand = false
+        val command = seyfiCommandHandler.handle(commandInput)
+
+        log("Seyfi Usta komutu: $rawCommand → ${command.action}")
 
         when (command.action) {
             SeyfiAction.WAKE_WORD -> {
+                seyfiAwaitingCommand = true
                 assistant.speak("Dinliyorum.")
             }
 
@@ -319,7 +352,8 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                assistant.chat(rawCommand) { answer ->
+                // Tanımlı ECU komutu değilse gerçek yerel yapay zekâya sohbet sorusu gönder.
+                assistant.chat(commandInput) { answer ->
                     log("Seyfi Usta yanıtı: $answer")
                 }
             }
