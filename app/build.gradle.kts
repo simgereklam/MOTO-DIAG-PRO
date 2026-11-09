@@ -1,4 +1,7 @@
+import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 
 
@@ -58,7 +61,7 @@ val downloadSeyfiModel by tasks.registering {
     outputs.file(modelFile)
     doLast {
         val target = modelFile.get().asFile
-        fun hash(file: java.io.File): String {
+        fun hash(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
             file.inputStream().use { input ->
                 val buffer = ByteArray(1024 * 1024)
@@ -73,14 +76,14 @@ val downloadSeyfiModel by tasks.registering {
         }
         target.parentFile.mkdirs()
         val partial = target.resolveSibling(target.name + ".part")
-        val connection = (java.net.URL("https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm").openConnection() as java.net.HttpURLConnection).apply {
+        val connection = (URL("https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm").openConnection() as HttpURLConnection).apply {
             connectTimeout = 30000; readTimeout = 180000; instanceFollowRedirects = true
             setRequestProperty("User-Agent", "MOTO-DIAG-PRO-Build")
         }
         try {
             val status = connection.responseCode
             check(status in 200..299) { "Seyfi Usta model indirme HTTP hatası: $status" }
-            connection.inputStream.use { input -> java.io.FileOutputStream(partial).use { output ->
+            connection.inputStream.use { input -> FileOutputStream(partial).use { output ->
                 val buffer = ByteArray(1024 * 1024)
                 while (true) { val count = input.read(buffer); if (count < 0) break; output.write(buffer, 0, count) }
                 output.fd.sync()
