@@ -32,6 +32,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.cos
 import kotlin.math.min
@@ -177,7 +179,8 @@ class MainActivity : ComponentActivity() {
                         if (isProblem) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
                     ).show()
                 }
-            }
+            },
+            onAppAction = { action -> executeSeyfiAppAction(action) }
         )
         seyfiUstaAI = assistant
         assistant.initialize {
@@ -419,6 +422,120 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
                 }
             }
+        }
+    }
+
+    /**
+     * Qwen'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
+     * Model sadece izin verilen eylemleri seçebilir; gerçek ECU işlemlerini
+     * mevcut teşhis yöneticisi yürütür.
+     */
+    private fun executeSeyfiAppAction(action: String): String {
+        val perform: () -> String = {
+            when (action) {
+                "start_ecu_scan" -> {
+                    if (scanRunning.get()) {
+                        "ECU taraması zaten devam ediyor."
+                    } else {
+                        startDiagnosis()
+                        "Gerçek ECU taraması başlatıldı. Tarama tamamlanınca arıza sonuçları ekranda görünecek."
+                    }
+                }
+
+                "read_fault_codes" -> {
+                    if (!hasCompletedScan) {
+                        if (!scanRunning.get()) startDiagnosis()
+                        "Henüz tamamlanmış gerçek ECU taraması yok. Önce ECU taramasını başlattım; sonuçlar tamamlanınca arıza kodları okunabilir."
+                    } else {
+                        showFaults()
+                        if (faults.isEmpty()) {
+                            "Son gerçek ECU taramasında kayıtlı arıza kodu bulunmadı."
+                        } else {
+                            "Gerçek ECU taramasında bulunan arıza kodları: ${faults.joinToString(", ")}"
+                        }
+                    }
+                }
+
+                "clear_fault_codes" -> {
+                    if (!hasCompletedScan) {
+                        "Arıza silinmedi. Önce gerçek ECU taraması yapılmalı."
+                    } else if (faults.isEmpty()) {
+                        "Silinecek kayıtlı arıza kodu bulunmuyor."
+                    } else {
+                        confirmClearFaults()
+                        "Arıza silme onay penceresi açıldı. ECU arıza kodları, kullanıcı ekrandaki onayı vermeden silinmeyecek."
+                    }
+                }
+
+                "show_live_data" -> {
+                    showLiveData()
+                    if (!liveLoop) startLiveRead()
+                    "Canlı veri ekranı açıldı ve ECU canlı veri okuması başlatıldı."
+                }
+
+                "get_live_data" -> {
+                    if (liveValues.isEmpty()) {
+                        showLiveData()
+                        if (!liveLoop) startLiveRead()
+                        "Henüz okunmuş canlı ECU verisi yok. Gerçek veri okumasını başlattım."
+                    } else {
+                        val values = liveValues.entries.joinToString("; ") { (key, value) ->
+                            "$key = ${"%.2f".format(Locale.US, value)}"
+                        }
+                        "ECU'dan son okunan gerçek canlı veriler: $values"
+                    }
+                }
+
+                "connection_status" -> {
+                    if (connected && viecarConnection.isConnected()) {
+                        "Viecar Wi-Fi adaptörü ve ECU bağlantısı açık."
+                    } else {
+                        "Şu anda doğrulanmış Viecar/ECU bağlantısı yok."
+                    }
+                }
+
+                "show_home" -> {
+                    showHome()
+                    "Ana sayfa açıldı."
+                }
+
+                "show_tests" -> {
+                    showTests()
+                    "Sistem iletişim testleri ekranı açıldı. Testler mevcut güvenli, salt-okunur komutlarla sınırlıdır."
+                }
+
+                "export_report" -> {
+                    exportDiagnosticReport()
+                    "Teşhis raporu paylaşım penceresi açıldı."
+                }
+
+                else -> "İstenen uygulama eylemi tanımlı değil; hiçbir işlem yapılmadı."
+            }
+        }
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return try { perform() } catch (e: Exception) {
+                "Uygulama işlemi başarısız: ${e.message}"
+            }
+        }
+
+        val latch = CountDownLatch(1)
+        var result = "Uygulama işlemi zaman aşımına uğradı."
+        mainHandler.post {
+            try {
+                result = perform()
+            } catch (e: Exception) {
+                result = "Uygulama işlemi başarısız: ${e.message}"
+            } finally {
+                latch.countDown()
+            }
+        }
+        return try {
+            if (latch.await(20, TimeUnit.SECONDS)) result
+            else "Uygulama ana ekranı 20 saniye içinde yanıt vermedi; işlem tamamlandı olarak bildirilmedi."
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            "Uygulama işlemi beklenirken kesinti oldu."
         }
     }
 
