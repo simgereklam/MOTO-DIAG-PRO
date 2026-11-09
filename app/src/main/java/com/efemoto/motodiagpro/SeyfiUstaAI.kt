@@ -31,7 +31,7 @@ class SeyfiUstaAI(
         private const val MODEL_URL =
             "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
         private const val MODEL_SHA256 =
-            "bf1aba9ce8d963124407353c6aa4cbf72eba78db21ae133de983eac672ce83e0"
+            "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9"
         private const val MIN_MODEL_BYTES = 300L * 1024L * 1024L
     }
 
