@@ -297,11 +297,10 @@ class MainActivity : ComponentActivity() {
             }
 
             else -> {
-    // Gerçek yerel yapay zekâ sohbeti
-    assistant.brain.chat(q) { aiReply ->
-        assistant.speak(aiReply)
-    }
-}
+                // Gerçek yerel yapay zekâ sohbeti
+                assistant.brain.chat(q) { aiReply ->
+                    assistant.speak(aiReply)
+                }
             }
         }
     }
