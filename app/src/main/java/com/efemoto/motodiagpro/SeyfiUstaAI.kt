@@ -56,9 +56,8 @@ class SeyfiUstaAI(
         }
         initialized = true
 
-        // Sesli komutlar model indirilirken de kullanılabilir.
-        voice.initialize(onReady)
-
+        // Model hazırlığını konuşma servisinden bağımsız başlat.
+        // Cihazda konuşma servisi yoksa da sohbet modeli yüklenebilsin.
         if (modelTaskStarted.compareAndSet(false, true)) {
             modelExecutor.execute {
                 try {
@@ -78,6 +77,14 @@ class SeyfiUstaAI(
                     Log.e(TAG, modelStatus, e)
                 }
             }
+        }
+
+        try {
+            // Sesli komutlar model indirilirken de kullanılabilir.
+            voice.initialize(onReady)
+        } catch (e: Exception) {
+            Log.e(TAG, "Ses sistemi başlatılamadı", e)
+            onReady()
         }
     }
 
