@@ -9,6 +9,7 @@ import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.ThinkingConfig
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -82,7 +83,13 @@ class SeyfiBrain(context: Context) {
 
                 val newConversation = newEngine.createConversation(
                     ConversationConfig(
-                        systemInstruction = Contents.of(systemPrompt)
+                        systemInstruction = Contents.of(systemPrompt),
+                        // Qwen3 bir düşünme modelidir. Düşünme açıkken 256 tokenlık
+                        // sınırın tamamını iç düşünce tüketebiliyor ve kullanıcıya
+                        // gösterilecek son yanıt boş kalabiliyor. Seyfi Usta sohbetinde
+                        // düşünmeyi kapatıp doğrudan yanıt üretmesini sağla.
+                        thinkingConfig = ThinkingConfig(enableThinking = false),
+                        maxOutputToken = 512
                     )
                 )
 
@@ -210,13 +217,16 @@ class SeyfiBrain(context: Context) {
                     Eksik verileri tahmin etme. Servis referansı yoksa bunu açıkça söyle.
                 """.trimIndent()
 
-                val rawAnswer = activeConversation
-                    .sendMessage(
-                        fullQuestion,
-                        maxOutputToken = 256
-                    )
-                    .contents
-                    .toString()
+                val response = activeConversation.sendMessage(
+                    fullQuestion,
+                    maxOutputToken = 512,
+                    thinkingConfig = ThinkingConfig(enableThinking = false)
+                )
+                val rawAnswer = response.contents.toString()
+                android.util.Log.d(
+                    "SeyfiBrain",
+                    "Qwen yanıtı: ${rawAnswer.take(1200)} | kanallar=${response.channels.keys}"
+                )
 
                 // Qwen3 bazı yapılandırmalarda düşünme kanalını metinle birlikte döndürebilir.
                 // Kullanıcıya yalnızca son yanıtı göster; ham iç muhakemeyi gösterme.
