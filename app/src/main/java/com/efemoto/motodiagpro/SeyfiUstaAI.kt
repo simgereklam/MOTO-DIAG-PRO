@@ -37,7 +37,7 @@ class SeyfiUstaAI(
         }
 
         // Yerel üretken yapay zekâ yalnızca gerçek model dosyası varsa açılır.
-        val modelFile = File(activity.filesDir, "seyfi_model.bin")
+        val modelFile = File(activity.filesDir, "seyfi_model.litertlm")
         brain.initialize(modelFile) { success, message ->
             if (success) {
                 Log.i("SeyfiUstaAI", message)
