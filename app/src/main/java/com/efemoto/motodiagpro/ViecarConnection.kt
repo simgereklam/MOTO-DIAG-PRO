@@ -9,7 +9,8 @@ import java.net.Socket
 
 class ViecarConnection(
     private val host: String = "192.168.0.10",
-    private val port: Int = 35000
+    private val port: Int = 35000,
+    private val socketFactory: (() -> Socket)? = null
 ) : AutoCloseable {
 
     private var socket: Socket? = null
@@ -22,7 +23,7 @@ class ViecarConnection(
 
         disconnect()
 
-        val newSocket = Socket()
+        val newSocket = socketFactory?.invoke() ?: Socket()
 
         try {
             newSocket.tcpNoDelay = true
