@@ -419,7 +419,6 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
                 }
             }
-            }
         }
     }
 
