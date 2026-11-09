@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
     private val io = Executors.newSingleThreadExecutor()
     private val busy = AtomicBoolean(false)
     private val scanRunning = AtomicBoolean(false)
-    @Volatile private var socket: Socket? = null
+    private val viecarConnection by lazy { ViecarConnection(socketFactory = { createWifiBoundSocket() }) }
     @Volatile private var connected = false
     @Volatile private var lastRaw = ""
     @Volatile private var currentScreen = "HOME"
@@ -259,7 +259,7 @@ class MainActivity : ComponentActivity() {
                 speakLiveValue("map", "Emme manifoldu basıncı", "kilopaskal")
 
             SeyfiAction.SHOW_CONNECTION_STATUS -> {
-                if (connected && socket?.isConnected == true && socket?.isClosed == false) {
+                if (connected && viecarConnection.isConnected()) {
                     assistant.speak("Viecar Wi-Fi adaptörü ve ECU bağlantısı açık görünüyor.")
                 } else {
                     assistant.speak("Şu anda ECU bağlantısı yok. Gerçek bağlantıyı doğrulamak için taramaya başla komutunu verebilirsiniz.")
@@ -1683,14 +1683,10 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun ensureConnected(onExchange: ((String, String) -> Unit)? = null) {
-        if (connected && socket?.isConnected == true && socket?.isClosed == false) return
+        if (connected && viecarConnection.isConnected()) return
         closeAdapter()
         supportedPidSet.clear()
-        val s = createWifiBoundSocket()
-        s.tcpNoDelay = true
-        s.connect(InetSocketAddress("192.168.0.10", 35000), 7000)
-        s.soTimeout = 3500
-        socket = s
+        viecarConnection.connect(7000)
 
         fun exchange(command: String, timeoutMs: Int = 3000): String {
             return try {
@@ -1722,27 +1718,9 @@ class MainActivity : ComponentActivity() {
 
     @Synchronized
     private fun elm(command: String, timeoutMs: Int = 3000): String {
-        val s = socket ?: throw IllegalStateException("Adaptör bağlı değil")
-        if (s.isClosed || !s.isConnected) throw IllegalStateException("Adaptör bağlantısı kapalı")
-        val out = s.getOutputStream()
-        val input = s.getInputStream()
-        s.soTimeout = timeoutMs
-        try {
-            while (input.available() > 0) input.read()
-        } catch (_: Exception) { }
-        out.write((command.trim() + "\r").toByteArray(Charset.forName("US-ASCII")))
-        out.flush()
-        val result = ByteArrayOutputStream()
-        val started = System.currentTimeMillis()
-        try {
-            while (System.currentTimeMillis() - started < timeoutMs) {
-                val b = input.read()
-                if (b < 0) break
-                if (b == '>'.code) break
-                result.write(b)
-            }
-        } catch (_: SocketTimeoutException) { }
-        val response = result.toString("US-ASCII").replace("\u0000", "").trim().uppercase(Locale.US)
+        if (!viecarConnection.isConnected()) throw IllegalStateException("Adaptör bağlı değil")
+        val response = viecarConnection.sendCommand(command, timeoutMs)
+            .replace("\u0000", "").trim().uppercase(Locale.US)
         lastRaw = response
         return response
     }
@@ -1782,8 +1760,7 @@ class MainActivity : ComponentActivity() {
 
     private fun closeAdapter() {
         connected = false
-        try { socket?.close() } catch (_: Exception) { }
-        socket = null
+        viecarConnection.disconnect()
         mainHandler.post { statusLine?.apply { text = "● ADAPTÖR BAĞLI DEĞİL"; setTextColor(muted) } }
     }
 
