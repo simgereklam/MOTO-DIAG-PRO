@@ -56,9 +56,10 @@ class OfflineVoiceAssistant(
     private var restartAttempts = 0
 
     private fun reportStatus(message: String) {
+        if (currentStatus == message) return
         currentStatus = message
         if (Looper.myLooper() == Looper.getMainLooper()) {
-            onStatus(message)
+            if (!released) onStatus(message)
         } else {
             mainHandler.post { if (!released) onStatus(message) }
         }
@@ -220,7 +221,10 @@ class OfflineVoiceAssistant(
 
         val model = voskModel
         if (model == null) {
-            reportStatus("Türkçe ses modeli henüz hazır değil.")
+            reportStatus("Türkçe ses modeli hazır değil; yükleme tekrar kontrol ediliyor.")
+            // Model yüklemesi gecikmiş veya ilk açılışta depolama işlemi aksatılmış
+            // olabilir. Dinlemeyi sessizce kalıcı olarak kapatmak yerine yeniden dene.
+            scheduleRestart()
             return
         }
 
@@ -276,7 +280,18 @@ class OfflineVoiceAssistant(
 
     private val voskListener = object : RecognitionListener {
         override fun onPartialResult(hypothesis: String?) {
-            // Kısmi sonuçlar komut olarak çalıştırılmaz; yalnızca tamamlanan cümle işlenir.
+            // Kısmi sonuçları komut olarak çalıştırma; ancak dinleme hattının
+            // canlı olduğunu durum bilgisinde belirt.
+            if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
+                val partial = hypothesis?.let { extractText(it, "partial") }.orEmpty()
+                if (partial.isNotBlank()) {
+                    mainHandler.post {
+                        if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
+                            reportStatus("Seyfi Usta duyuyor: $partial")
+                        }
+                    }
+                }
+            }
         }
 
         override fun onResult(hypothesis: String?) {
