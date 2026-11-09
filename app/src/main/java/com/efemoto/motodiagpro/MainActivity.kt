@@ -1690,16 +1690,19 @@ class MainActivity : ComponentActivity() {
         c.addView(header("SEYFİ USTA • YEREL YAPAY ZEKÂ"))
 
         val statusCard = neonCard("YEREL MODEL DURUMU", cyan)
-        val status = text(
-            seyfiUstaAI?.getModelStatus()
-                ?: "Asistan başlatılıyor. Mikrofon izni bekleniyor olabilir.",
-            13, white
-        )
+        fun combinedAssistantStatus(): String {
+            val assistant = seyfiUstaAI
+            return if (assistant == null) {
+                "Asistan başlatılıyor. Mikrofon izni bekleniyor olabilir."
+            } else {
+                "YAPAY ZEKÂ: ${assistant.getModelStatus()}\n\nSES / MİKROFON: ${assistant.getVoiceStatus()}"
+            }
+        }
+        val status = text(combinedAssistantStatus(), 13, white)
         status.setPadding(dp(4), dp(6), dp(4), dp(6))
         statusCard.addView(status)
         statusCard.addView(actionButton("MODEL DURUMUNU YENİLE", blue) {
-            status.text = seyfiUstaAI?.getModelStatus()
-                ?: "Asistan henüz başlatılmadı."
+            status.text = combinedAssistantStatus()
         })
         c.addView(statusCard)
 
@@ -1707,7 +1710,7 @@ class MainActivity : ComponentActivity() {
         val statusRefresh = object : Runnable {
             override fun run() {
                 if (!status.isAttachedToWindow) return
-                status.text = seyfiUstaAI?.getModelStatus() ?: "Asistan başlatılıyor."
+                status.text = combinedAssistantStatus()
                 status.postDelayed(this, 700L)
             }
         }
@@ -1756,11 +1759,11 @@ class MainActivity : ComponentActivity() {
                     seyfiChatHistory.append("SEYFİ USTA: Asistan henüz başlatılmadı. Uygulamayı yeniden açıp bağlantıyı kontrol edin.\n\n")
                     transcript.text = seyfiChatHistory.toString()
                 } else {
-                    status.text = assistant.getModelStatus()
+                    status.text = combinedAssistantStatus()
                     assistant.chat(prompt) { answer ->
                         seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
                         transcript.text = seyfiChatHistory.toString()
-                        status.text = assistant.getModelStatus()
+                        status.text = combinedAssistantStatus()
                         transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
                     }
                 }
