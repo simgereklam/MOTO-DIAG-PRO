@@ -158,7 +158,11 @@ class MainActivity : ComponentActivity() {
                     "Seyfi Usta yerel yapay zekâsı hazır",
                     ignoreCase = true
                 )
-                if (isProblem || isModelProgress || isModelReady) {
+                val isVoiceListening = status.contains(
+                    "Seyfi Usta çevrimdışı dinliyor",
+                    ignoreCase = true
+                )
+                if (isProblem || isModelProgress || isModelReady || isVoiceListening) {
                     Toast.makeText(
                         this,
                         status,
