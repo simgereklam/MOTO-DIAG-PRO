@@ -6,8 +6,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.MessageDigest
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -28,12 +26,9 @@ class SeyfiUstaAI(
     companion object {
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
-        private const val MODEL_URL =
-            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm?download=true"
         private const val MODEL_SHA256 =
             "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9"
         private const val MODEL_BYTES = 344686592L
-        private const val MODEL_CHUNK_BYTES = 16L * 1024L * 1024L
     }
 
     private val voice = OfflineVoiceAssistant(
@@ -95,9 +90,9 @@ class SeyfiUstaAI(
     }
 
     /**
-     * Modeli ilk kullanımda Hugging Face üzerinden parça parça indirir.
-     * Her aralık Content-Range ile doğrulanır; dosya yalnızca tam boyut ve
-     * SHA-256 kontrolünden geçerse etkin model dosyasına taşınır.
+     * Model derleme sırasında APK assets içine eklenir.
+     * İlk açılışta yalnızca uygulamanın kendi assets alanından kopyalanır;
+     * telefonda model indirmek için internet bağlantısı gerekmez.
      */
     private fun ensureModelFile(): File {
         val target = File(activity.filesDir, MODEL_FILE_NAME)
@@ -109,120 +104,44 @@ class SeyfiUstaAI(
         }
 
         if (target.exists()) target.delete()
-        val partial = File(activity.filesDir, "$MODEL_FILE_NAME.part")
-        if (partial.exists()) partial.delete()
+        val temporary = File(activity.filesDir, "$MODEL_FILE_NAME.tmp")
+        if (temporary.exists()) temporary.delete()
 
         try {
-            downloadModelInChunks(partial)
+            activity.assets.open(MODEL_FILE_NAME).use { input ->
+                FileOutputStream(temporary).use { output ->
+                    input.copyTo(output, 1024 * 1024)
+                    output.fd.sync()
+                }
+            }
 
-            if (partial.length() != MODEL_BYTES) {
+            if (temporary.length() != MODEL_BYTES) {
                 throw IllegalStateException(
-                    "Model dosyası eksik: " + partial.length() + " / " + MODEL_BYTES + " bayt."
+                    "APK içindeki model eksik: ${temporary.length()} / $MODEL_BYTES bayt."
                 )
             }
 
-            val actualHash = sha256(partial)
+            val actualHash = sha256(temporary)
             if (!actualHash.equals(MODEL_SHA256, ignoreCase = true)) {
                 throw IllegalStateException(
-                    "Model SHA-256 doğrulaması başarısız: " + actualHash
+                    "APK içindeki model SHA-256 doğrulaması başarısız: $actualHash"
                 )
             }
 
-            if (!partial.renameTo(target)) {
+            if (!temporary.renameTo(target)) {
                 throw IllegalStateException(
-                    "Doğrulanan model cihazın uygulama alanına taşınamadı."
+                    "Doğrulanan model uygulama alanına kopyalanamadı."
                 )
             }
 
-            modelStatus = "Model indirildi ve doğrulandı."
+            modelStatus = "APK içindeki model kopyalandı ve doğrulandı."
             return target
         } catch (e: Exception) {
-            partial.delete()
-            throw e
+            temporary.delete()
+            throw IllegalStateException(
+                "APK içinde doğrulanmış Seyfi Usta modeli bulunamadı. ${e.message}", e
+            )
         }
-    }
-
-    private fun downloadModelInChunks(target: File) {
-        target.parentFile?.mkdirs()
-        var start = 0L
-
-        while (start < MODEL_BYTES) {
-            val end = minOf(start + MODEL_CHUNK_BYTES - 1L, MODEL_BYTES - 1L)
-            val expectedChunkBytes = end - start + 1L
-            var connection: HttpURLConnection? = null
-
-            try {
-                modelStatus = "Seyfi Usta modeli indiriliyor: " +
-                    (start * 100L / MODEL_BYTES).toInt() + "%"
-
-                val active = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 30000
-                    readTimeout = 120000
-                    instanceFollowRedirects = true
-                    useCaches = false
-                    requestMethod = "GET"
-                    setRequestProperty("User-Agent", "MOTO-DIAG-PRO-Android/1.0")
-                    setRequestProperty("Accept-Encoding", "identity")
-                    setRequestProperty("Range", "bytes=$start-$end")
-                    setRequestProperty("Cache-Control", "no-cache")
-                }
-                connection = active
-
-                val status = active.responseCode
-                if (status != HttpURLConnection.HTTP_PARTIAL) {
-                    throw IllegalStateException(
-                        "Model sunucusu aralıklı indirmeyi kabul etmedi (HTTP $status)."
-                    )
-                }
-
-                val expectedRange = "bytes $start-$end/$MODEL_BYTES"
-                val receivedRange = active.getHeaderField("Content-Range")?.trim()
-                if (receivedRange != expectedRange) {
-                    throw IllegalStateException(
-                        "Model parça aralığı doğrulanamadı. Gelen: " +
-                            receivedRange + "; beklenen: " + expectedRange
-                    )
-                }
-
-                var received = 0L
-                active.inputStream.use { input ->
-                    FileOutputStream(target, true).use { output ->
-                        val buffer = ByteArray(256 * 1024)
-                        while (received < expectedChunkBytes) {
-                            val wanted = minOf(
-                                buffer.size.toLong(),
-                                expectedChunkBytes - received
-                            ).toInt()
-                            val count = input.read(buffer, 0, wanted)
-                            if (count < 0) break
-                            output.write(buffer, 0, count)
-                            received += count
-                            val totalReceived = start + received
-                            val percent = totalReceived.toDouble() * 100.0 / MODEL_BYTES.toDouble()
-                            modelStatus = "Seyfi Usta modeli indiriliyor: " +
-                                String.format(java.util.Locale.US, "%.1f", percent) + "% (" +
-                                String.format(java.util.Locale.US, "%.1f", totalReceived / 1048576.0) +
-                                " / " + String.format(java.util.Locale.US, "%.1f", MODEL_BYTES / 1048576.0) +
-                                " MB)"
-                        }
-                        output.fd.sync()
-                    }
-                }
-
-                if (received != expectedChunkBytes) {
-                    throw IllegalStateException(
-                        "Model parçası eksik indirildi: " +
-                            received + " / " + expectedChunkBytes + " bayt."
-                    )
-                }
-            } finally {
-                connection?.disconnect()
-            }
-
-            start = end + 1L
-        }
-
-        modelStatus = "Model indirildi; bütünlük kontrolü yapılıyor."
     }
 
     private fun sha256(file: File): String {
