@@ -90,9 +90,15 @@ class MainActivity : ComponentActivity() {
     private var scanPercent = 0
 
     private val homeScreenBitmap: Bitmap by lazy {
-        val bytes = Base64.decode(HOME_IMAGE_PARTS.joinToString(""), Base64.DEFAULT)
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            ?: throw IllegalStateException("EFE MOTO açılış görseli yüklenemedi")
+        // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
+        // Görsel yüklenemediğinde siyah bir yedek tuval kullan; diğer ekranlar çalışmaya devam etsin.
+        runCatching {
+            val encoded = HOME_IMAGE_PARTS.joinToString("")
+            val bytes = Base64.decode(encoded, Base64.DEFAULT)
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        }.getOrNull() ?: Bitmap.createBitmap(403, 728, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(Color.BLACK)
+        }
     }
 
     private val HOME_IMAGE_PARTS = listOf(
