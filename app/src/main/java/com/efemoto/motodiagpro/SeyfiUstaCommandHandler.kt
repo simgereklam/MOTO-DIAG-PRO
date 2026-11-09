@@ -23,6 +23,9 @@ enum class SeyfiAction {
     SHOW_VOLTAGE,
     SHOW_TPS,
     SHOW_HELP,
+    GO_HOME,
+    SHOW_TESTS,
+    EXPORT_REPORT,
     STOP,
     UNKNOWN
 }
@@ -237,6 +240,53 @@ class SeyfiUstaCommandHandler {
                 SeyfiAction.SHOW_HELP,
                 original,
                 "Arıza taraması, arıza okuma, arıza silme ve canlı veri kontrolü yapabilirim."
+            )
+        }
+
+        if (containsAny(
+                commandText,
+                "ana sayfa",
+                "ana ekran",
+                "ana menu",
+                "eve don"
+            )
+        ) {
+            return command(
+                SeyfiAction.GO_HOME,
+                original,
+                "Ana sayfaya dönüyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
+                "test yap",
+                "testleri goster",
+                "sistem testi",
+                "testler",
+                "iletisim testi"
+            )
+        ) {
+            return command(
+                SeyfiAction.SHOW_TESTS,
+                original,
+                "Sistem testleri ekranını açıyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
+                "rapor hazirla",
+                "rapor al",
+                "rapor kaydet",
+                "raporu paylas",
+                "servis raporu"
+            )
+        ) {
+            return command(
+                SeyfiAction.EXPORT_REPORT,
+                original,
+                "Teşhis raporunu hazırlıyorum."
             )
         }
 
