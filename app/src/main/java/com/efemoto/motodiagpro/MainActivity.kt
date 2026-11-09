@@ -396,9 +396,24 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Tanımlı ECU komutu değilse gerçek yerel yapay zekâya sohbet sorusu gönder.
+                // Genel konuşma sorusuna, büyük yerel model yüklenirken bile hemen sesli
+                // geri bildirim ver. Aksi halde kullanıcı mikrofonun duyduğunu görür ama
+                // asistanın cevap hazırladığını anlayamaz.
+                assistant.speak("Sorunuzu aldım. Motor arızasıyla ilgili bilgiyi hazırlıyorum.")
+                Toast.makeText(
+                    this,
+                    "SEYFİ USTA: Sorunuz alındı, yanıt hazırlanıyor.",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                // Tanımlı ECU komutu değilse yerel Qwen modeline sohbet sorusu gönder.
                 assistant.chat(commandInput) { answer ->
                     log("Seyfi Usta yanıtı: $answer")
+                    Toast.makeText(
+                        this,
+                        answer,
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
             }
         }
