@@ -166,7 +166,11 @@ class MainActivity : ComponentActivity() {
                     "Seyfi Usta uyandırma sözünü algıladı",
                     ignoreCase = true
                 )
-                if (isProblem || isModelProgress || isModelReady || isVoiceListening || isWakeDetected) {
+                val isTtsDiagnostic =
+                    status.contains("SEYFİ TTS", ignoreCase = true) ||
+                    status.contains("Türkçe TTS", ignoreCase = true) ||
+                    status.contains("Türkçe metin okuma", ignoreCase = true)
+                if (isProblem || isModelProgress || isModelReady || isVoiceListening || isWakeDetected || isTtsDiagnostic) {
                     Toast.makeText(
                         this,
                         status,
