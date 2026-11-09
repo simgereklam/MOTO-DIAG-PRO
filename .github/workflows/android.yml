@@ -58,10 +58,13 @@ jobs:
           curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
             "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip" \
             --output /tmp/vosk-tr/model.zip
+          echo "8c8d07cec1bce31add14967c16891c84152cdf76d391e33c08278119b9ea96e5  /tmp/vosk-tr/model.zip" | sha256sum --check
           unzip -q /tmp/vosk-tr/model.zip -d /tmp/vosk-tr
-          test -d /tmp/vosk-tr/vosk-model-small-tr-0.3/conf
-          test -d /tmp/vosk-tr/vosk-model-small-tr-0.3/graph
-          cp -a /tmp/vosk-tr/vosk-model-small-tr-0.3/. app/src/main/assets/model-tr/
+          MODEL_CONF="$(find /tmp/vosk-tr -type d -name conf -print -quit)"
+          test -n "$MODEL_CONF"
+          MODEL_ROOT="$(dirname "$MODEL_CONF")"
+          test -d "$MODEL_ROOT/graph"
+          cp -a "$MODEL_ROOT"/. app/src/main/assets/model-tr/
           printf '%s\n' "$GITHUB_SHA" > app/src/main/assets/model-tr/uuid
           test -f app/src/main/assets/model-tr/uuid
           echo "Türkçe Vosk model assets hazır."
