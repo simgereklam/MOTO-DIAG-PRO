@@ -4,7 +4,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -24,29 +23,20 @@ android {
         applicationId = "com.efemoto.motodiagpro"
         minSdk = 26
         targetSdk = 35
-
         versionCode = 1
         versionName = "1.0.0"
-
-        testInstrumentationRunner =
-            "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-
-        debug {
-            isDebuggable = true
-        }
+        release { isMinifyEnabled = false }
+        debug { isDebuggable = true }
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-
 }
 
 kotlin {
@@ -59,45 +49,113 @@ val downloadSeyfiModel by tasks.registering {
     val modelDir = layout.buildDirectory.dir("generated/seyfiAssets")
     val modelFile = modelDir.map { it.file("seyfi_model.litertlm") }
     outputs.file(modelFile)
+
     doLast {
         val target = modelFile.get().asFile
-        fun hash(file: File): String {
+        val expectedSha256 = "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9"
+        val expectedBytes = 344686592L
+        val modelUrl = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm?download=true"
+
+        fun sha256(file: File): String {
             val digest = MessageDigest.getInstance("SHA-256")
             file.inputStream().use { input ->
                 val buffer = ByteArray(1024 * 1024)
-                while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+                while (true) {
+                    val count = input.read(buffer)
+                    if (count < 0) break
+                    digest.update(buffer, 0, count)
+                }
             }
             return digest.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }
         }
-        val expected = "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9"
-        if (target.exists() && target.length() >= 300L * 1024L * 1024L && hash(target) == expected) {
-            logger.lifecycle("Seyfi Usta modeli APK için hazır.")
+
+        fun isValid(file: File): Boolean =
+            file.isFile && file.length() == expectedBytes &&
+                sha256(file).equals(expectedSha256, ignoreCase = true)
+
+        if (isValid(target)) {
+            logger.lifecycle("Seyfi Usta modeli doğrulandı ve APK assets klasöründe hazır.")
             return@doLast
         }
+
         target.parentFile.mkdirs()
         val partial = target.resolveSibling(target.name + ".part")
-        val connection = (URL("https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm").openConnection() as HttpURLConnection).apply {
-            connectTimeout = 30000; readTimeout = 180000; instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "MOTO-DIAG-PRO-Build")
+        var lastFailure = "Bilinmeyen indirme hatası"
+
+        // Hugging Face Xet/CDN bazen eski veya eksik yanıt döndürebiliyor.
+        // Her denemede önbelleği devre dışı bırak ve dosyanın boyutunu + SHA-256 değerini doğrula.
+        for (attempt in 1..3) {
+            if (partial.exists()) partial.delete()
+            var connection: HttpURLConnection? = null
+            try {
+                logger.lifecycle("Seyfi Usta modeli indiriliyor (deneme $attempt/3)...")
+                connection = (URL(modelUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30000
+                    readTimeout = 240000
+                    instanceFollowRedirects = true
+                    useCaches = false
+                    setRequestProperty("User-Agent", "MOTO-DIAG-PRO-Build/1.0")
+                    setRequestProperty("Accept-Encoding", "identity")
+                    setRequestProperty("Cache-Control", "no-cache")
+                    setRequestProperty("Pragma", "no-cache")
+                }
+
+                val status = connection.responseCode
+                check(status in 200..299) {
+                    "Hugging Face HTTP $status: ${connection.responseMessage}"
+                }
+
+                val advertisedLength = connection.contentLengthLong
+                if (advertisedLength > 0L) {
+                    check(advertisedLength == expectedBytes) {
+                        "Sunucu beklenmeyen dosya boyutu bildirdi: $advertisedLength bayt; beklenen: $expectedBytes"
+                    }
+                }
+
+                connection.inputStream.use { input ->
+                    FileOutputStream(partial).use { output ->
+                        val buffer = ByteArray(1024 * 1024)
+                        while (true) {
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            output.write(buffer, 0, count)
+                        }
+                        output.fd.sync()
+                    }
+                }
+
+                val actualBytes = partial.length()
+                check(actualBytes == expectedBytes) {
+                    "Model indirme boyutu hatalı. Gelen: $actualBytes bayt; beklenen: $expectedBytes bayt."
+                }
+
+                val actualSha256 = sha256(partial)
+                check(actualSha256.equals(expectedSha256, ignoreCase = true)) {
+                    "Model SHA-256 doğrulaması başarısız. Gelen: $actualSha256; beklenen: $expectedSha256."
+                }
+
+                check(partial.renameTo(target)) {
+                    "Doğrulanan model APK assets klasörüne taşınamadı."
+                }
+
+                logger.lifecycle("Seyfi Usta modeli doğrulandı: $actualBytes bayt, SHA-256 doğru.")
+                return@doLast
+            } catch (error: Exception) {
+                lastFailure = error.message ?: error.javaClass.simpleName
+                logger.warn("Seyfi Usta model indirme denemesi $attempt başarısız: $lastFailure")
+            } finally {
+                connection?.disconnect()
+            }
         }
-        try {
-            val status = connection.responseCode
-            check(status in 200..299) { "Seyfi Usta model indirme HTTP hatası: $status" }
-            connection.inputStream.use { input -> FileOutputStream(partial).use { output ->
-                val buffer = ByteArray(1024 * 1024)
-                while (true) { val count = input.read(buffer); if (count < 0) break; output.write(buffer, 0, count) }
-                output.fd.sync()
-            } }
-            check(partial.length() >= 300L * 1024L * 1024L) { "Seyfi Usta model dosyası eksik." }
-            val actualHash = hash(partial)
-            check(actualHash == expected) { "Seyfi Usta model SHA-256 doğrulaması başarısız. Beklenen: $expected / Gelen: $actualHash / Boyut: ${partial.length()}" }
-            check(partial.renameTo(target)) { "Seyfi Usta model dosyası hedefe taşınamadı." }
-            logger.lifecycle("Seyfi Usta yerel modeli APK assets içine eklendi (" + target.length() + " bayt).")
-        } finally { connection.disconnect(); if (partial.exists()) partial.delete() }
+
+        if (partial.exists()) partial.delete()
+        throw GradleException("Seyfi Usta modeli güvenli şekilde indirilemedi. 3 deneme yapıldı. Son hata: $lastFailure")
     }
 }
 
-tasks.named("preBuild") { dependsOn(downloadSeyfiModel) }
+tasks.named("preBuild") {
+    dependsOn(downloadSeyfiModel)
+}
 
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
@@ -106,6 +164,6 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
 
-    // SEYFİ USTA - YEREL YAPAY ZEKÂ
+    // Seyfi Usta: cihaz üzerinde çalışan LiteRT-LM yerel model motoru.
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
 }
