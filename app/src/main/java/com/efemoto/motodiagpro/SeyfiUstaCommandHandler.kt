@@ -16,12 +16,15 @@ enum class SeyfiAction {
     WAKE_WORD,
     START_SCAN,
     READ_FAULTS,
+    EXPLAIN_FAULTS,
     CLEAR_FAULTS,
     SHOW_LIVE_DATA,
     SHOW_RPM,
     SHOW_TEMPERATURE,
     SHOW_VOLTAGE,
     SHOW_TPS,
+    SHOW_MAP,
+    SHOW_CONNECTION_STATUS,
     SHOW_HELP,
     GO_HOME,
     SHOW_TESTS,
@@ -108,7 +111,15 @@ class SeyfiUstaCommandHandler {
                 "motoru tara",
                 "ecu tara",
                 "diagnostik baslat",
-                "diagnostik tara"
+                "diagnostik tara",
+                "genel tarama yap",
+                "genel kontrol yap",
+                "motorun durumunu kontrol et",
+                "motoru kontrol et",
+                "motorumu analiz et",
+                "ariza tespiti yap",
+                "simdi tara",
+                "tarama yap"
             )
         ) {
             return command(
@@ -142,7 +153,10 @@ class SeyfiUstaCommandHandler {
                 "hata kodlarini oku",
                 "arizalar neler",
                 "hangi arizalar var",
-                "ariza listesi"
+                "ariza listesi",
+                "hata kodlari neler",
+                "kayitli hatalar",
+                "motorumdaki arizalar"
             )
         ) {
             return command(
@@ -154,11 +168,31 @@ class SeyfiUstaCommandHandler {
 
         if (containsAny(
                 commandText,
+                "arizalari acikla",
+                "ariza kodlarini acikla",
+                "arizalari anlat",
+                "ariza detaylari",
+                "arizalarin nedenleri",
+                "bu arizalar ne anlama geliyor"
+            )
+        ) {
+            return command(
+                SeyfiAction.EXPLAIN_FAULTS,
+                original,
+                "Okunan ECU arızalarını ve olası nedenlerini açıklıyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
                 "canli verileri goster",
                 "canli verileri oku",
                 "sensorleri goster",
                 "motor verileri",
-                "canli veri"
+                "canli veri",
+                "tum sensorleri oku",
+                "motorun anlik verileri",
+                "sensor degerlerini oku"
             )
         ) {
             return command(
@@ -210,6 +244,38 @@ class SeyfiUstaCommandHandler {
                 SeyfiAction.SHOW_VOLTAGE,
                 original,
                 "Akü voltajını kontrol ediyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
+                "manifold basinci",
+                "emme basinci",
+                "map degeri",
+                "map kac",
+                "hava basinci"
+            )
+        ) {
+            return command(
+                SeyfiAction.SHOW_MAP,
+                original,
+                "Emme manifoldu basıncını kontrol ediyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
+                "baglanti durumu",
+                "viecar bagli mi",
+                "ecu bagli mi",
+                "adaptore bagli miyim",
+                "motor beynine bagli mi"
+            )
+        ) {
+            return command(
+                SeyfiAction.SHOW_CONNECTION_STATUS,
+                original,
+                "ECU bağlantı durumunu kontrol ediyorum."
             )
         }
 
