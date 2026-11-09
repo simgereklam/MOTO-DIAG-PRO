@@ -41,6 +41,14 @@ class OfflineVoiceAssistant(
     @Volatile private var listeningEnabled = false
     @Volatile private var processingRequested = false
     @Volatile private var speakingRequested = false
+    @Volatile private var currentStatus = "Türkçe çevrimdışı ses sistemi hazırlanıyor."
+
+    private fun reportStatus(message: String) {
+        currentStatus = message
+        onStatus(message)
+    }
+
+    fun getStatus(): String = currentStatus
 
     private var voskInitializationFinished = false
     private var ttsInitializationFinished = false
@@ -48,7 +56,7 @@ class OfflineVoiceAssistant(
 
     fun initialize(onInitialized: (() -> Unit)? = null) {
         initializedCallback = onInitialized
-        onStatus("Türkçe çevrimdışı konuşma modeli hazırlanıyor...")
+        reportStatus("Türkçe çevrimdışı konuşma modeli hazırlanıyor...")
 
         // Model dosyaları APK assets içindeki model-tr klasöründen açılır.
         // İlk açılıştan sonra uygulamanın özel dosya alanında saklanır.
@@ -60,19 +68,19 @@ class OfflineVoiceAssistant(
                 { model ->
                     voskModel = model
                     voskInitializationFinished = true
-                    onStatus("Türkçe çevrimdışı ses tanıma hazır.")
+                    reportStatus("Türkçe çevrimdışı ses tanıma hazır.")
                     startSpeechServiceIfPossible()
                     completeInitializationIfReady()
                 },
                 { error ->
                     voskInitializationFinished = true
-                    onStatus("Türkçe ses modeli açılamadı: ${error.message}")
+                    reportStatus("Türkçe ses modeli açılamadı: ${error.message}")
                     completeInitializationIfReady()
                 }
             )
         } catch (e: Exception) {
             voskInitializationFinished = true
-            onStatus("Türkçe ses modeli başlatılamadı: ${e.message}")
+            reportStatus("Türkçe ses modeli başlatılamadı: ${e.message}")
             completeInitializationIfReady()
         }
 
@@ -98,25 +106,25 @@ class OfflineVoiceAssistant(
                     if (selectedVoice != null) {
                         engine?.voice = selectedVoice
                         ttsReady = true
-                        onStatus(
+                        reportStatus(
                             if (maleVoice != null) "Türkçe çevrimdışı erkek sesi hazır."
                             else "Türkçe çevrimdışı ses hazır."
                         )
                     } else {
                         ttsReady = false
-                        onStatus("Türkçe çevrimdışı ses paketi yüklü değil.")
+                        reportStatus("Türkçe çevrimdışı ses paketi yüklü değil.")
                     }
 
                     engine?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                         override fun onStart(utteranceId: String?) {
-                            mainHandler.post { onStatus("Seyfi Usta konuşuyor...") }
+                            mainHandler.post { reportStatus("Seyfi Usta konuşuyor...") }
                         }
 
                         override fun onDone(utteranceId: String?) {
                             mainHandler.post {
                                 speakingRequested = false
                                 utteranceId?.let { pendingDone.remove(it)?.invoke() }
-                                onStatus("Seyfi Usta dinlemeye hazır.")
+                                reportStatus("Seyfi Usta dinlemeye hazır.")
                                 resumeRecognition()
                             }
                         }
@@ -126,7 +134,7 @@ class OfflineVoiceAssistant(
                             mainHandler.post {
                                 speakingRequested = false
                                 utteranceId?.let { pendingDone.remove(it)?.invoke() }
-                                onStatus("Sesli yanıt tamamlanamadı.")
+                                reportStatus("Sesli yanıt tamamlanamadı.")
                                 resumeRecognition()
                             }
                         }
@@ -135,14 +143,14 @@ class OfflineVoiceAssistant(
                             mainHandler.post {
                                 speakingRequested = false
                                 utteranceId?.let { pendingDone.remove(it)?.invoke() }
-                                onStatus("Sesli yanıt hatası: $errorCode")
+                                reportStatus("Sesli yanıt hatası: $errorCode")
                                 resumeRecognition()
                             }
                         }
                     })
                 } else {
                     ttsReady = false
-                    onStatus("Metin okuma motoru başlatılamadı.")
+                    reportStatus("Metin okuma motoru başlatılamadı.")
                 }
                 ttsInitializationFinished = true
                 completeInitializationIfReady()
@@ -150,7 +158,7 @@ class OfflineVoiceAssistant(
         } catch (e: Exception) {
             ttsInitializationFinished = true
             ttsReady = false
-            onStatus("Metin okuma motoru açılamadı: ${e.message}")
+            reportStatus("Metin okuma motoru açılamadı: ${e.message}")
             completeInitializationIfReady()
         }
     }
@@ -182,21 +190,24 @@ class OfflineVoiceAssistant(
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            onStatus("Mikrofon izni gerekli.")
+            reportStatus("Mikrofon izni gerekli.")
             return
         }
 
-        val model = voskModel ?: return
+        val model = voskModel ?: run {
+            reportStatus("Türkçe ses modeli yüklenemedi. Ses modeli açılamadığı için mikrofon dinlemesi başlamadı.")
+            return
+        }
         try {
             val recognizer = Recognizer(model, 16000.0f)
             voskRecognizer = recognizer
             val service = VoskSpeechService(recognizer, 16000.0f)
             speechService = service
             service.startListening(voskListener)
-            onStatus("Seyfi Usta çevrimdışı dinliyor...")
+            reportStatus("Seyfi Usta çevrimdışı dinliyor...")
         } catch (e: Exception) {
             releaseSpeechService()
-            onStatus("Çevrimdışı mikrofon başlatılamadı: ${e.message}")
+            reportStatus("Çevrimdışı mikrofon başlatılamadı: ${e.message}")
             if (listeningEnabled && !processingRequested) {
                 mainHandler.postDelayed(restartRecognition, 1200)
             }
@@ -240,7 +251,7 @@ class OfflineVoiceAssistant(
         }
 
         override fun onError(exception: Exception?) {
-            onStatus("Çevrimdışı ses tanıma hatası: ${exception?.message}")
+            reportStatus("Çevrimdışı ses tanıma hatası: ${exception?.message}")
             if (listeningEnabled && !processingRequested) {
                 mainHandler.removeCallbacks(restartRecognition)
                 mainHandler.postDelayed({
@@ -261,6 +272,7 @@ class OfflineVoiceAssistant(
         val service = speechService
         if (service != null) {
             service.setPause(false)
+            reportStatus("Seyfi Usta çevrimdışı dinliyor...")
         } else {
             mainHandler.removeCallbacks(restartRecognition)
             mainHandler.postDelayed(restartRecognition, 350)
@@ -272,7 +284,7 @@ class OfflineVoiceAssistant(
         processingRequested = true
         mainHandler.removeCallbacks(restartRecognition)
         releaseSpeechService()
-        onStatus("Seyfi Usta dinlemeyi durdurdu.")
+        reportStatus("Seyfi Usta dinlemeyi durdurdu.")
     }
 
     private fun releaseSpeechService() {
@@ -301,7 +313,7 @@ class OfflineVoiceAssistant(
         }
 
         if (!ttsReady || tts == null) {
-            onStatus("Türkçe çevrimdışı ses kullanılamıyor.")
+            reportStatus("Türkçe çevrimdışı ses kullanılamıyor.")
             onDone?.invoke()
             resumeRecognition()
             return
@@ -317,7 +329,7 @@ class OfflineVoiceAssistant(
         if (result == TextToSpeech.ERROR) {
             speakingRequested = false
             pendingDone.remove(id)?.invoke()
-            onStatus("Sesli yanıt başlatılamadı.")
+            reportStatus("Sesli yanıt başlatılamadı.")
             resumeRecognition()
         }
     }
