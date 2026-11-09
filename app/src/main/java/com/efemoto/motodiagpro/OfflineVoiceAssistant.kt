@@ -16,6 +16,7 @@ import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Uses Android's built-in SpeechRecognizer and TextToSpeech.
@@ -29,6 +30,8 @@ class OfflineVoiceAssistant(
     private val mainHandler = Handler(Looper.getMainLooper())
     private val turkish = Locale("tr", "TR")
     private val utteranceIds = AtomicInteger(0)
+    private val pendingSpeechCallbacks = ConcurrentHashMap<String, () -> Unit>()
+    @Volatile private var activeUtteranceId: String? = null
 
     @Volatile private var recognizer: SpeechRecognizer? = null
     @Volatile private var tts: TextToSpeech? = null
@@ -117,31 +120,23 @@ class OfflineVoiceAssistant(
                             }
 
                             override fun onDone(utteranceId: String?) {
-                                mainHandler.post {
-                                    speakingRequested = false
-                                    pendingSpeechCallback?.also { pendingSpeechCallback = null }?.invoke()
-                                    reportStatus("Seyfi Usta dinlemeye hazır.")
-                                    resumeRecognition()
-                                }
+                                finishUtterance(utteranceId, "Seyfi Usta dinlemeye hazır.")
+                            }
+
+                            override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                                finishUtterance(
+                                    utteranceId,
+                                    if (interrupted) "Sesli yanıt kesildi." else "Seyfi Usta dinlemeye hazır."
+                                )
                             }
 
                             @Deprecated("Deprecated by Android")
                             override fun onError(utteranceId: String?) {
-                                mainHandler.post {
-                                    speakingRequested = false
-                                pendingSpeechCallback?.also { pendingSpeechCallback = null }?.invoke()
-                                reportStatus("Sesli yanıt tamamlanamadı.")
-                                    resumeRecognition()
-                                }
+                                finishUtterance(utteranceId, "Sesli yanıt tamamlanamadı.")
                             }
 
                             override fun onError(utteranceId: String?, errorCode: Int) {
-                                mainHandler.post {
-                                    speakingRequested = false
-                                pendingSpeechCallback?.also { pendingSpeechCallback = null }?.invoke()
-                                reportStatus("Sesli yanıt hatası: $errorCode")
-                                    resumeRecognition()
-                                }
+                                finishUtterance(utteranceId, "Sesli yanıt hatası: $errorCode")
                             }
                         })
 
@@ -171,6 +166,21 @@ class OfflineVoiceAssistant(
         }
     }
 
+    private fun finishUtterance(utteranceId: String?, status: String) {
+        mainHandler.post {
+            val callback = utteranceId?.let { pendingSpeechCallbacks.remove(it) }
+            if (utteranceId == activeUtteranceId) {
+                activeUtteranceId = null
+                speakingRequested = false
+                reportStatus(status)
+                callback?.invoke()
+                resumeRecognition()
+            } else {
+                callback?.invoke()
+            }
+        }
+    }
+
     private fun completeInitializationIfReady() {
         if (recognitionInitialized && ttsInitialized) {
             val callback = initializedCallback
@@ -191,8 +201,11 @@ class OfflineVoiceAssistant(
     }
 
     private fun startRecognition() {
-        if (released || !listeningEnabled || processingRequested ||
-            speakingRequested || recognizer == null) return
+        if (released || !listeningEnabled || processingRequested || speakingRequested) return
+        if (recognizer == null) {
+            reportStatus("Mikrofon servisi hazır değil. Android konuşma tanıma hizmetini kontrol edin.")
+            return
+        }
 
         if (ContextCompat.checkSelfPermission(
                 activity, Manifest.permission.RECORD_AUDIO
@@ -334,19 +347,18 @@ class OfflineVoiceAssistant(
         speakingRequested = true
 
         val id = "SEYFI_${utteranceIds.incrementAndGet()}"
+        activeUtteranceId = id
+        if (onDone != null) pendingSpeechCallbacks[id] = onDone
         val result = engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, id)
         if (result == TextToSpeech.ERROR) {
+            pendingSpeechCallbacks.remove(id)
+            activeUtteranceId = null
             speakingRequested = false
             reportStatus("Sesli yanıt başlatılamadı.")
             onDone?.invoke()
             resumeRecognition()
-        } else if (onDone != null) {
-            // The TTS completion listener below always resumes listening.
-            pendingSpeechCallback = onDone
         }
     }
-
-    @Volatile private var pendingSpeechCallback: (() -> Unit)? = null
 
     fun isListening(): Boolean = listeningEnabled && listening && !processingRequested
     fun isSpeechReady(): Boolean = ttsReady
@@ -364,7 +376,8 @@ class OfflineVoiceAssistant(
         tts = null
         ttsReady = false
         speakingRequested = false
-        pendingSpeechCallback = null
+        activeUtteranceId = null
+        pendingSpeechCallbacks.clear()
         initializedCallback = null
     }
 }
