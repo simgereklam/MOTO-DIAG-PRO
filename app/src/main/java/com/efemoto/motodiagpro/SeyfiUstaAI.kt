@@ -7,6 +7,7 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.security.MessageDigest
 import java.util.concurrent.Executors
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -41,6 +42,7 @@ class SeyfiUstaAI(
 
     private val modelExecutor = Executors.newSingleThreadExecutor()
     private val modelTaskStarted = AtomicBoolean(false)
+    private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
     @Volatile private var modelStatus =
         "Seyfi Usta yerel yapay zekâsı hazırlanıyor."
@@ -79,12 +81,19 @@ class SeyfiUstaAI(
                         modelTaskStarted.set(false)
                         "Yerel yapay zekâ başlatılamadı: $message"
                     }
-                    if (success) Log.i(TAG, message) else Log.e(TAG, modelStatus)
+                    if (success) {
+                        Log.i(TAG, message)
+                        drainPendingChats()
+                    } else {
+                        Log.e(TAG, modelStatus)
+                        failPendingChats(modelStatus)
+                    }
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
                 modelStatus = "Yerel yapay zekâ kullanılamıyor: ${e.message}"
                 Log.e(TAG, modelStatus, e)
+                activity.runOnUiThread { failPendingChats(modelStatus) }
             }
         }
     }
@@ -167,6 +176,10 @@ class SeyfiUstaAI(
         voice.startListening()
     }
 
+    fun pauseForProcessing() {
+        voice.pauseForProcessing()
+    }
+
     fun stopListening() {
         voice.stopListening()
     }
@@ -174,27 +187,37 @@ class SeyfiUstaAI(
     fun isListening(): Boolean = voice.isListening()
 
     fun chat(message: String, onAnswer: (String) -> Unit) {
-        if (!brain.isReady() && !modelTaskStarted.get()) {
-            // İlk açılışta internet yoksa model indirilememiş olabilir.
-            // Sonraki sohbet isteğinde bağlantı yeniden denenir.
-            startModelLoading()
-        }
         if (brain.isReady()) {
-            brain.chat(message) { answer ->
-                onAnswer(answer)
-                speak(answer)
-            }
-        } else {
-            val fallback = when {
-                modelStatus.contains("indiriliyor", ignoreCase = true) ||
-                    modelStatus.contains("kontrol ediliyor", ignoreCase = true) ||
-                    modelStatus.contains("yükleniyor", ignoreCase = true) ->
-                    "Yerel yapay zekâ modelini hazırlıyorum. İlk kullanımda model internet üzerinden cihaza indiriliyor. İndirme tamamlanınca çevrimdışı çalışacak."
-                else ->
-                    "Yerel yapay zekâ şu anda hazır değil. Durum: $modelStatus. ECU tarama, arıza okuma ve canlı veri gibi tanımlı teşhis komutları kullanılabilir."
-            }
-            onAnswer(fallback)
-            speak(fallback)
+            answerWithBrain(message, onAnswer)
+            return
+        }
+
+        // Model açılırken gelen ilk soruyu kaybetme. Mikrofon beklemede kalır;
+        // model hazır olunca gerçek yanıt üretilip seslendirilir.
+        pendingChats.add(message to onAnswer)
+        if (!modelTaskStarted.get()) startModelLoading()
+    }
+
+    private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
+        brain.chat(message) { answer ->
+            onAnswer(answer)
+            speak(answer)
+        }
+    }
+
+    private fun drainPendingChats() {
+        while (true) {
+            val pending = pendingChats.poll() ?: break
+            answerWithBrain(pending.first, pending.second)
+        }
+    }
+
+    private fun failPendingChats(reason: String) {
+        while (true) {
+            val pending = pendingChats.poll() ?: break
+            val answer = "Yerel yapay zekâ başlatılamadı. $reason"
+            pending.second(answer)
+            speak(answer)
         }
     }
 
