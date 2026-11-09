@@ -39,6 +39,7 @@ import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     private var seyfiUstaAI: SeyfiUstaAI? = null
+    private val seyfiCommandHandler = SeyfiUstaCommandHandler()
     private val seyfiPermissionRequestCode = 7314
     private val bg = Color.rgb(2, 7, 18)
     private val panel = Color.rgb(4, 15, 34)
@@ -129,12 +130,10 @@ class MainActivity : ComponentActivity() {
         seyfiUstaAI = assistant
         assistant.initialize {
             assistant.speak(
-                "Merhaba, ben Seyfi Usta. Dijital tamir asistanınızım. " +
-                    "Lütfen motosikletinizin OBD kablosunu takın ve Wi-Fi cihazınızı bağlayın."
+                "Merhaba, ben Seyfi Usta. Efe Moto dijital teşhis asistanınızım. " +
+                    "Beni çağırmak için Seyfi Usta deyin. Dinliyorum."
             ) {
-                assistant.speak("Bağlantı kurmaya başlıyorum.") {
-                    startDiagnosis()
-                }
+                assistant.startListening()
             }
         }
     }
@@ -205,101 +204,79 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleSeyfiCommand(rawCommand: String) {
-        val normalized = rawCommand.lowercase(Locale("tr", "TR"))
-            .replace("ı", "i")
-            .replace("ş", "s")
-            .replace("ğ", "g")
-            .replace("ü", "u")
-            .replace("ö", "o")
-            .replace("ç", "c")
-            .trim()
-
-        val command = normalized.replace("seyfi usta", "").trim()
-        val q = if (command.isBlank()) normalized else command
         val assistant = seyfiUstaAI ?: return
+        val command = seyfiCommandHandler.handle(rawCommand)
 
-        if (q == "seyfi usta" || q == "seyfi" || q == "usta") {
-            assistant.speak("Efendim usta?")
-            return
-        }
+        log("Seyfi Usta komutu: ${command.originalText} → ${command.action}")
 
-        when {
-            q.contains("dinlemeyi birak") || q.contains("dinlemeyi durdur") -> {
-                assistant.stopListening()
-                assistant.speak("Tamam usta, dinlemeyi bıraktım.")
+        when (command.action) {
+            SeyfiAction.WAKE_WORD -> {
+                assistant.speak("Dinliyorum.")
             }
 
-            q.contains("tarama") || q.contains("ariza tara") || q.contains("motoru tara") -> {
-                assistant.speak("Gerçek ECU arıza taramasını başlatıyorum.")
+            SeyfiAction.START_SCAN -> {
+                assistant.speak("Gerçek ECU taramasını başlatıyorum.")
                 startDiagnosis()
             }
 
-            q.contains("arizalari sil") || q.contains("ariza sil") -> {
-                confirmClearFaults()
-                assistant.speak("Arıza silme onay ekranını açtım. Devam etmek için ekrandaki Sil ve Doğrula düğmesine basın.")
-            }
-
-            q.contains("canli veri") || q.contains("sensor ver") -> {
-                showLiveData()
-                if (!liveLoop) startLiveRead()
-                assistant.speak("Canlı veri ekranını açtım. Yalnızca ECU'dan gerçekten okuyabildiğim değerleri söyleyeceğim.")
-            }
-
-            q.contains("ana sayfa") || q == "ana ekran" -> {
-                showHome()
-                assistant.speak("Ana sayfadayız usta.")
-            }
-
-            q.contains("test yap") || q == "testler" || q.contains("sistem testi") -> {
-                showTests()
-                assistant.speak("Sistem testleri ekranını açtım. Çalıştırmak istediğiniz testi ekrandan seçebilirsiniz.")
-            }
-
-            q.contains("ariza anlat") || q.contains("arizalari anlat") -> {
-                speakFaultDetails()
-            }
-
-            q.contains("ariza") || q.contains("hata kod") -> {
+            SeyfiAction.READ_FAULTS -> {
                 showFaults()
                 speakFaultSummary()
             }
 
-            q.contains("rapor") -> {
-                exportDiagnosticReport()
-                assistant.speak("Teşhis raporu kaydetme ve paylaşma ekranını açtım.")
-            }
-
-            q.contains("devir") || q.contains("rpm") -> speakLiveValue(
-                "rpm", "Motor devri", "devir/dakika"
-            )
-
-            q.contains("gaz") || q.contains("tps") -> speakLiveValue(
-                "tps", "Gaz kelebeği konumu", "yüzde"
-            )
-
-            q.contains("hararet") || q.contains("sogutma") || q.contains("sicaklik") -> speakLiveValue(
-                "coolant", "Motor soğutma suyu sıcaklığı", "derece"
-            )
-
-            q.contains("aku") || q.contains("voltaj") || q.contains("sarj") -> speakLiveValue(
-                "voltage", "Akü ve ECU voltajı", "volt"
-            )
-
-            q.contains("manifold") || q.contains("map") || q.contains("emme basinci") -> speakLiveValue(
-                "map", "Emme manifoldu basıncı", "kilopaskal"
-            )
-
-            q.contains("yardim") || q.contains("ne yapabilirsin") -> {
+            SeyfiAction.CLEAR_FAULTS -> {
+                confirmClearFaults()
                 assistant.speak(
-                    "Tarama yap, arızaları göster veya anlat, canlı veri, devir, gaz, hararet, " +
-                        "akü voltajı, manifold basıncı, test yap, rapor hazırla, ana sayfa veya arızaları sil diyebilirsiniz."
+                    "Arıza silme onay ekranını açtım. Güvenlik için ekrandaki Sil ve Doğrula düğmesine basmanız gerekiyor."
                 )
             }
 
-            else -> {
-                // Gerçek yerel yapay zekâ sohbeti
-                assistant.brain.chat(q) { aiReply ->
-                    assistant.speak(aiReply)
+            SeyfiAction.SHOW_LIVE_DATA -> {
+                showLiveData()
+                if (!liveLoop) startLiveRead()
+                assistant.speak("Canlı veri ekranını açtım. Yalnızca ECU'dan gerçekten okunan değerleri kullanacağım.")
+            }
+
+            SeyfiAction.SHOW_RPM ->
+                speakLiveValue("rpm", "Motor devri", "devir/dakika")
+
+            SeyfiAction.SHOW_TEMPERATURE ->
+                speakLiveValue("coolant", "Motor soğutma suyu sıcaklığı", "derece")
+
+            SeyfiAction.SHOW_VOLTAGE ->
+                speakLiveValue("voltage", "Akü ve ECU voltajı", "volt")
+
+            SeyfiAction.SHOW_TPS ->
+                speakLiveValue("tps", "Gaz kelebeği konumu", "yüzde")
+
+            SeyfiAction.SHOW_HELP -> assistant.speak(
+                "Taramaya başla, arızaları oku, arızaları sil, canlı veri, motor devri, " +
+                    "hararet, akü voltajı, gaz konumu, test yap, rapor hazırla veya ana sayfa diyebilirsiniz."
+            )
+
+            SeyfiAction.GO_HOME -> {
+                showHome()
+                assistant.speak("Ana sayfaya döndüm.")
+            }
+
+            SeyfiAction.SHOW_TESTS -> {
+                showTests()
+                assistant.speak("Sistem testleri ekranını açtım.")
+            }
+
+            SeyfiAction.EXPORT_REPORT -> {
+                exportDiagnosticReport()
+                assistant.speak("Teşhis raporu hazırlama ekranını açtım.")
+            }
+
+            SeyfiAction.STOP -> {
+                assistant.stopListening()
+                assistant.speak("Tamam, dinlemeyi durdurdum.")
+            }
+
+            SeyfiAction.UNKNOWN -> {
+                assistant.chat(rawCommand) { answer ->
+                    log("Seyfi Usta yanıtı: $answer")
                 }
             }
         }
