@@ -42,7 +42,8 @@ jobs:
           mkdir -p app/src/main/assets
           curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
             --user-agent "MOTO-DIAG-PRO-Android/1.0" \
-            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm?download=true" \
+            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm?download=true&cachebust=${GITHUB_RUN_ID}" \
+            --header "Cache-Control: no-cache" \
             --output app/src/main/assets/seyfi_model.litertlm
           echo "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9  app/src/main/assets/seyfi_model.litertlm" | sha256sum --check
           test "$(stat -c%s app/src/main/assets/seyfi_model.litertlm)" -eq 344686592
