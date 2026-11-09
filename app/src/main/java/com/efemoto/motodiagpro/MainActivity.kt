@@ -402,25 +402,23 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Genel konuşma sorusuna, büyük yerel model yüklenirken bile hemen sesli
-                // geri bildirim ver. Aksi halde kullanıcı mikrofonun duyduğunu görür ama
-                // asistanın cevap hazırladığını anlayamaz.
-                assistant.speak("Sorunuzu aldım. Motor arızasıyla ilgili bilgiyi hazırlıyorum.")
+                // Genel soruyu doğrudan yerel Qwen modeline gönder.
+                // Sabit bir sesli karşılama cümlesi kullanma: kullanıcıya her seferinde
+                // aynı cevabı veriyormuş izlenimi oluşturuyordu.
+                seyfiChatHistory.append("SİZ: ").append(commandInput).append("\n\n")
                 Toast.makeText(
                     this,
-                    "SEYFİ USTA: Sorunuz alındı, yanıt hazırlanıyor.",
+                    "SEYFİ USTA: Soru yerel yapay zekâya gönderildi.",
                     Toast.LENGTH_LONG
                 ).show()
 
-                // Tanımlı ECU komutu değilse yerel Qwen modeline sohbet sorusu gönder.
                 assistant.chat(commandInput) { answer ->
                     log("Seyfi Usta yanıtı: $answer")
-                    Toast.makeText(
-                        this,
-                        answer,
-                        Toast.LENGTH_LONG
-                    ).show()
+                    seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
+                    if (currentScreen == "SEYFI") showSeyfiChat()
+                    Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
                 }
+            }
             }
         }
     }
