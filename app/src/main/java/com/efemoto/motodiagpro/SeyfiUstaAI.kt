@@ -49,6 +49,8 @@ class SeyfiUstaAI(
     // Yerel model yanıt üretirken takılırsa sesli asistan sonsuza kadar mikrofonu kapalı tutmasın.
     private val chatTimeoutExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val modelTaskStarted = AtomicBoolean(false)
+    // Sohbet istekleri tek tek işlenir; aynı Conversation üzerinde paralel üretim yoktur.
+    private val chatInProgress = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
     @Volatile private var modelStatus = "APK içindeki Seyfi Usta yapay zekâsı hazırlanıyor."
@@ -159,21 +161,23 @@ class SeyfiUstaAI(
     fun isListening(): Boolean = voice.isListening()
 
     fun chat(message: String, onAnswer: (String) -> Unit) {
+        val cleanMessage = message.trim()
+        if (cleanMessage.isEmpty()) return
+
+        val pending = cleanMessage to onAnswer
+        pendingChats.add(pending)
+
         if (brain.isReady()) {
-            answerWithBrain(message, onAnswer)
+            drainPendingChats()
             return
         }
 
-        val pending = message to onAnswer
-        pendingChats.add(pending)
-        publishModelStatus("Yerel model henüz hazır değil; mesaj kısa süreliğine bekletiliyor.")
-
-        // Model başlatma takılırsa kullanıcıya sonsuza kadar "gönderildi" denmesin.
-        // Kuyrukta hâlâ duran istek 30 saniye içinde açık bir hata alır.
+        publishModelStatus("Yerel model hazırlanıyor; mesaj sıraya alındı.")
+        // Model yükleme başarısız veya takılmışsa bekleyen isteği sonsuza kadar tutma.
         chatTimeoutExecutor.schedule({
             if (pendingChats.remove(pending)) {
-                val failure = "Yerel yapay zekâ 30 saniye içinde hazır olmadı. Model yükleme durumunu kontrol edin; tekrar deneyebilirsiniz."
-                publishModelStatus("Model yüklemesi tamamlanmadı; bekleyen mesaj sonlandırıldı.")
+                val failure = "Yerel yapay zekâ 30 saniye içinde hazır olmadı. Model yükleme durumunu kontrol edin."
+                publishModelStatus("Model hazır olmadığı için bekleyen mesaj sonlandırıldı.")
                 activity.runOnUiThread {
                     try {
                         onAnswer(failure)
@@ -187,59 +191,84 @@ class SeyfiUstaAI(
         if (!modelTaskStarted.get()) startModelLoading()
     }
 
-    private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
-        publishModelStatus("Seyfi Usta düşünüyor ve yanıt hazırlıyor.")
-        Log.i(TAG, "Sohbet isteği SmolLM2'ya gönderildi: ${message.take(240)}")
+    private fun answerWithBrain(
+        message: String,
+        onAnswer: (String) -> Unit,
+        onFinished: () -> Unit
+    ) {
+        publishModelStatus("Seyfi Usta yanıt hazırlıyor.")
+        Log.i(TAG, "Yerel model isteği başladı: ${message.take(240)}")
 
-        val completed = AtomicBoolean(false)
-        val timeout = chatTimeoutExecutor.schedule({
-            if (completed.compareAndSet(false, true)) {
-                val fallback = "Usta şu anda yerel yapay zekâdan zamanında yanıt alamadı. Mikrofonu yeniden açıyorum; biraz daha kısa bir soru sorabilirsiniz."
-                Log.e(TAG, "Yerel yapay zekâ 25 saniyede yanıt üretemedi.")
-                publishModelStatus("Yerel yapay zekâ 25 saniyede yanıt üretemedi; sesli dinleme yeniden başlatılıyor.")
+        val reported = AtomicBoolean(false)
+        // Bu süre yalnızca kullanıcıya durum bildirir. Native üretimi iptal ettiği
+        // iddia edilmez ve yeni istek başlatılmaz; gerçek callback gelince kuyruk açılır.
+        val watchdog = chatTimeoutExecutor.schedule({
+            if (reported.compareAndSet(false, true)) {
+                val warning = "Usta, yerel modelden 90 saniyedir yanıt gelmedi. İşlem hâlâ cihazda sürüyor olabilir; aynı anda yeni soru göndermiyorum. Uygulama yanıt vermezse yeniden başlatın."
+                publishModelStatus("Yerel model yanıtı gecikti; mevcut işlem güvenli biçimde bekleniyor.")
                 activity.runOnUiThread {
                     try {
-                        onAnswer(fallback)
+                        onAnswer(warning)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Zaman aşımı yanıtı ekrana aktarılamadı", e)
+                        Log.e(TAG, "Bekleme uyarısı ekrana aktarılamadı", e)
                     } finally {
-                        speak(fallback)
+                        speak(warning)
                     }
                 }
             }
-        }, 25, TimeUnit.SECONDS)
+        }, 90, TimeUnit.SECONDS)
 
         try {
             brain.chat(message) { answer ->
-                if (completed.compareAndSet(false, true)) {
-                    timeout.cancel(false)
-                    Log.i(TAG, "SmolLM2 yanıtı alındı: ${answer.take(600)}")
-                    try {
-                        onAnswer(answer)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
-                    } finally {
-                        speak(answer)
+                watchdog.cancel(false)
+                if (reported.compareAndSet(false, true)) {
+                    Log.i(TAG, "Yerel model yanıtı alındı: ${answer.take(600)}")
+                    activity.runOnUiThread {
+                        try {
+                            onAnswer(answer)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
+                        } finally {
+                            speak(answer)
+                        }
                     }
                 } else {
-                    Log.w(TAG, "Zaman aşımından sonra gelen geç yanıt yok sayıldı.")
+                    Log.w(TAG, "Gecikme uyarısından sonra gerçek yanıt geldi.")
                 }
+                // Model callback'i gerçekten tamamlandı; sıradaki mesaja ancak şimdi geç.
+                activity.runOnUiThread { onFinished() }
             }
         } catch (e: Exception) {
-            if (completed.compareAndSet(false, true)) {
-                timeout.cancel(false)
+            watchdog.cancel(false)
+            if (reported.compareAndSet(false, true)) {
                 val failure = "Yerel yapay zekâ yanıt üretemedi: ${e.message}"
                 activity.runOnUiThread {
-                    try { onAnswer(failure) } finally { speak(failure) }
+                    try {
+                        onAnswer(failure)
+                    } finally {
+                        speak(failure)
+                        onFinished()
+                    }
                 }
+            } else {
+                activity.runOnUiThread { onFinished() }
             }
         }
     }
 
     private fun drainPendingChats() {
-        while (true) {
-            val pending = pendingChats.poll() ?: break
-            answerWithBrain(pending.first, pending.second)
+        if (!brain.isReady()) return
+        if (!chatInProgress.compareAndSet(false, true)) return
+
+        val pending = pendingChats.poll()
+        if (pending == null) {
+            chatInProgress.set(false)
+            return
+        }
+
+        answerWithBrain(pending.first, pending.second) {
+            chatInProgress.set(false)
+            drainPendingChats()
         }
     }
 
