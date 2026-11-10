@@ -91,6 +91,8 @@ class MainActivity : ComponentActivity() {
     private var progressLine: TextView? = null
     private var scanPercent = 0
     private val seyfiChatHistory = StringBuilder()
+    private var lastSeyfiPartialToastText = ""
+    private var lastSeyfiPartialToastAt = 0L
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
 
@@ -172,7 +174,26 @@ class MainActivity : ComponentActivity() {
                     status.contains("SEYFİ TTS", ignoreCase = true) ||
                     status.contains("Türkçe TTS", ignoreCase = true) ||
                     status.contains("Türkçe metin okuma", ignoreCase = true)
-                if (isProblem || isModelProgress || isModelReady || isVoiceListening || isWakeDetected || isTtsDiagnostic) {
+                val isVoicePartial = status.startsWith("Seyfi Usta duyuyor:", ignoreCase = true)
+                val showVoicePartial = if (isVoicePartial) {
+                    val transcript = status.substringAfter(":").trim()
+                    val now = System.currentTimeMillis()
+                    if (transcript.isNotBlank() &&
+                        transcript != lastSeyfiPartialToastText &&
+                        now - lastSeyfiPartialToastAt >= 900L
+                    ) {
+                        lastSeyfiPartialToastText = transcript
+                        lastSeyfiPartialToastAt = now
+                        true
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+                if (isProblem || isModelProgress || isModelReady || isVoiceListening ||
+                    isWakeDetected || isTtsDiagnostic || showVoicePartial
+                ) {
                     Toast.makeText(
                         this,
                         status,
