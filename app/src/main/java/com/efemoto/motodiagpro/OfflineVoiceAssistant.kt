@@ -4,6 +4,9 @@ import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -35,6 +38,9 @@ class OfflineVoiceAssistant(
     private val onStatus: (String) -> Unit
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val audioManager = activity.getSystemService(Activity.AUDIO_SERVICE) as AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var utteranceWatchdog: Runnable? = null
     private val turkish = Locale("tr", "TR")
     private val utteranceIds = AtomicInteger(0)
     private val pendingSpeechCallbacks = ConcurrentHashMap<String, () -> Unit>()
@@ -157,7 +163,7 @@ class OfflineVoiceAssistant(
                         // kullanıcı bunu telefonun ses tuşlarıyla kontrol edebilir.
                         val audioResult = engine.setAudioAttributes(
                             AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
+                                .setUsage(AudioAttributes.USAGE_ASSISTANT)
                                 .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                                 .build()
                         )
@@ -387,13 +393,49 @@ class OfflineVoiceAssistant(
         }
     }
 
+    private fun requestSpeechAudioFocus() {
+        try {
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+                    .setAudioAttributes(attrs)
+                    .setOnAudioFocusChangeListener { }
+                    .setWillPauseWhenDucked(false)
+                    .build()
+                audioFocusRequest = request
+                audioManager.requestAudioFocus(request)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+            }
+        } catch (_: Exception) { }
+    }
+
+    private fun abandonSpeechAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+                audioFocusRequest = null
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+        } catch (_: Exception) { }
+    }
+
     private fun finishUtterance(utteranceId: String?, status: String) {
         mainHandler.post {
             if (released) return@post
+            utteranceWatchdog?.let { mainHandler.removeCallbacks(it) }
+            utteranceWatchdog = null
             val callback = utteranceId?.let { pendingSpeechCallbacks.remove(it) }
             if (utteranceId == activeUtteranceId) {
                 activeUtteranceId = null
                 speakingRequested = false
+                abandonSpeechAudioFocus()
                 reportStatus(status)
                 callback?.invoke()
                 resumeRecognition()
@@ -446,21 +488,36 @@ class OfflineVoiceAssistant(
             return
         }
 
+        // Mikrofonu kapat: Seyfi kendi hoparlör sesini komut sanmasın.
         processingRequested = true
-        speechService?.setPause(true)
-        speakingRequested = true
         mainHandler.removeCallbacks(restartRecognition)
+        releaseSpeechService()
+        speakingRequested = true
+        try { engine.stop() } catch (_: Exception) {}
+        requestSpeechAudioFocus()
 
         val id = "SEYFI_${utteranceIds.incrementAndGet()}"
         activeUtteranceId = id
         if (onDone != null) pendingSpeechCallbacks[id] = onDone
 
         reportStatus("SEYFİ TTS: ses isteği gönderiliyor.")
+        val watchdog = Runnable {
+            if (activeUtteranceId == id && !released) {
+                reportStatus("SEYFİ TTS yanıt vermedi; mikrofon yeniden başlatılıyor.")
+                try { engine.stop() } catch (_: Exception) {}
+                finishUtterance(id, "SEYFİ TTS zaman aşımı.")
+            }
+        }
+        utteranceWatchdog = watchdog
+        mainHandler.postDelayed(watchdog, (10_000L + message.length * 110L).coerceAtMost(90_000L))
         val result = engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, id)
         if (result == TextToSpeech.ERROR) {
             pendingSpeechCallbacks.remove(id)
             activeUtteranceId = null
             speakingRequested = false
+            utteranceWatchdog?.let { mainHandler.removeCallbacks(it) }
+            utteranceWatchdog = null
+            abandonSpeechAudioFocus()
             reportStatus("SEYFİ TTS HATASI: speak() isteği reddedildi.")
             onDone?.invoke()
             resumeRecognition()
@@ -494,6 +551,9 @@ class OfflineVoiceAssistant(
         releaseSpeechService()
         try { voskModel?.close() } catch (_: Exception) {}
         voskModel = null
+        utteranceWatchdog?.let { mainHandler.removeCallbacks(it) }
+        utteranceWatchdog = null
+        abandonSpeechAudioFocus()
         try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
         tts = null
         ttsReady = false
