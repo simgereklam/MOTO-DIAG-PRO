@@ -102,7 +102,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val newConversation = newEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemPrompt),
-                        // SmolLM2 360M sohbetinde düşünme kanalı kullanılmaz; doğrudan
+                        // Gemma 4 E2B sohbetinde düşünme kanalı kullanılmaz; doğrudan
                         // kullanıcıya gösterilecek yanıtı üretmesi için kapalı tutulur.
                         thinkingConfig = ThinkingConfig(enableThinking = false),
                         tools = if (appTools != null) listOf(appTools) else emptyList(),
