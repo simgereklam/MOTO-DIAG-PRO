@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * Seyfi Usta ses katmanı:
  * - Vosk: sürekli, yerel Türkçe konuşma tanıma.
  * - Android TTS: Türkçe sesli yanıt.
- * - Tanınan metin onRecognized üzerinden SeyfiUstaAI / Qwen'e ve
+ * - Tanınan metin onRecognized üzerinden SeyfiUstaAI / Gemma 4'e ve
  *   MainActivity komut yönlendiricisine aktarılır.
  *
  * SpeechRecognizer kullanılmaz; böylece telefonun bulut/üretici konuşma
