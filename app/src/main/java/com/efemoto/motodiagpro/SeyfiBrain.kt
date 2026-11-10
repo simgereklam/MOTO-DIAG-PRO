@@ -107,12 +107,24 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                     )
                 )
 
+                // Sadece model dosyasının açılması yeterli değildir. Gerçek bir
+                // ilk üretim yaparak modelin cevap verebildiğini doğrula.
+                val warmupReply = newConversation.sendMessage(
+                    "Merhaba. Hazır olduğunu tek cümleyle söyle.",
+                    thinkingConfig = ThinkingConfig(enableThinking = false)
+                ).toString().trim()
+
+                if (warmupReply.isBlank()) {
+                    throw IllegalStateException("Model açıldı ancak başlangıç deneme sorusuna boş cevap verdi.")
+                }
+
+                Log.i("SeyfiBrain", "Model başlangıç testi başarılı: ${warmupReply.take(240)}")
                 engine = newEngine
                 conversation = newConversation
                 ready = true
 
                 mainHandler.post {
-                    onResult(true, "Seyfi Usta yapay zekâ motoru hazır.")
+                    onResult(true, "Seyfi Usta yapay zekâ motoru hazır; deneme sorusu cevaplandı.")
                 }
 
             } catch (e: Exception) {
@@ -263,42 +275,51 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
             }
         }
 
+        // Engine/Conversation yaşam döngüsü ve tüm native LiteRT-LM çağrıları
+        // aynı tek iş parçacıklı executor üzerinden yürütülür.
         try {
-            activeConversation.sendMessageAsync(
-                fullQuestion,
-                object : MessageCallback {
-                    override fun onMessage(message: Message) {
-                        // LiteRT-LM her çağrıda yalnızca yeni metin parçasını verir.
-                        val chunk = message.toString()
-                        if (chunk.isNotBlank()) {
-                            synchronized(chunks) { chunks.append(chunk) }
-                        }
-                    }
-
-                    override fun onDone() {
-                        val raw = synchronized(chunks) { chunks.toString() }
-                        val answer = raw
-                            .substringAfter("</think>", raw)
-                            .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
-                            .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
-                            .trim()
-                            .ifBlank {
-                                "Model yanıt akışını tamamladı ancak okunabilir bir metin döndürmedi. Daha kısa ve açık bir soru deneyin."
+            executor.execute {
+                try {
+                    activeConversation.sendMessageAsync(
+                        fullQuestion,
+                        object : MessageCallback {
+                            override fun onMessage(message: Message) {
+                                val chunk = message.toString()
+                                if (chunk.isNotBlank()) {
+                                    synchronized(chunks) { chunks.append(chunk) }
+                                }
                             }
-                        Log.i("SeyfiBrain", "Yerel model yanıtı tamamlandı: ${answer.take(1000)}")
-                        finish(answer)
-                    }
 
-                    override fun onError(throwable: Throwable) {
-                        Log.e("SeyfiBrain", "Yerel model akış hatası", throwable)
-                        finish("Yerel yapay zekâ yanıt üretirken hata verdi: ${throwable.message ?: "Bilinmeyen model hatası"}")
-                    }
-                },
-                thinkingConfig = ThinkingConfig(enableThinking = false)
-            )
+                            override fun onDone() {
+                                val raw = synchronized(chunks) { chunks.toString() }
+                                val answer = raw
+                                    .substringAfter("</think>", raw)
+                                    .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+                                    .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
+                                    .trim()
+                                    .ifBlank {
+                                        "Model yanıt akışını tamamladı ancak okunabilir bir metin döndürmedi. Daha kısa ve açık bir soru deneyin."
+                                    }
+                                Log.i("SeyfiBrain", "Yerel model yanıtı tamamlandı: ${answer.take(1000)}")
+                                finish(answer)
+                            }
+
+                            override fun onError(throwable: Throwable) {
+                                Log.e("SeyfiBrain", "Yerel model akış hatası", throwable)
+                                finish("Yerel yapay zekâ yanıt üretirken hata verdi: ${throwable.message ?: "Bilinmeyen model hatası"}")
+                            }
+                        },
+                        thinkingConfig = ThinkingConfig(enableThinking = false),
+                        maxOutputToken = 160
+                    )
+                } catch (e: Exception) {
+                    Log.e("SeyfiBrain", "Yerel model isteği başlatılamadı", e)
+                    finish("Yerel yapay zekâ başlatılamadı: ${e.message ?: "Bilinmeyen hata"}")
+                }
+            }
         } catch (e: Exception) {
-            Log.e("SeyfiBrain", "Yerel model isteği başlatılamadı", e)
-            finish("Yerel yapay zekâ başlatılamadı: ${e.message ?: "Bilinmeyen hata"}")
+            Log.e("SeyfiBrain", "Model iş kuyruğuna eklenemedi", e)
+            finish("Yerel yapay zekâ işlem kuyruğu kapalı: ${e.message ?: "Bilinmeyen hata"}")
         }
     }
 
