@@ -281,9 +281,6 @@ class SeyfiUstaAI(
         }
     }
 
-    fun chat(message: String): String =
-        if (brain.isReady()) "Sorunuzu yerel yapay zekâya iletiyorum: $message" else modelStatus
-
     fun updateEcuData(
         rpm: Int,
         tps: Float,
