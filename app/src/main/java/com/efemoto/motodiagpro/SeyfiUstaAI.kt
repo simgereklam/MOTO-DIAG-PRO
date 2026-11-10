@@ -131,29 +131,60 @@ class SeyfiUstaAI(
      * Gemma 4 E2B ilk kurulumda Hugging Face'ten uygulamanın özel alanına indirilir.
      * İndirme tamamlanmadan .part dosyası motor tarafından kullanılmaz.
      */
-    private fun ensureModelFile(): File {
-        val target = File(activity.filesDir, MODEL_FILE_NAME)
-        if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-            publishModelStatus("Gemma 4 E2B telefonda kurulu; çevrimdışı başlatılıyor.")
-            return target
-        }
-        if (target.exists()) target.delete()
+    private fun modelStorageDirectories(): List<File> {
+        val candidates = mutableListOf<File>()
+        candidates += File(activity.filesDir, "models")
+        activity.getExternalFilesDir("models")?.let { candidates += it }
+        return candidates.distinctBy { it.absolutePath }
+    }
 
-        val partial = File(activity.filesDir, "$MODEL_FILE_NAME.part")
+    private fun ensureModelFile(): File {
+        val directories = modelStorageDirectories()
+        directories.forEach { dir ->
+            val installed = File(dir, MODEL_FILE_NAME)
+            if (installed.isFile && installed.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
+                publishModelStatus("Gemma 4 E2B telefonda kurulu; çevrimdışı başlatılıyor.")
+                return installed
+            }
+        }
+
+        val available = directories.mapNotNull { dir ->
+            try {
+                if (!dir.exists() && !dir.mkdirs()) return@mapNotNull null
+                dir to StatFs(dir.absolutePath).availableBytes
+            } catch (_: Exception) {
+                null
+            }
+        }.maxByOrNull { it.second }
+
+        val minimumFreeBytes = MIN_MODEL_BYTES + 150_000_000L
+        if (available == null || available.second < minimumFreeBytes) {
+            val freeGb = (available?.second ?: 0L) / 1_000_000_000.0
+            val needGb = minimumFreeBytes / 1_000_000_000.0
+            throw IllegalStateException(
+                "Gemma 4 E2B yaklaşık 2,6 GB. Kurulum için en az %.1f GB boş alan gerekiyor. " +
+                "Uygulamanın erişebildiği en geniş depolama alanında %.1f GB boş yer var. " +
+                "En az 3 GB boşaltıp tekrar deneyin.".format(java.util.Locale.US, needGb, freeGb)
+            )
+        }
+
+        val modelDirectory = available.first
+        val target = File(modelDirectory, MODEL_FILE_NAME)
+        val partial = File(modelDirectory, "$MODEL_FILE_NAME.part")
+        if (target.exists()) target.delete()
         if (partial.exists()) partial.delete()
 
-        val freeBytes = StatFs(activity.filesDir.absolutePath).availableBytes
-        if (freeBytes < MIN_MODEL_BYTES + 500_000_000L) {
-            throw IllegalStateException("Gemma 4 için en az 3 GB boş depolama alanı gerekli.")
-        }
-
-        publishModelStatus("Gemma 4 E2B indiriliyor (yaklaşık 2,6 GB). Wi-Fi kullanmanız önerilir.")
+        publishModelStatus(
+            "Gemma 4 E2B indiriliyor. Uygun depolama alanı: %.1f GB".format(
+                java.util.Locale("tr", "TR"), available.second / 1_000_000_000.0
+            )
+        )
         var connection: HttpURLConnection? = null
         try {
             connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
                 instanceFollowRedirects = true
                 connectTimeout = 30_000
-                readTimeout = 90_000
+                readTimeout = 120_000
                 requestMethod = "GET"
                 setRequestProperty("User-Agent", "MOTO-DIAG-PRO/1.0")
             }
@@ -166,6 +197,9 @@ class SeyfiUstaAI(
             val expectedBytes = connection.contentLengthLong
             if (expectedBytes !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
                 throw IllegalStateException("Model dosyasının sunucu boyutu beklenenden farklı: $expectedBytes bayt.")
+            }
+            if (StatFs(modelDirectory.absolutePath).availableBytes < expectedBytes + 100_000_000L) {
+                throw IllegalStateException("İndirme başladıktan önce depolama alanı yetersiz kaldı. En az 3 GB boş alan açın.")
             }
 
             var total = 0L
