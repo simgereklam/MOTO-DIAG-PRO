@@ -168,7 +168,10 @@ class OfflineVoiceAssistant(
                                 .build()
                         )
 
-                        ttsReady = languageSupported
+                        // TTS motoru başarıyla açıldıysa telefonun mevcut sesi kullanılabilir.
+                        // Türkçe dil paketi bulunamaması motoru tümden devre dışı bırakmasın:
+                        // Türkçe ses varsa onu seç, yoksa Android'in varsayılan sesine düş.
+                        ttsReady = true
                         engine.setSpeechRate(0.92f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
@@ -204,7 +207,8 @@ class OfflineVoiceAssistant(
 
                         reportStatus(
                             when {
-                                !ttsReady -> "Türkçe metin okuma dili telefonda yüklü değil."
+                                !languageSupported && turkishVoices.isEmpty() ->
+                                    "Telefonun TTS motoru hazır; Türkçe ses paketi bulunamadı, varsayılan telefon sesi kullanılacak."
                                 selected != null && selected.isNetworkConnectionRequired ->
                                     "SEYFİ TTS HAZIR: $selectedVoiceName (internet gerektirir); medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
                                 selected != null ->
