@@ -134,6 +134,9 @@ class SeyfiUstaAI(
         if (partial.length() > MAX_MODEL_BYTES) partial.delete()
 
         if (partial.length() < MIN_MODEL_BYTES) {
+            if (activity.filesDir.usableSpace < MIN_MODEL_BYTES + 300_000_000L) {
+                throw IllegalStateException("Gemma 4 E2B için telefonda en az 2,85 GB boş alan gerekiyor.")
+            }
             val manager = activity.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             val network = manager.activeNetwork
             val capabilities = network?.let { manager.getNetworkCapabilities(it) }
