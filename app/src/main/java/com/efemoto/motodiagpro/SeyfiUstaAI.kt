@@ -4,16 +4,14 @@ import android.app.Activity
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Vosk modeli APK içindedir; büyük Qwen modeli ilk kullanımda ayrıca indirilir.
- * Kısmi indirme korunur ve sunucu Range destekliyorsa kaldığı yerden sürer.
+ * Vosk ve Qwen modelleri derleme sırasında APK assets içine paketlenir.
+ * Telefonda ilk açılışta yalnızca uygulama alanına kopyalanır; internet gerekmez.
  */
 class SeyfiUstaAI(
     private val activity: Activity,
@@ -24,10 +22,9 @@ class SeyfiUstaAI(
     companion object {
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
+        private const val MODEL_ASSET_NAME = "seyfi_model.litertlm"
         private const val MIN_MODEL_BYTES = 300_000_000L
         private const val MAX_MODEL_BYTES = 400_000_000L
-        private const val MODEL_URL =
-            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/e6bb3e4a1eb3f663153f0c1c12b735d64be657a7/Qwen3-0.6B_dynamic_wi4b32_afp32_gpu_composites.litertlm?download=true"
     }
 
     private val voice = OfflineVoiceAssistant(
@@ -49,7 +46,7 @@ class SeyfiUstaAI(
     private val modelTaskStarted = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
-    @Volatile private var modelStatus = "Seyfi Usta yapay zekâ modeli henüz indirilmedi."
+    @Volatile private var modelStatus = "APK içindeki Seyfi Usta yapay zekâsı hazırlanıyor."
 
     fun initialize(onReady: () -> Unit) {
         if (initialized) {
@@ -57,12 +54,13 @@ class SeyfiUstaAI(
             return
         }
         initialized = true
-        // Büyük Qwen modeli açılışta indirilmez/yüklenmez.
-        // Mikrofon ve uyandırma sözü hazır olduktan sonra, ilk sohbet sorusunda yüklenir.
+        // Ses tanıma başlatılırken APK'ya gömülü yapay zekâ da arka planda
+        // hazırlanır. İlk sohbet için internetten model indirme beklenmez.
         try {
             voice.initialize(onReady)
+            startModelLoading()
         } catch (e: Exception) {
-            Log.e(TAG, "Ses sistemi başlatılamadı", e)
+            Log.e(TAG, "Asistan başlatılamadı", e)
             onReady()
         }
     }
@@ -93,92 +91,39 @@ class SeyfiUstaAI(
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
-                val failure = "Seyfi Usta modeli indirilemedi: ${e.message}"
+                val failure = "APK içindeki Seyfi Usta modeli hazırlanamadı: ${e.message}"
                 publishModelStatus(failure)
                 activity.runOnUiThread { failPendingChats(failure) }
             }
         }
     }
 
-    /** İlk açılışta indirir; .part dosyası sayesinde kesilen indirme korunur. */
+    /** Model APK assets içinden kopyalanır; çalışma anında internet bağlantısı kullanılmaz. */
     private fun ensureModelFile(): File {
         val target = File(activity.filesDir, MODEL_FILE_NAME)
         if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-            publishModelStatus("Seyfi Usta yapay zekâ modeli cihazda hazır.")
+            publishModelStatus("Seyfi Usta yapay zekâ modeli uygulamada hazır.")
             return target
         }
         if (target.exists()) target.delete()
 
         val partial = File(activity.filesDir, "$MODEL_FILE_NAME.part")
-        var downloaded = if (partial.isFile) partial.length() else 0L
-        if (downloaded > MAX_MODEL_BYTES) {
-            partial.delete()
-            downloaded = 0L
-        }
+        if (partial.exists()) partial.delete()
 
-        var connection: HttpURLConnection? = null
+        publishModelStatus("APK içindeki yapay zekâ modeli telefona hazırlanıyor.")
         try {
-            publishModelStatus(
-                if (downloaded > 0L) "Seyfi Usta yapay zekâ indirmesine kaldığı yerden devam ediyor."
-                else "Seyfi Usta yapay zekâ modeli indiriliyor: 0%"
-            )
-
-            connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = 25_000
-                readTimeout = 45_000
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "MOTO-DIAG-PRO-Android/1.0")
-                setRequestProperty("Accept-Encoding", "identity")
-                if (downloaded > 0L) setRequestProperty("Range", "bytes=$downloaded-")
-            }
-
-            val response = connection.responseCode
-            val append = when {
-                response == HttpURLConnection.HTTP_PARTIAL && downloaded > 0L -> true
-                response == HttpURLConnection.HTTP_OK -> {
-                    // Sunucu Range desteklemiyorsa bozuk birleştirme yapma; baştan başla.
-                    downloaded = 0L
-                    false
-                }
-                else -> throw IllegalStateException("Model sunucusu HTTP $response yanıtı verdi.")
-            }
-
-            val responseLength = connection.getHeaderFieldLong("Content-Length", -1L)
-            val totalBytes = if (responseLength > 0L) downloaded + responseLength else -1L
-            if (totalBytes > MAX_MODEL_BYTES) {
-                throw IllegalStateException("Model dosyası beklenen boyut sınırını aşıyor.")
-            }
-
-            var lastReportedStep = -1
-            var lastReportedMb = -1L
-            connection.inputStream.use { input ->
-                FileOutputStream(partial, append).use { output ->
-                    val buffer = ByteArray(64 * 1024)
-                    var currentBytes = downloaded
+            activity.assets.open(MODEL_ASSET_NAME).use { input ->
+                FileOutputStream(partial).use { output ->
+                    val buffer = ByteArray(1024 * 1024)
+                    var total = 0L
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
+                        total += count
+                        if (total > MAX_MODEL_BYTES) {
+                            throw IllegalStateException("APK içindeki yapay zekâ modeli beklenen boyutu aşıyor.")
+                        }
                         output.write(buffer, 0, count)
-                        currentBytes += count
-                        if (currentBytes > MAX_MODEL_BYTES) {
-                            throw IllegalStateException("İndirilen model dosyası boyut sınırını aştı.")
-                        }
-
-                        if (totalBytes > 0L) {
-                            val percent = ((currentBytes * 100L) / totalBytes).toInt().coerceIn(0, 100)
-                            val step = percent / 10
-                            if (step > lastReportedStep) {
-                                lastReportedStep = step
-                                publishModelStatus("Seyfi Usta yapay zekâ modeli indiriliyor: ${step * 10}%")
-                            }
-                        } else {
-                            val mb = currentBytes / (1024L * 1024L)
-                            if (mb >= lastReportedMb + 20L) {
-                                lastReportedMb = mb
-                                publishModelStatus("Seyfi Usta yapay zekâ modeli indiriliyor: ${mb} MB")
-                            }
-                        }
                     }
                     output.fd.sync()
                 }
@@ -186,16 +131,17 @@ class SeyfiUstaAI(
 
             if (partial.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
                 throw IllegalStateException(
-                    "İndirilen model eksik veya geçersiz (${partial.length()} bayt). Bağlantıyı kontrol edip yeniden deneyin."
+                    "APK içindeki yapay zekâ modeli eksik veya geçersiz (${partial.length()} bayt)."
                 )
             }
             if (!partial.renameTo(target)) {
-                throw IllegalStateException("İndirilen model dosyası kaydedilemedi.")
+                throw IllegalStateException("Yapay zekâ modeli uygulama alanına kopyalanamadı.")
             }
-            publishModelStatus("Seyfi Usta yapay zekâ modeli indirildi ve doğrulandı.")
+            publishModelStatus("APK içindeki yapay zekâ modeli hazır; yerel motor başlatılıyor.")
             return target
-        } finally {
-            connection?.disconnect()
+        } catch (e: Exception) {
+            partial.delete()
+            throw e
         }
     }
 
