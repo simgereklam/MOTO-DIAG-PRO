@@ -393,6 +393,7 @@ class OfflineVoiceAssistant(
         }
     }
 
+    // TTS oynarken Vosk tamamen kapalıdır; ses bitince yeni tanıyıcı açılır.
     private fun requestSpeechAudioFocus() {
         try {
             val attrs = AudioAttributes.Builder()
