@@ -6,6 +6,9 @@ import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -19,6 +22,10 @@ import org.vosk.android.RecognitionListener
 import org.vosk.android.SpeechService
 import org.vosk.android.StorageService
 import java.util.Locale
+import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.util.concurrent.Executors
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
@@ -58,6 +65,9 @@ class OfflineVoiceAssistant(
     @Volatile private var speakingRequested = false
     @Volatile private var released = false
     @Volatile private var currentStatus = "Türkçe çevrimdışı ses modeli hazırlanıyor."
+    @Volatile private var holdRecognitionAfterSpeech = false
+    @Volatile private var directAudioCallback: ((ByteArray) -> Unit)? = null
+    private val directAudioExecutor = Executors.newSingleThreadExecutor()
 
     private var modelInitialized = false
     private var ttsInitialized = false
@@ -434,7 +444,7 @@ class OfflineVoiceAssistant(
                 callback?.invoke()
                 if (pendingSpeechQueue.isNotEmpty()) {
                     speakNextPending()
-                } else {
+                } else if (!holdRecognitionAfterSpeech) {
                     resumeRecognition()
                 }
             } else {
@@ -447,6 +457,125 @@ class OfflineVoiceAssistant(
         if (released || !ttsReady || speakingRequested) return
         val pending = pendingSpeechQueue.poll() ?: return
         speak(pending.text, pending.onDone)
+    }
+
+    /**
+     * Uyandırma sözü Vosk tarafından algılandıktan sonra gerçek konuşma parçasını
+     * metne çevirmeden 16 kHz WAV olarak Gemma 4'e aktarır.
+     */
+    fun speakAndRecordDirectAudio(onAudio: (ByteArray) -> Unit) {
+        if (released) return
+        directAudioCallback = onAudio
+        holdRecognitionAfterSpeech = true
+        speak("Dinliyorum.") {
+            startDirectAudioCapture()
+        }
+    }
+
+    private fun startDirectAudioCapture() {
+        if (released) return
+        processingRequested = true
+        mainHandler.removeCallbacks(restartRecognition)
+        releaseSpeechService()
+        reportStatus("Gemma 4 konuşmanızı doğrudan dinliyor...")
+        directAudioExecutor.execute {
+            var recorder: AudioRecord? = null
+            try {
+                val rate = 16_000
+                val minSize = AudioRecord.getMinBufferSize(
+                    rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+                )
+                if (minSize <= 0) throw IllegalStateException("Mikrofon tamponu hazırlanamadı.")
+                val bufferSize = maxOf(minSize, 3_200)
+                recorder = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                    rate,
+                    AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize
+                )
+                if (recorder.state != AudioRecord.STATE_INITIALIZED) {
+                    throw IllegalStateException("Doğrudan mikrofon kaydı başlatılamadı.")
+                }
+                recorder.startRecording()
+                val pcm = ByteArrayOutputStream()
+                val buffer = ByteArray(3_200)
+                var elapsedMs = 0
+                var silenceMs = 0
+                var speechMs = 0
+                var heardSpeech = false
+
+                while (!released && elapsedMs < 15_000 && (!heardSpeech || silenceMs < 950)) {
+                    val count = recorder.read(buffer, 0, buffer.size)
+                    if (count <= 0) continue
+                    pcm.write(buffer, 0, count)
+                    val samples = count / 2
+                    var energy = 0.0
+                    var i = 0
+                    while (i + 1 < count) {
+                        val sample = ((buffer[i + 1].toInt() shl 8) or (buffer[i].toInt() and 0xff)).toShort().toInt()
+                        energy += sample.toDouble() * sample.toDouble()
+                        i += 2
+                    }
+                    val rms = if (samples > 0) kotlin.math.sqrt(energy / samples) else 0.0
+                    val chunkMs = (count * 1000 / (rate * 2)).coerceAtLeast(1)
+                    elapsedMs += chunkMs
+                    if (rms > 420.0) {
+                        heardSpeech = true
+                        speechMs += chunkMs
+                        silenceMs = 0
+                    } else if (heardSpeech) {
+                        silenceMs += chunkMs
+                    }
+                    if (heardSpeech && speechMs >= 350 && silenceMs >= 950) break
+                }
+                recorder.stop()
+                recorder.release()
+                recorder = null
+
+                if (!heardSpeech || speechMs < 250) {
+                    throw IllegalStateException("Konuşma algılanamadı. Tekrar deneyin.")
+                }
+
+                val audioBytes = makeWav(pcm.toByteArray(), 16_000)
+                holdRecognitionAfterSpeech = false
+                reportStatus("Konuşma Gemma 4'e doğrudan gönderiliyor...")
+                mainHandler.post {
+                    if (!released) {
+                        val callback = directAudioCallback
+                        directAudioCallback = null
+                        callback?.invoke(audioBytes)
+                    }
+                }
+            } catch (e: Exception) {
+                try { recorder?.stop() } catch (_: Exception) {}
+                try { recorder?.release() } catch (_: Exception) {}
+                holdRecognitionAfterSpeech = false
+                directAudioCallback = null
+                reportStatus("Doğrudan ses alma hatası: ${e.message}")
+                mainHandler.post {
+                    if (!released) speak("Konuşmanızı alamadım. Lütfen tekrar deneyin.")
+                }
+            }
+        }
+    }
+
+    private fun makeWav(pcm: ByteArray, sampleRate: Int): ByteArray {
+        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+        header.put("RIFF".toByteArray(Charsets.US_ASCII))
+        header.putInt(36 + pcm.size)
+        header.put("WAVE".toByteArray(Charsets.US_ASCII))
+        header.put("fmt ".toByteArray(Charsets.US_ASCII))
+        header.putInt(16)
+        header.putShort(1.toShort())
+        header.putShort(1.toShort())
+        header.putInt(sampleRate)
+        header.putInt(sampleRate * 2)
+        header.putShort(2.toShort())
+        header.putShort(16.toShort())
+        header.put("data".toByteArray(Charsets.US_ASCII))
+        header.putInt(pcm.size)
+        return header.array() + pcm
     }
 
     private fun resumeRecognition() {
@@ -559,6 +688,8 @@ class OfflineVoiceAssistant(
         utteranceWatchdog = null
         abandonSpeechAudioFocus()
         try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
+        directAudioExecutor.shutdownNow()
+        directAudioCallback = null
         tts = null
         ttsReady = false
         speakingRequested = false
