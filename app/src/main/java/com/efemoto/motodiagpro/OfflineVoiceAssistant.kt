@@ -44,6 +44,8 @@ class OfflineVoiceAssistant(
     private val turkish = Locale("tr", "TR")
     private val utteranceIds = AtomicInteger(0)
     private val pendingSpeechCallbacks = ConcurrentHashMap<String, () -> Unit>()
+    private data class PendingSpeech(val text: String, val onDone: (() -> Unit)?)
+    private val pendingSpeechQueue = ConcurrentLinkedQueue<PendingSpeech>()
 
     @Volatile private var voskModel: Model? = null
     @Volatile private var recognizer: Recognizer? = null
@@ -177,6 +179,9 @@ class OfflineVoiceAssistant(
                         // Türkçe dil paketi bulunamaması motoru tümden devre dışı bırakmasın:
                         // Türkçe ses varsa onu seç, yoksa Android'in varsayılan sesine düş.
                         ttsReady = true
+                        if (pendingSpeechQueue.isNotEmpty()) {
+                            mainHandler.post { speakNextPending() }
+                        }
                         engine.setSpeechRate(0.92f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
@@ -230,7 +235,11 @@ class OfflineVoiceAssistant(
                     }
                 } else {
                     ttsReady = false
-                    reportStatus("Telefonun metin okuma motoru başlatılamadı.")
+                    reportStatus("Telefonun metin okuma motoru başlatılamadı (sonuç kodu: $status).")
+                    while (true) {
+                        val pending = pendingSpeechQueue.poll() ?: break
+                        pending.onDone?.invoke()
+                    }
                 }
                     ttsInitialized = true
                     completeInitializationIfReady()
@@ -452,11 +461,21 @@ class OfflineVoiceAssistant(
                 abandonSpeechAudioFocus()
                 reportStatus(status)
                 callback?.invoke()
-                resumeRecognition()
+                if (pendingSpeechQueue.isNotEmpty()) {
+                    speakNextPending()
+                } else {
+                    resumeRecognition()
+                }
             } else {
                 callback?.invoke()
             }
         }
+    }
+
+    private fun speakNextPending() {
+        if (released || !ttsReady || speakingRequested) return
+        val pending = pendingSpeechQueue.poll() ?: return
+        speak(pending.text, pending.onDone)
     }
 
     private fun resumeRecognition() {
@@ -496,7 +515,12 @@ class OfflineVoiceAssistant(
 
         val engine = tts
         if (!ttsReady || engine == null) {
-            val defaultEngine = TextToSpeech.getDefaultEngine() ?: "varsayılan motor yok"
+            // TTS açılışı asenkrondur. İlk karşılama/yanıt, onInit tamamlanmadan
+            // gelirse kaybetme; motor hazır olunca sırayla seslendir.
+            pendingSpeechQueue.add(PendingSpeech(message, onDone))
+            reportStatus("Telefonun ses motoru hazırlanıyor; konuşma sıraya alındı.")
+            return
+        } = TextToSpeech.getDefaultEngine() ?: "varsayılan motor yok"
             reportStatus(
                 "TTS hazır değil (motor: $defaultEngine). " +
                     "Başlatma sonucu veya motor bağlantısı başarısız; uygulama günlüklerini kontrol edin."
@@ -578,6 +602,7 @@ class OfflineVoiceAssistant(
         speakingRequested = false
         activeUtteranceId = null
         pendingSpeechCallbacks.clear()
+        pendingSpeechQueue.clear()
         initializedCallback = null
     }
 
