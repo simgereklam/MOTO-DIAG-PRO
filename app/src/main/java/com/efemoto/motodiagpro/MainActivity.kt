@@ -151,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 // Mikrofon/model hatalarını yalnızca Logcat'te bırakma.
                 // Normal dinleme durumlarında ekrana bildirim basma.
                 val isProblem = listOf(
-                    "hata", "açılamadı", "başlatılamadı", "indirilemedi",
+                    "hata", "açılamadı", "başlatılamadı", "hazırlanamadı", "indirilemedi",
                     "izin gerekli", "hazır değil", "bulunamadı", "kullanılamıyor",
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
