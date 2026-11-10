@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Vosk ve Gemma 3 1B modelleri derleme sırasında APK assets içine paketlenir.
+ * Vosk ve SmolLM2 360M modelleri derleme sırasında APK assets içine paketlenir.
  * Telefonda ilk açılışta yalnızca uygulama alanına kopyalanır; internet gerekmez.
  */
 class SeyfiUstaAI(
@@ -25,9 +25,9 @@ class SeyfiUstaAI(
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
         private const val MODEL_ASSET_NAME = "seyfi_model.litertlm"
-        // Gemma 3 1B IT int4 QAT: 584,417,280 bayt (LiteRT Community model card).
-        private const val MIN_MODEL_BYTES = 570_000_000L
-        private const val MAX_MODEL_BYTES = 600_000_000L
+        // SmolLM2 360M IT int4 QAT: 584,417,280 bayt (LiteRT Community model card).
+        private const val MIN_MODEL_BYTES = 360_000_000L
+        private const val MAX_MODEL_BYTES = 390_000_000L
     }
 
     private val voice = OfflineVoiceAssistant(
@@ -189,7 +189,7 @@ class SeyfiUstaAI(
 
     private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
         publishModelStatus("Seyfi Usta düşünüyor ve yanıt hazırlıyor.")
-        Log.i(TAG, "Sohbet isteği Gemma'ya gönderildi: ${message.take(240)}")
+        Log.i(TAG, "Sohbet isteği SmolLM2'ya gönderildi: ${message.take(240)}")
 
         val completed = AtomicBoolean(false)
         val timeout = chatTimeoutExecutor.schedule({
@@ -213,7 +213,7 @@ class SeyfiUstaAI(
             brain.chat(message) { answer ->
                 if (completed.compareAndSet(false, true)) {
                     timeout.cancel(false)
-                    Log.i(TAG, "Gemma yanıtı alındı: ${answer.take(600)}")
+                    Log.i(TAG, "SmolLM2 yanıtı alındı: ${answer.take(600)}")
                     try {
                         onAnswer(answer)
                     } catch (e: Exception) {
