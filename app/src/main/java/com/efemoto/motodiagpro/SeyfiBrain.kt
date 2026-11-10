@@ -240,7 +240,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val rawAnswer = contentAnswer.ifBlank { channelAnswer }
                 android.util.Log.i(
                     "SeyfiBrain",
-                    "Qwen yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
+                    "Gemma yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
                 )
 
                 // Model yanıtında düşünme etiketi bulunursa kullanıcıya gösterme.
