@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - master
+      - seyfi-offline-stability
   workflow_dispatch:
 
 permissions:
