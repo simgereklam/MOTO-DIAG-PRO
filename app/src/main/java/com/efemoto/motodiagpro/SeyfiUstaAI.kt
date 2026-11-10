@@ -187,6 +187,20 @@ class SeyfiUstaAI(
         }
     }
 
+    /**
+     * Uyandırma sözü sonrasında kullanıcı sesini metne çevirmeden Gemma 4'e aktarır.
+     */
+    fun listenDirectAudio(onAnswer: (String) -> Unit = {}) {
+        voice.speakAndRecordDirectAudio { audio ->
+            publishModelStatus("Gemma 4 konuşmayı doğrudan anlıyor...")
+            brain.askAudio(audio) { answer ->
+                activity.runOnUiThread {
+                    try { onAnswer(answer) } finally { speak(answer) }
+                }
+            }
+        }
+    }
+
     fun getModelStatus(): String = modelStatus
     fun getVoiceStatus(): String = voice.getStatus()
     fun speak(text: String, onDone: (() -> Unit)? = null) = voice.speak(text, onDone)
