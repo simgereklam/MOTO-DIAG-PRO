@@ -374,8 +374,10 @@ class MainActivity : ComponentActivity() {
         }
         val command = seyfiCommandHandler.handle(commandInput)
 
-        log("Seyfi Usta komutu: $rawCommand → ${command.action}")
-        Toast.makeText(this, "SEYFİ USTA komutu: ${command.action}", Toast.LENGTH_SHORT).show()
+        if (command.action != SeyfiAction.UNKNOWN) {
+            log("Seyfi Usta komutu: $rawCommand → ${command.action}")
+            Toast.makeText(this, "SEYFİ USTA: ${command.response}", Toast.LENGTH_SHORT).show()
+        }
 
         when (command.action) {
             SeyfiAction.WAKE_WORD -> {
@@ -461,8 +463,12 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Komut olmayan doğal dil mesajlarını yerel Qwen'e aktar.
-                sendSeyfiChatMessage(commandInput)
+                // Serbest konuşma yerel Qwen'e aktarılır; boş metin sessizce yutulmaz.
+                if (commandInput.isNotBlank()) {
+                    sendSeyfiChatMessage(commandInput)
+                } else {
+                    assistant.speak("Komutu anlayamadım. Taramaya başla veya yardım de.")
+                }
             }
         }
     }
