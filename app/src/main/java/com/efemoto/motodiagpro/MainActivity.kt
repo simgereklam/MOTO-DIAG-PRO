@@ -2074,6 +2074,25 @@ class MainActivity : ComponentActivity() {
         statusCard.addView(actionButton("MODEL DURUMUNU YENİLE", blue) {
             status.text = combinedAssistantStatus()
         })
+        statusCard.addView(actionButton("SESLİ CEVABI TEST ET", green) {
+            val assistant = seyfiUstaAI
+            if (assistant == null) {
+                Toast.makeText(this, "Seyfi Usta henüz başlatılmadı.", Toast.LENGTH_LONG).show()
+            } else {
+                assistant.speak("Ses testi. Ben Seyfi Usta. Beni net duyabiliyor musunuz?")
+            }
+        })
+        statusCard.addView(actionButton("TÜRKÇE SES PAKETİNİ KONTROL ET", blue) {
+            try {
+                startActivity(android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
+            } catch (_: Exception) {
+                try {
+                    startActivity(android.content.Intent("com.android.settings.TTS_SETTINGS"))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "Telefonun Ayarlar bölümünden Metin Okuma / TTS ayarlarını açın.", Toast.LENGTH_LONG).show()
+                }
+            }
+        })
         statusCard.addView(actionButton("GEMINI İNTERNET ARAŞTIRMA AYARLARI", cyan) {
             showResearchApiKeyDialog()
         })
