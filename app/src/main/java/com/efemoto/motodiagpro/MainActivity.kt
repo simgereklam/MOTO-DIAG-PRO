@@ -350,7 +350,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // "Sohbet" özel bir oturum açar. Oturum boyunca doğal cümleler
-        // yerel Qwen'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
+        // yerel Gemma 4'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
         val normalizedInput = commandInput.lowercase(java.util.Locale("tr", "TR")).trim()
         if (normalizedInput in setOf("sohbet", "sohbet modu", "sohbete gec", "sohbet baslat")) {
             seyfiChatMode = true
@@ -467,7 +467,7 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Serbest konuşma yerel Qwen'e aktarılır; boş metin sessizce yutulmaz.
+                // Serbest konuşma yerel Gemma 4'e aktarılır; boş metin sessizce yutulmaz.
                 if (commandInput.isNotBlank()) {
                     sendSeyfiChatMessage(commandInput)
                 } else {
@@ -492,7 +492,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Qwen'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
+     * Gemma 4'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
      * Model sadece izin verilen eylemleri seçebilir; gerçek ECU işlemlerini
      * mevcut teşhis yöneticisi yürütür.
      */
