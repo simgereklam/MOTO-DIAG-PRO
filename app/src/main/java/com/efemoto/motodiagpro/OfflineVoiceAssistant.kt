@@ -391,18 +391,21 @@ class OfflineVoiceAssistant(
 
     private fun resumeRecognition() {
         if (!listeningEnabled || released) return
+
+        // TTS sırasında Vosk SpeechService pause durumuna alınmıştı.
+        // Bazı Android cihazlarda aynı Recognizer'ı reset()+setPause(false)
+        // ile sürdürmek sonraki konuşma parçasını teslim etmeyebiliyor.
+        // Her TTS/komut sonrasında eski oturumu tamamen kapatıp yeni
+        // Recognizer + SpeechService oluşturmak daha güvenilir bir döngüdür.
         processingRequested = false
-        val service = speechService
-        if (service != null) {
-            // Önceki uyandırma/komut parçasını temizle; yeniden açıldığında
-            // aynı kelimeyi ikinci kez tetiklemesin.
-            service.reset()
-            service.setPause(false)
-            reportStatus("Seyfi Usta çevrimdışı dinliyor...")
-        } else {
-            mainHandler.removeCallbacks(restartRecognition)
-            mainHandler.postDelayed(restartRecognition, 350L)
-        }
+        mainHandler.removeCallbacks(restartRecognition)
+        releaseSpeechService()
+        reportStatus("Seyfi Usta mikrofonu yeniden açıyor...")
+        mainHandler.postDelayed({
+            if (listeningEnabled && !processingRequested && !speakingRequested && !released) {
+                startSpeechService()
+            }
+        }, 450L)
     }
 
     fun stopListening() {
