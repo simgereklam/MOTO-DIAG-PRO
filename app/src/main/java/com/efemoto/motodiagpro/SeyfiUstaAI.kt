@@ -33,7 +33,7 @@ class SeyfiUstaAI(
         private const val MODEL_FILE_NAME = "gemma-4-E2B-it.litertlm"
         private const val MODEL_URL =
             "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true"
-        private const val MIN_MODEL_BYTES = 2_400_000_000L
+        private const val MIN_MODEL_BYTES = 2_550_000_000L
         private const val MAX_MODEL_BYTES = 2_800_000_000L
     }
 
