@@ -315,7 +315,7 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\s+"), " ")
             .trim()
 
-        val wakeDetected = Regex("\\bseyfi\\b")
+        val wakeDetected = Regex("\\b(seyfi|usta)\\b")
             .containsMatchIn(normalizedSpeech)
         val commandInput: String
 
@@ -326,7 +326,7 @@ class MainActivity : ComponentActivity() {
         commandInput = if (wakeDetected) {
             normalizedSpeech
                 .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\s+usta\\b"), " ")
-                .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b"), " ")
+                .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı|usta)\\b"), " ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
         } else if (seyfiAwaitingCommand) {
