@@ -34,10 +34,10 @@ class DirectAudioAssistant(
         private const val TAG = "DirectAudioAssistant"
         private const val SAMPLE_RATE = 16_000
         private const val CHUNK_SAMPLES = 1024
-        private const val SPEECH_THRESHOLD = 850.0
+        private const val SPEECH_THRESHOLD = 600.0
         private const val END_SILENCE_MS = 850
         private const val MAX_UTTERANCE_MS = 20_000
-        private const val MIN_UTTERANCE_MS = 450
+        private const val MIN_UTTERANCE_MS = 250
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -171,6 +171,9 @@ class DirectAudioAssistant(
             audioRecord.startRecording()
             while (listeningRequested && !released) {
                 if (paused) {
+                    // Keep draining microphone buffers while Gemma/TTS is busy so old audio
+                    // (especially Seyfi Usta's own spoken reply) is never replayed as input.
+                    audioRecord.read(samples, 0, samples.size)
                     preRoll.clear()
                     pcm.reset()
                     speechStarted = false
