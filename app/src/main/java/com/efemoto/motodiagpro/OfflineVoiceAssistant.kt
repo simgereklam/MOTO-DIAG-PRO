@@ -20,6 +20,7 @@ import org.vosk.android.SpeechService
 import org.vosk.android.StorageService
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -117,136 +118,106 @@ class OfflineVoiceAssistant(
 
     private fun initializeTts() {
         try {
-            // Android belgesine göre TTS başlatma hatasında onInit(), kurucu
-            // tamamen dönmeden ve tts alanına nesne atanmadan çağrılabilir.
-            // Callback içeriğini ana kuyruğa ertelemek, atama tamamlandıktan
-            // sonra motoru kontrol etmemizi sağlar.
+            // Callback ana kuyruğa ertelenir; TextToSpeech kurucusu döndükten
+            // sonra tts alanı güvenle atanmış olur.
             val createdEngine = TextToSpeech(activity.applicationContext) { status ->
                 mainHandler.post {
                     if (released) return@post
                     val engine = tts
                     if (status == TextToSpeech.SUCCESS && engine != null) {
-                    try {
-                        // Önce dili ayarla. Android setLanguage() çağrısı varsayılan sesi
-                        // yeniden seçtiği için özel sesi bundan SONRA seçmek gerekir.
-                        val languageResult = engine.setLanguage(turkish)
-                        val languageSupported =
-                            languageResult != TextToSpeech.LANG_MISSING_DATA &&
-                                languageResult != TextToSpeech.LANG_NOT_SUPPORTED
+                        try {
+                            val languageResult = engine.setLanguage(turkish)
+                            val languageSupported =
+                                languageResult != TextToSpeech.LANG_MISSING_DATA &&
+                                    languageResult != TextToSpeech.LANG_NOT_SUPPORTED
 
-                        val turkishVoices = engine.voices.orEmpty().filter {
-                            it.locale.language.equals("tr", ignoreCase = true)
-                        }
-                        val offlineTurkish = turkishVoices.filter {
-                            !it.isNetworkConnectionRequired
-                        }
-                        fun isMaleVoice(voice: android.speech.tts.Voice): Boolean {
-                            val details = (voice.name + " " +
-                                voice.features.orEmpty().joinToString(" "))
-                                .lowercase(Locale.ROOT)
-                            return details.contains("male") || details.contains("erkek")
-                        }
-
-                        // Önce çevrimdışı Türkçe erkek sesi; yoksa çevrimdışı herhangi
-                        // bir Türkçe ses; o da yoksa telefondaki Türkçe ağ sesini seç.
-                        // Önceki kod çevrimdışı Türkçe ses yokken varsayılan motor sesini
-                        // bırakıyordu; bu ses Türkçe olmayabilir veya kullanılamayabilirdi.
-                        val selected = offlineTurkish.firstOrNull(::isMaleVoice)
-                            ?: offlineTurkish.firstOrNull()
-                            ?: turkishVoices.firstOrNull(::isMaleVoice)
-                            ?: turkishVoices.firstOrNull()
-
-                        var selectedVoiceName = "Android varsayılan Türkçe sesi"
-                        if (selected != null) {
-                            val voiceResult = engine.setVoice(selected)
-                            if (voiceResult == TextToSpeech.ERROR) {
-                                reportStatus("Türkçe ses seçilemedi: ${selected.name}; varsayılan ses deneniyor.")
-                            } else {
-                                selectedVoiceName = selected.name
+                            val turkishVoices = engine.voices.orEmpty().filter {
+                                it.locale.language.equals("tr", ignoreCase = true)
                             }
-                        }
+                            val offlineTurkish = turkishVoices.filter {
+                                !it.isNetworkConnectionRequired
+                            }
+                            fun isMaleVoice(voice: android.speech.tts.Voice): Boolean {
+                                val details = (voice.name + " " +
+                                    voice.features.orEmpty().joinToString(" "))
+                                    .lowercase(Locale.ROOT)
+                                return details.contains("male") || details.contains("erkek")
+                            }
 
-                        // Medya ses seviyesini kullan; telefonun medya sesi kapalıysa
-                        // kullanıcı bunu telefonun ses tuşlarıyla kontrol edebilir.
-                        val audioResult = engine.setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                        )
+                            val selected = offlineTurkish.firstOrNull(::isMaleVoice)
+                                ?: offlineTurkish.firstOrNull()
+                                ?: turkishVoices.firstOrNull(::isMaleVoice)
+                                ?: turkishVoices.firstOrNull()
 
-                        // TTS motoru başarıyla açıldıysa telefonun mevcut sesi kullanılabilir.
-                        // Türkçe dil paketi bulunamaması motoru tümden devre dışı bırakmasın:
-                        // Türkçe ses varsa onu seç, yoksa Android'in varsayılan sesine düş.
-                        ttsReady = true
-                        if (pendingSpeechQueue.isNotEmpty()) {
-                            mainHandler.post { speakNextPending() }
-                        }
-                        engine.setSpeechRate(0.92f)
-                        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                            override fun onStart(utteranceId: String?) {
-                                mainHandler.post {
-                                    if (!released) reportStatus("SEYFİ TTS: konuşma başladı.")
+                            var selectedVoiceName = "Android varsayılan sesi"
+                            if (selected != null) {
+                                if (engine.setVoice(selected) != TextToSpeech.ERROR) {
+                                    selectedVoiceName = selected.name
                                 }
                             }
 
-                            override fun onDone(utteranceId: String?) {
-                                finishUtterance(utteranceId, "SEYFİ TTS: konuşma tamamlandı.")
-                            }
+                            val audioResult = engine.setAudioAttributes(
+                                AudioAttributes.Builder()
+                                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                                    .build()
+                            )
+                            engine.setSpeechRate(0.92f)
+                            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                                override fun onStart(utteranceId: String?) {
+                                    mainHandler.post {
+                                        if (!released) reportStatus("SEYFİ TTS: konuşma başladı.")
+                                    }
+                                }
+                                override fun onDone(utteranceId: String?) {
+                                    finishUtterance(utteranceId, "SEYFİ TTS: konuşma tamamlandı.")
+                                }
+                                override fun onStop(utteranceId: String?, interrupted: Boolean) {
+                                    finishUtterance(
+                                        utteranceId,
+                                        if (interrupted) "SEYFİ TTS: konuşma kesildi."
+                                        else "SEYFİ TTS: konuşma durdu."
+                                    )
+                                }
+                                @Deprecated("Deprecated by Android")
+                                override fun onError(utteranceId: String?) {
+                                    finishUtterance(utteranceId, "SEYFİ TTS HATASI: ses üretilemedi.")
+                                }
+                                override fun onError(utteranceId: String?, errorCode: Int) {
+                                    finishUtterance(utteranceId, "SEYFİ TTS HATASI: kod $errorCode.")
+                                }
+                            })
 
-                            override fun onStop(utteranceId: String?, interrupted: Boolean) {
-                                finishUtterance(
-                                    utteranceId,
-                                    if (interrupted) "SEYFİ TTS: konuşma kesildi."
-                                    else "SEYFİ TTS: konuşma durdu."
-                                )
-                            }
-
-                            @Deprecated("Deprecated by Android")
-                            override fun onError(utteranceId: String?) {
-                                finishUtterance(utteranceId, "SEYFİ TTS HATASI: ses üretilemedi.")
-                            }
-
-                            override fun onError(utteranceId: String?, errorCode: Int) {
-                                finishUtterance(
-                                    utteranceId,
-                                    "SEYFİ TTS HATASI: kod $errorCode."
-                                )
-                            }
-                        })
-
-                        reportStatus(
-                            when {
-                                !languageSupported && turkishVoices.isEmpty() ->
-                                    "Telefonun TTS motoru hazır; Türkçe ses paketi bulunamadı, varsayılan telefon sesi kullanılacak."
-                                selected != null && selected.isNetworkConnectionRequired ->
-                                    "SEYFİ TTS HAZIR: $selectedVoiceName (internet gerektirir); medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
-                                selected != null ->
-                                    "SEYFİ TTS HAZIR: $selectedVoiceName (çevrimdışı); medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
-                                turkishVoices.isEmpty() ->
-                                    "Türkçe TTS sesi bulunamadı. Telefona Türkçe ses paketi yüklenmeli."
-                                else ->
-                                    "Türkçe TTS hazır; varsayılan ses kullanılacak."
-                            }
-                        )
-                    } catch (e: Exception) {
+                            ttsReady = true
+                            reportStatus(
+                                when {
+                                    selected != null && selected.isNetworkConnectionRequired ->
+                                        "SEYFİ TTS HAZIR: $selectedVoiceName (internet gerektirir); ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
+                                    selected != null ->
+                                        "SEYFİ TTS HAZIR: $selectedVoiceName (çevrimdışı); ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
+                                    !languageSupported ->
+                                        "SEYFİ TTS HAZIR; Türkçe dil sonucu $languageResult, varsayılan ses kullanılacak."
+                                    else ->
+                                        "SEYFİ TTS HAZIR; varsayılan ses kullanılacak."
+                                }
+                            )
+                            if (pendingSpeechQueue.isNotEmpty()) speakNextPending()
+                        } catch (e: Exception) {
+                            ttsReady = false
+                            reportStatus("Türkçe ses motoru hazırlanamadı: ${e.message}")
+                        }
+                    } else {
                         ttsReady = false
-                        reportStatus("Türkçe ses motoru hazırlanamadı: ${e.message}")
+                        reportStatus("Telefonun metin okuma motoru başlatılamadı (sonuç kodu: $status).")
+                        while (true) {
+                            val pending = pendingSpeechQueue.poll() ?: break
+                            pending.onDone?.invoke()
+                        }
                     }
-                } else {
-                    ttsReady = false
-                    reportStatus("Telefonun metin okuma motoru başlatılamadı (sonuç kodu: $status).")
-                    while (true) {
-                        val pending = pendingSpeechQueue.poll() ?: break
-                        pending.onDone?.invoke()
-                    }
-                }
                     ttsInitialized = true
                     completeInitializationIfReady()
                 }
             }
-            // onInit callback'i yukarıda post edildiği için bu atama callback
-            // işlenmeden önce tamamlanır.
             tts = createdEngine
         } catch (e: Exception) {
             ttsReady = false
@@ -302,9 +273,9 @@ class OfflineVoiceAssistant(
         }
 
         try {
-            val newRecognizer = Recognizer(model, SAMPLE_RATE)
+            val newRecognizer = Recognizer(model, 16000.0f)
             recognizer = newRecognizer
-            val newService = SpeechService(newRecognizer, SAMPLE_RATE)
+            val newService = SpeechService(newRecognizer, 16000.0f)
             speechService = newService
 
             val started = newService.startListening(voskListener)
@@ -515,18 +486,9 @@ class OfflineVoiceAssistant(
 
         val engine = tts
         if (!ttsReady || engine == null) {
-            // TTS açılışı asenkrondur. İlk karşılama/yanıt, onInit tamamlanmadan
-            // gelirse kaybetme; motor hazır olunca sırayla seslendir.
+            // Motor başlatılırken gelen ilk konuşma isteğini kaybetme.
             pendingSpeechQueue.add(PendingSpeech(message, onDone))
             reportStatus("Telefonun ses motoru hazırlanıyor; konuşma sıraya alındı.")
-            return
-        } = TextToSpeech.getDefaultEngine() ?: "varsayılan motor yok"
-            reportStatus(
-                "TTS hazır değil (motor: $defaultEngine). " +
-                    "Başlatma sonucu veya motor bağlantısı başarısız; uygulama günlüklerini kontrol edin."
-            )
-            onDone?.invoke()
-            resumeRecognition()
             return
         }
 
