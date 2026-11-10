@@ -189,7 +189,7 @@ class SeyfiUstaAI(
 
     private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
         publishModelStatus("Seyfi Usta düşünüyor ve yanıt hazırlıyor.")
-        Log.i(TAG, "Sohbet isteği Qwen'e gönderildi: ${message.take(240)}")
+        Log.i(TAG, "Sohbet isteği Gemma'ya gönderildi: ${message.take(240)}")
 
         val completed = AtomicBoolean(false)
         val timeout = chatTimeoutExecutor.schedule({
@@ -213,7 +213,7 @@ class SeyfiUstaAI(
             brain.chat(message) { answer ->
                 if (completed.compareAndSet(false, true)) {
                     timeout.cancel(false)
-                    Log.i(TAG, "Qwen yanıtı alındı: ${answer.take(600)}")
+                    Log.i(TAG, "Gemma yanıtı alındı: ${answer.take(600)}")
                     try {
                         onAnswer(answer)
                     } catch (e: Exception) {
