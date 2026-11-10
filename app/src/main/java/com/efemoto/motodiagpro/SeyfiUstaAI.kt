@@ -5,6 +5,8 @@ import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -43,6 +45,8 @@ class SeyfiUstaAI(
         com.google.ai.edge.litertlm.tool(SeyfiAppTools(onAppAction))
     )
     private val modelExecutor = Executors.newSingleThreadExecutor()
+    // Yerel model yanıt üretirken takılırsa sesli asistan sonsuza kadar mikrofonu kapalı tutmasın.
+    private val chatTimeoutExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val modelTaskStarted = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
@@ -165,14 +169,48 @@ class SeyfiUstaAI(
     private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
         publishModelStatus("Seyfi Usta düşünüyor ve yanıt hazırlıyor.")
         Log.i(TAG, "Sohbet isteği Qwen'e gönderildi: ${message.take(240)}")
-        brain.chat(message) { answer ->
-            Log.i(TAG, "Qwen yanıtı alındı: ${answer.take(600)}")
-            try {
-                onAnswer(answer)
-            } catch (e: Exception) {
-                Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
-            } finally {
-                speak(answer)
+
+        val completed = AtomicBoolean(false)
+        val timeout = chatTimeoutExecutor.schedule({
+            if (completed.compareAndSet(false, true)) {
+                val fallback = "Usta şu anda yerel yapay zekâdan zamanında yanıt alamadı. Mikrofonu yeniden açıyorum; biraz daha kısa bir soru sorabilirsiniz."
+                Log.e(TAG, "Yerel yapay zekâ yanıt zaman aşımı.")
+                publishModelStatus("Yerel yapay zekâ yanıtı zaman aşımına uğradı; sesli dinleme yeniden başlatılıyor.")
+                activity.runOnUiThread {
+                    try {
+                        onAnswer(fallback)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Zaman aşımı yanıtı ekrana aktarılamadı", e)
+                    } finally {
+                        speak(fallback)
+                    }
+                }
+            }
+        }, 60, TimeUnit.SECONDS)
+
+        try {
+            brain.chat(message) { answer ->
+                if (completed.compareAndSet(false, true)) {
+                    timeout.cancel(false)
+                    Log.i(TAG, "Qwen yanıtı alındı: ${answer.take(600)}")
+                    try {
+                        onAnswer(answer)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
+                    } finally {
+                        speak(answer)
+                    }
+                } else {
+                    Log.w(TAG, "Zaman aşımından sonra gelen geç yanıt yok sayıldı.")
+                }
+            }
+        } catch (e: Exception) {
+            if (completed.compareAndSet(false, true)) {
+                timeout.cancel(false)
+                val failure = "Yerel yapay zekâ yanıt üretemedi: ${e.message}"
+                activity.runOnUiThread {
+                    try { onAnswer(failure) } finally { speak(failure) }
+                }
             }
         }
     }
@@ -221,6 +259,7 @@ class SeyfiUstaAI(
         voice.release()
         brain.close()
         modelExecutor.shutdownNow()
+        chatTimeoutExecutor.shutdownNow()
         initialized = false
     }
 }
