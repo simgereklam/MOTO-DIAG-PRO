@@ -92,7 +92,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val newConversation = newEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemPrompt),
-                        // Gemma 3 1B sohbetinde düşünme kanalı kullanılmaz; doğrudan
+                        // SmolLM2 360M sohbetinde düşünme kanalı kullanılmaz; doğrudan
                         // kullanıcıya gösterilecek yanıtı üretmesi için kapalı tutulur.
                         thinkingConfig = ThinkingConfig(enableThinking = false),
                         tools = if (appTools != null) listOf(appTools) else emptyList(),
@@ -240,7 +240,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val rawAnswer = contentAnswer.ifBlank { channelAnswer }
                 android.util.Log.i(
                     "SeyfiBrain",
-                    "Gemma yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
+                    "SmolLM2 yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
                 )
 
                 // Model yanıtında düşünme etiketi bulunursa kullanıcıya gösterme.
