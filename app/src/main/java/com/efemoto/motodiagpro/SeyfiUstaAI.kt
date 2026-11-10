@@ -81,7 +81,9 @@ class SeyfiUstaAI(
     }
 
     private fun completeStartupIfReady() {
-        if (!voiceReady || !brain.isReady()) return
+        // Vosk + TTS, Gemma modelinden bağımsızdır. İlk model indirmesi sürerken
+        // yerel uyandırma ve temel uygulama komutları da kullanılabilsin.
+        if (!voiceReady) return
         val callback = initializationCallback ?: return
         initializationCallback = null
         activity.runOnUiThread {
@@ -245,6 +247,17 @@ class SeyfiUstaAI(
      * Uyandırma sözü sonrasında kullanıcı sesini metne çevirmeden Gemma 4'e aktarır.
      */
     fun listenDirectAudio(onAnswer: (String) -> Unit = {}) {
+        if (!brain.isReady()) {
+            val message = if (modelStatus.contains("indiriliyor", ignoreCase = true)) {
+                "Yerel yapay zekâ modeli henüz indiriliyor. İndirme tamamlandığında doğrudan sesli sohbet açılacak."
+            } else {
+                "Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin."
+            }
+            activity.runOnUiThread {
+                try { onAnswer(message) } finally { speak(message) }
+            }
+            return
+        }
         voice.speakAndRecordDirectAudio { audio ->
             publishModelStatus("Gemma 4 konuşmayı doğrudan anlıyor...")
             brain.askAudio(audio) { answer ->
