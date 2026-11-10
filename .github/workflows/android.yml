@@ -57,6 +57,17 @@ jobs:
           echo "Türkçe Vosk model assets hazır."
           du -sh app/src/main/assets/model-tr
 
+      - name: Çevrimdışı yapay zekâ modelini APK içine ekle
+        run: |
+          mkdir -p app/src/main/assets
+          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
+            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/e6bb3e4a1eb3f663153f0c1c12b735d64be657a7/Qwen3-0.6B_dynamic_wi4b32_afp32_gpu_composites.litertlm?download=true" \
+            --output app/src/main/assets/seyfi_model.litertlm
+          MODEL_BYTES="$(stat -c%s app/src/main/assets/seyfi_model.litertlm)"
+          test "$MODEL_BYTES" -ge 300000000
+          test "$MODEL_BYTES" -le 400000000
+          echo "Seyfi Usta yapay zekâ modeli APK assets içine alındı: $MODEL_BYTES bayt"
+
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace
 
