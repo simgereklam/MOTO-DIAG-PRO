@@ -162,7 +162,27 @@ class SeyfiUstaAI(
             answerWithBrain(message, onAnswer)
             return
         }
-        pendingChats.add(message to onAnswer)
+
+        val pending = message to onAnswer
+        pendingChats.add(pending)
+        publishModelStatus("Yerel model henüz hazır değil; mesaj kısa süreliğine bekletiliyor.")
+
+        // Model başlatma takılırsa kullanıcıya sonsuza kadar "gönderildi" denmesin.
+        // Kuyrukta hâlâ duran istek 30 saniye içinde açık bir hata alır.
+        chatTimeoutExecutor.schedule({
+            if (pendingChats.remove(pending)) {
+                val failure = "Yerel yapay zekâ 30 saniye içinde hazır olmadı. Model yükleme durumunu kontrol edin; tekrar deneyebilirsiniz."
+                publishModelStatus("Model yüklemesi tamamlanmadı; bekleyen mesaj sonlandırıldı.")
+                activity.runOnUiThread {
+                    try {
+                        onAnswer(failure)
+                    } finally {
+                        speak(failure)
+                    }
+                }
+            }
+        }, 30, TimeUnit.SECONDS)
+
         if (!modelTaskStarted.get()) startModelLoading()
     }
 
@@ -174,8 +194,8 @@ class SeyfiUstaAI(
         val timeout = chatTimeoutExecutor.schedule({
             if (completed.compareAndSet(false, true)) {
                 val fallback = "Usta şu anda yerel yapay zekâdan zamanında yanıt alamadı. Mikrofonu yeniden açıyorum; biraz daha kısa bir soru sorabilirsiniz."
-                Log.e(TAG, "Yerel yapay zekâ yanıt zaman aşımı.")
-                publishModelStatus("Yerel yapay zekâ yanıtı zaman aşımına uğradı; sesli dinleme yeniden başlatılıyor.")
+                Log.e(TAG, "Yerel yapay zekâ 25 saniyede yanıt üretemedi.")
+                publishModelStatus("Yerel yapay zekâ 25 saniyede yanıt üretemedi; sesli dinleme yeniden başlatılıyor.")
                 activity.runOnUiThread {
                     try {
                         onAnswer(fallback)
@@ -186,7 +206,7 @@ class SeyfiUstaAI(
                     }
                 }
             }
-        }, 60, TimeUnit.SECONDS)
+        }, 25, TimeUnit.SECONDS)
 
         try {
             brain.chat(message) { answer ->
