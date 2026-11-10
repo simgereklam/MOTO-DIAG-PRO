@@ -91,6 +91,8 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                     EngineConfig(
                         modelPath = modelFile.absolutePath,
                         backend = Backend.CPU(),
+                        // Gemma 4'ün ses girdisi için ayrı audio backend açık olmalı.
+                        audioBackend = Backend.CPU(),
                         cacheDir = appContext.cacheDir.absolutePath
                     )
                 )
