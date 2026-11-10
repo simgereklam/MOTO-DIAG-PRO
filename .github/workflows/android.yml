@@ -62,20 +62,16 @@ jobs:
           echo "Türkçe Vosk model assets hazır."
           du -sh app/src/main/assets/model-tr
 
-      - name: Gemma 3 1B model erişimini doğrula
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      - name: SmolLM2 360M çevrimdışı sohbet modelini ekle
         run: |
-          test -n "$HF_TOKEN" || (echo "::error::GitHub Secrets içine HF_TOKEN ekleyin. Hugging Face üzerinde Gemma lisansını kabul edip Read token oluşturun." && exit 1)
           mkdir -p app/src/main/assets
           curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
-            --header "Authorization: Bearer $HF_TOKEN" \
-            "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/main/gemma3-1b-it-int4.litertlm?download=true" \
+            "https://huggingface.co/litert-community/SmolLM2-360M-Instruct/resolve/main/SmolLM2_360M_instruct.litertlm?download=true" \
             --output app/src/main/assets/seyfi_model.litertlm
           MODEL_BYTES="$(stat -c%s app/src/main/assets/seyfi_model.litertlm)"
-          test "$MODEL_BYTES" -ge 570000000
-          test "$MODEL_BYTES" -le 600000000
-          echo "Gemma 3 1B LiteRT-LM modeli APK assets içine alındı: $MODEL_BYTES bayt"
+          test "$MODEL_BYTES" -ge 360000000
+          test "$MODEL_BYTES" -le 390000000
+          echo "SmolLM2 360M LiteRT-LM modeli APK assets içine alındı: $MODEL_BYTES bayt"
 
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace
