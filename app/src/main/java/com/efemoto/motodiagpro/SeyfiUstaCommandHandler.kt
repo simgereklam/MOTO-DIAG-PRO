@@ -106,6 +106,12 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "taramaya basla",
+                "taramayi baslat",
+                "tarama baslat",
+                "tara",
+                "basla taramayi",
+                "ariza taramaya basla",
+                "motoru taramaya basla",
                 "ariza tara",
                 "arizalari tara",
                 "arizalari taramaya basla",
@@ -147,7 +153,10 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "arizalari sil",
+                "arizayi sil",
+                "ariza kodlarini temizle",
                 "ariza sil",
+                "arizalari temizle",
                 "hatalari sil",
                 "hata kodlarini sil",
                 "dtc sil",
@@ -164,6 +173,9 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "arizalari oku",
+                "arizayi oku",
+                "ariza kodu oku",
+                "hatalari oku",
                 "ariza kodlarini oku",
                 "hata kodlarini oku",
                 "arizalar neler",
