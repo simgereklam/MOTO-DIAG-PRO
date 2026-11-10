@@ -1,9 +1,14 @@
 package com.efemoto.motodiagpro
 
 import android.app.Activity
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -11,28 +16,30 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Vosk ve SmolLM2 360M modelleri derleme sırasında APK assets içine paketlenir.
- * Telefonda ilk açılışta yalnızca uygulama alanına kopyalanır; internet gerekmez.
+ * Seyfi Usta'nın tek giriş noktası.
+ * Kullanıcı sesi Vosk/ASR üzerinden metne çevrilmez; 16 kHz WAV doğrudan
+ * Gemma 4 E2B'nin yerel ses girişine verilir. Model ilk kurulumda Wi-Fi
+ * üzerinden indirilir, sonraki kullanımlarda tamamen cihaz üzerinde çalışır.
  */
 class SeyfiUstaAI(
     private val activity: Activity,
-    private val onCommandRecognized: (String) -> Unit,
+    @Suppress("unused") private val onCommandRecognized: (String) -> Unit,
     private val onVoiceStatusChanged: (String) -> Unit = {},
-    private val onAppAction: (String) -> String = { "Uygulama işlem köprüsü hazır değil." }
+    private val onAppAction: (String) -> String = { "Uygulama işlem köprüsü hazır değil." },
+    private val onVoiceResponse: (String) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "SeyfiUstaAI"
-        private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
-        private const val MODEL_ASSET_NAME = "seyfi_model.litertlm"
-        // SmolLM2 360M IT int4 QAT: 584,417,280 bayt (LiteRT Community model card).
-        private const val MIN_MODEL_BYTES = 360_000_000L
-        private const val MAX_MODEL_BYTES = 390_000_000L
+        private const val MODEL_FILE_NAME = "gemma-4-E2B-it.litertlm"
+        private const val MODEL_URL =
+            "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm?download=true"
+        private const val MIN_MODEL_BYTES = 2_400_000_000L
+        private const val MAX_MODEL_BYTES = 2_800_000_000L
     }
 
-    private val voice = OfflineVoiceAssistant(
+    private val voice = DirectAudioAssistant(
         activity = activity,
-        onRecognized = { text -> onCommandRecognized(text) },
+        onAudioCaptured = { wav -> handleVoiceAudio(wav) },
         onStatus = { status ->
             Log.d(TAG, status)
             activity.runOnUiThread {
@@ -46,29 +53,38 @@ class SeyfiUstaAI(
         com.google.ai.edge.litertlm.tool(SeyfiAppTools(onAppAction))
     )
     private val modelExecutor = Executors.newSingleThreadExecutor()
-    // Yerel model yanıt üretirken takılırsa sesli asistan sonsuza kadar mikrofonu kapalı tutmasın.
     private val chatTimeoutExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val modelTaskStarted = AtomicBoolean(false)
-    // Sohbet istekleri tek tek işlenir; aynı Conversation üzerinde paralel üretim yoktur.
     private val chatInProgress = AtomicBoolean(false)
+    private val readyNotified = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
+
     @Volatile private var initialized = false
-    @Volatile private var modelStatus = "APK içindeki Seyfi Usta yapay zekâsı hazırlanıyor."
+    @Volatile private var voiceReady = false
+    @Volatile private var modelReady = false
+    @Volatile private var modelStatus = "Gemma 4 E2B yerel modeli hazırlanıyor."
+    @Volatile private var readyCallback: (() -> Unit)? = null
 
     fun initialize(onReady: () -> Unit) {
-        if (initialized) {
-            onReady()
+        readyCallback = onReady
+        if (readyNotified.get()) {
+            activity.runOnUiThread { onReady() }
             return
         }
-        initialized = true
-        // Ses tanıma başlatılırken APK'ya gömülü yapay zekâ da arka planda
-        // hazırlanır. İlk sohbet için internetten model indirme beklenmez.
-        try {
-            voice.initialize(onReady)
+        if (!initialized) {
+            initialized = true
+            voice.initialize {
+                voiceReady = true
+                maybeNotifyReady()
+            }
             startModelLoading()
-        } catch (e: Exception) {
-            Log.e(TAG, "Asistan başlatılamadı", e)
-            onReady()
+        }
+    }
+
+    private fun maybeNotifyReady() {
+        if (voiceReady && modelReady && readyNotified.compareAndSet(false, true)) {
+            publishModelStatus("Seyfi Usta doğrudan ses anlayan Gemma 4 yapay zekâsı hazır.")
+            activity.runOnUiThread { readyCallback?.invoke() }
         }
     }
 
@@ -85,109 +101,153 @@ class SeyfiUstaAI(
         modelExecutor.execute {
             try {
                 val modelFile = ensureModelFile()
-                publishModelStatus("Seyfi Usta yerel yapay zekâsı başlatılıyor.")
+                publishModelStatus("Gemma 4 E2B modeli açılıyor; telefonun belleği hazırlanıyor.")
                 brain.initialize(modelFile) { success, message ->
-                    modelStatus = if (success) {
-                        "Seyfi Usta yerel yapay zekâsı hazır."
+                    if (success) {
+                        modelReady = true
+                        modelStatus = "Gemma 4 E2B hazır."
+                        publishModelStatus("Gemma 4 E2B yerel yapay zekâsı hazır.")
+                        maybeNotifyReady()
+                        drainPendingChats()
                     } else {
                         modelTaskStarted.set(false)
-                        "Seyfi Usta yapay zekâ başlatılamadı: $message"
+                        publishModelStatus("Gemma 4 E2B başlatılamadı: $message")
+                        failPendingChats(modelStatus)
                     }
-                    publishModelStatus(modelStatus)
-                    if (success) drainPendingChats() else failPendingChats(modelStatus)
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
-                val failure = "APK içindeki Seyfi Usta modeli hazırlanamadı: ${e.message}"
-                publishModelStatus(failure)
-                activity.runOnUiThread { failPendingChats(failure) }
+                publishModelStatus("Gemma 4 E2B hazırlanamadı: ${e.message}")
+                activity.runOnUiThread { failPendingChats(modelStatus) }
             }
         }
     }
 
-    /** Model APK assets içinden kopyalanır; çalışma anında internet bağlantısı kullanılmaz. */
     private fun ensureModelFile(): File {
         val target = File(activity.filesDir, MODEL_FILE_NAME)
         if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-            publishModelStatus("Seyfi Usta yapay zekâ modeli uygulamada hazır.")
+            publishModelStatus("Gemma 4 E2B modeli telefonda mevcut.")
             return target
         }
         if (target.exists()) target.delete()
-
         val partial = File(activity.filesDir, "$MODEL_FILE_NAME.part")
-        if (partial.exists()) partial.delete()
+        if (partial.length() > MAX_MODEL_BYTES) partial.delete()
 
-        publishModelStatus("APK içindeki yapay zekâ modeli telefona hazırlanıyor.")
+        if (partial.length() < MIN_MODEL_BYTES) {
+            val manager = activity.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            val network = manager.activeNetwork
+            val capabilities = network?.let { manager.getNetworkCapabilities(it) }
+            if (capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) != true) {
+                throw IllegalStateException(
+                    "Gemma 4 E2B modeli yaklaşık 2,58 GB. Mobil veri kullanmamak için Wi-Fi ağına bağlanıp uygulamayı yeniden açın."
+                )
+            }
+            downloadModel(partial)
+        }
+
+        if (partial.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
+            throw IllegalStateException("Model dosyası eksik veya geçersiz: ${partial.length()} bayt.")
+        }
+        if (!partial.renameTo(target)) {
+            throw IllegalStateException("Gemma modeli uygulama alanına taşınamadı.")
+        }
+        publishModelStatus("Gemma 4 E2B modeli indirildi ve doğrulandı.")
+        return target
+    }
+
+    private fun downloadModel(partial: File) {
+        var offset = partial.length()
+        val connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 30_000
+            readTimeout = 90_000
+            instanceFollowRedirects = true
+            if (offset > 0L) setRequestProperty("Range", "bytes=$offset-")
+        }
         try {
-            activity.assets.open(MODEL_ASSET_NAME).use { input ->
-                FileOutputStream(partial).use { output ->
+            connection.connect()
+            val code = connection.responseCode
+            if (offset > 0L && code != HttpURLConnection.HTTP_PARTIAL) {
+                partial.delete()
+                offset = 0L
+            }
+            if (code !in listOf(HttpURLConnection.HTTP_OK, HttpURLConnection.HTTP_PARTIAL)) {
+                throw IllegalStateException("Model indirme sunucusu HTTP $code döndürdü.")
+            }
+            val append = offset > 0L && code == HttpURLConnection.HTTP_PARTIAL
+            val initialBytes = if (append) offset else 0L
+            val declaredLength = connection.getHeaderFieldLong("Content-Length", -1L)
+            val totalBytes = if (declaredLength > 0L) initialBytes + declaredLength else -1L
+            var lastReport = -1
+            FileOutputStream(partial, append).use { output ->
+                connection.inputStream.use { input ->
                     val buffer = ByteArray(1024 * 1024)
-                    var total = 0L
+                    var downloaded = initialBytes
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
-                        total += count
-                        if (total > MAX_MODEL_BYTES) {
-                            throw IllegalStateException("APK içindeki yapay zekâ modeli beklenen boyutu aşıyor.")
+                        downloaded += count
+                        if (downloaded > MAX_MODEL_BYTES) {
+                            throw IllegalStateException("İndirilen model beklenen boyutu aşıyor.")
                         }
                         output.write(buffer, 0, count)
+                        val percent = if (totalBytes > 0L) {
+                            ((downloaded * 100L) / totalBytes).toInt().coerceIn(0, 100)
+                        } else -1
+                        if (percent >= 0 && percent / 20 > lastReport / 20) {
+                            lastReport = percent
+                            publishModelStatus("Gemma 4 E2B modeli indiriliyor: %$percent")
+                        }
                     }
                     output.fd.sync()
                 }
             }
-
-            if (partial.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-                throw IllegalStateException(
-                    "APK içindeki yapay zekâ modeli eksik veya geçersiz (${partial.length()} bayt)."
-                )
-            }
-            if (!partial.renameTo(target)) {
-                throw IllegalStateException("Yapay zekâ modeli uygulama alanına kopyalanamadı.")
-            }
-            publishModelStatus("APK içindeki yapay zekâ modeli hazır; yerel motor başlatılıyor.")
-            return target
-        } catch (e: Exception) {
-            partial.delete()
-            throw e
+        } finally {
+            connection.disconnect()
         }
     }
 
     fun getModelStatus(): String = modelStatus
-    fun getVoiceStatus(): String = voice.getStatus()
+    fun getVoiceStatus(): String = if (voice.isListening()) "Doğrudan ses dinleniyor." else "Ses beklemede."
     fun speak(text: String, onDone: (() -> Unit)? = null) = voice.speak(text, onDone)
     fun startListening() = voice.startListening()
     fun pauseForProcessing() = voice.pauseForProcessing()
     fun stopListening() = voice.stopListening()
     fun isListening(): Boolean = voice.isListening()
 
+    private fun handleVoiceAudio(wav: ByteArray) {
+        voice.pauseForProcessing()
+        publishModelStatus("Konuşma doğrudan Gemma 4 tarafından dinleniyor ve yorumlanıyor.")
+        if (!brain.isReady()) {
+            val failure = "Gemma 4 henüz hazır değil. Model durumunu kontrol edin."
+            onVoiceResponse(failure)
+            voice.speak(failure)
+            return
+        }
+        brain.askAudio(wav) { answer ->
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                onVoiceResponse(answer)
+                speak(answer)
+            }
+        }
+    }
+
     fun chat(message: String, onAnswer: (String) -> Unit) {
         val cleanMessage = message.trim()
         if (cleanMessage.isEmpty()) return
-
         val pending = cleanMessage to onAnswer
         pendingChats.add(pending)
-
         if (brain.isReady()) {
             drainPendingChats()
             return
         }
-
-        publishModelStatus("Yerel model hazırlanıyor; mesaj sıraya alındı.")
-        // Model yükleme başarısız veya takılmışsa bekleyen isteği sonsuza kadar tutma.
+        publishModelStatus("Gemma 4 hazırlanıyor; yazılı mesaj sıraya alındı.")
         chatTimeoutExecutor.schedule({
             if (pendingChats.remove(pending)) {
-                val failure = "Yerel yapay zekâ 30 saniye içinde hazır olmadı. Model yükleme durumunu kontrol edin."
-                publishModelStatus("Model hazır olmadığı için bekleyen mesaj sonlandırıldı.")
-                activity.runOnUiThread {
-                    try {
-                        onAnswer(failure)
-                    } finally {
-                        speak(failure)
-                    }
-                }
+                val failure = "Gemma 4 henüz hazır değil. Model indirme/yükleme durumunu kontrol edin."
+                activity.runOnUiThread { onAnswer(failure) }
             }
-        }, 30, TimeUnit.SECONDS)
-
+        }, 180, TimeUnit.SECONDS)
         if (!modelTaskStarted.get()) startModelLoading()
     }
 
@@ -197,75 +257,39 @@ class SeyfiUstaAI(
         onFinished: () -> Unit
     ) {
         publishModelStatus("Seyfi Usta yanıt hazırlıyor.")
-        Log.i(TAG, "Yerel model isteği başladı: ${message.take(240)}")
-
-        val reported = AtomicBoolean(false)
-        // Bu süre yalnızca kullanıcıya durum bildirir. Native üretimi iptal ettiği
-        // iddia edilmez ve yeni istek başlatılmaz; gerçek callback gelince kuyruk açılır.
         val watchdog = chatTimeoutExecutor.schedule({
-            if (reported.compareAndSet(false, true)) {
-                val warning = "Usta, yerel modelden 90 saniyedir yanıt gelmedi. İşlem hâlâ cihazda sürüyor olabilir; aynı anda yeni soru göndermiyorum. Uygulama yanıt vermezse yeniden başlatın."
-                publishModelStatus("Yerel model yanıtı gecikti; mevcut işlem güvenli biçimde bekleniyor.")
-                activity.runOnUiThread {
-                    try {
-                        onAnswer(warning)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Bekleme uyarısı ekrana aktarılamadı", e)
-                    } finally {
-                        speak(warning)
-                    }
-                }
-            }
-        }, 90, TimeUnit.SECONDS)
+            publishModelStatus("Yapay zekâ yanıtı gecikiyor; cihaz üzerindeki işlem sürüyor.")
+        }, 120, TimeUnit.SECONDS)
 
         try {
             brain.chat(message) { answer ->
                 watchdog.cancel(false)
-                if (reported.compareAndSet(false, true)) {
-                    Log.i(TAG, "Yerel model yanıtı alındı: ${answer.take(600)}")
-                    activity.runOnUiThread {
-                        try {
-                            onAnswer(answer)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
-                        } finally {
-                            speak(answer)
-                        }
-                    }
-                } else {
-                    Log.w(TAG, "Gecikme uyarısından sonra gerçek yanıt geldi.")
-                }
-                // Model callback'i gerçekten tamamlandı; sıradaki mesaja ancak şimdi geç.
-                activity.runOnUiThread { onFinished() }
-            }
-        } catch (e: Exception) {
-            watchdog.cancel(false)
-            if (reported.compareAndSet(false, true)) {
-                val failure = "Yerel yapay zekâ yanıt üretemedi: ${e.message}"
                 activity.runOnUiThread {
                     try {
-                        onAnswer(failure)
+                        onAnswer(answer)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Yanıt ekrana aktarılamadı", e)
                     } finally {
-                        speak(failure)
                         onFinished()
                     }
                 }
-            } else {
-                activity.runOnUiThread { onFinished() }
+            }
+        } catch (e: Exception) {
+            watchdog.cancel(false)
+            activity.runOnUiThread {
+                onAnswer("Yerel yapay zekâ yanıt üretemedi: ${e.message}")
+                onFinished()
             }
         }
     }
 
     private fun drainPendingChats() {
-        if (!brain.isReady()) return
-        if (!chatInProgress.compareAndSet(false, true)) return
-
+        if (!brain.isReady() || !chatInProgress.compareAndSet(false, true)) return
         val pending = pendingChats.poll()
         if (pending == null) {
             chatInProgress.set(false)
             return
         }
-
         answerWithBrain(pending.first, pending.second) {
             chatInProgress.set(false)
             drainPendingChats()
@@ -276,8 +300,7 @@ class SeyfiUstaAI(
         while (true) {
             val pending = pendingChats.poll() ?: break
             val answer = "Yerel yapay zekâ başlatılamadı. $reason"
-            pending.second(answer)
-            speak(answer)
+            activity.runOnUiThread { pending.second(answer) }
         }
     }
 
