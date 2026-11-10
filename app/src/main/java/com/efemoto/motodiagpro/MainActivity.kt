@@ -155,18 +155,12 @@ class MainActivity : ComponentActivity() {
                     "izin gerekli", "hazır değil", "bulunamadı", "kullanılamıyor",
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
-                val isModelProgress = status.contains(
-                    "Seyfi Usta yapay zekâ modeli indiriliyor",
-                    ignoreCase = true
-                )
-                val isModelReady = status.contains(
-                    "Seyfi Usta yerel yapay zekâsı hazır",
-                    ignoreCase = true
-                )
-                val isVoiceListening = status.contains(
-                    "Seyfi Usta çevrimdışı dinliyor",
-                    ignoreCase = true
-                )
+                val isModelProgress = status.contains("Gemma 4 E2B modeli indiriliyor", ignoreCase = true) ||
+                    status.contains("Gemma 4 E2B modeli açılıyor", ignoreCase = true)
+                val isModelReady = status.contains("Gemma 4 yapay zekâsı hazır", ignoreCase = true) ||
+                    status.contains("Gemma 4 E2B yerel yapay zekâsı hazır", ignoreCase = true)
+                val isVoiceListening = status.contains("Seyfi Usta doğrudan sesi dinliyor", ignoreCase = true) ||
+                    status.contains("Seyfi Usta yeniden dinliyor", ignoreCase = true)
                 val isWakeDetected = status.contains(
                     "Seyfi Usta uyandırma sözünü algıladı",
                     ignoreCase = true
@@ -202,14 +196,21 @@ class MainActivity : ComponentActivity() {
                     ).show()
                 }
             },
-            onAppAction = { action -> executeSeyfiAppAction(action) }
+            onAppAction = { action -> executeSeyfiAppAction(action) },
+            onVoiceResponse = { answer ->
+                seyfiChatHistory.append("SİZ: [Sesli konuşma]\n\n")
+                seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
+                log("Seyfi Usta doğrudan ses yanıtı: $answer")
+                if (currentScreen == "SEYFI") showSeyfiChat()
+                Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
+            }
         )
         seyfiUstaAI = assistant
         assistant.initialize {
             if (startVoice) {
                 assistant.speak(
                     "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
-                        "Bana Seyfi Usta diye seslenin."
+                        "Artık beni uyandırma sözü söylemeden, normal konuşarak isteğinizi anlatabilirsiniz."
                 ) {
                     assistant.startListening()
                 }
