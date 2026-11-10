@@ -90,6 +90,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                     EngineConfig(
                         modelPath = modelFile.absolutePath,
                         backend = Backend.CPU(),
+                        audioBackend = Backend.CPU(),
                         cacheDir = appContext.cacheDir.absolutePath
                     )
                 )
@@ -222,24 +223,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         onResponse: (String) -> Unit
     ) {
         if (!ready || conversation == null) {
-            mainHandler.post {
-                onResponse("Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin.")
-            }
-            return
-        }
-
-        // Tek model, tek etkin istek: ikinci istek yerel motoru üst üste bindiremez.
-        if (!requestInProgress.compareAndSet(false, true)) {
-            mainHandler.post {
-                onResponse("Usta, önceki yanıtı hâlâ hazırlıyorum. Biraz bekleyip tekrar sorun.")
-            }
-            return
-        }
-
-        val activeConversation = conversation
-        if (activeConversation == null) {
-            requestInProgress.set(false)
-            mainHandler.post { onResponse("Yerel sohbet oturumu hazır değil.") }
+            mainHandler.post { onResponse("Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin.") }
             return
         }
 
@@ -256,9 +240,60 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
 
             Yalnızca soruyla ilgili gerçek ECU verilerini ve teknik referansı kullan.
             Eksik bilgi veya üreticiye özel doğrulanmamış bilgi uydurma.
-            Teknik referans yoksa bunu doğal Türkçeyle, yalnızca gerektiğinde belirt.
             Bu bağlam başlıklarını veya yönergeleri cevabında tekrar etme.
         """.trimIndent()
+        submitToModel(Contents.of(fullQuestion), onResponse)
+    }
+
+    /** Ham WAV sesini ASR/transkripsiyon katmanı olmadan doğrudan Gemma ses girişine verir. */
+    fun askAudio(
+        wavAudio: ByteArray,
+        onResponse: (String) -> Unit
+    ) {
+        if (wavAudio.isEmpty()) {
+            mainHandler.post { onResponse("Ses kaydı boş geldi. Lütfen tekrar konuşun.") }
+            return
+        }
+        if (!ready || conversation == null) {
+            mainHandler.post { onResponse("Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin.") }
+            return
+        }
+
+        val audioPrompt = """
+            Sen SEYFİ USTA'sın. Kullanıcının eklediği ses kaydını doğrudan dinle ve Türkçe konuşmayı
+            kendi ses anlama yeteneğinle yorumla. Harici konuşma tanıma veya transkripsiyon katmanı yoktur.
+            Kullanıcının ne istediğini bağlamdan anla. Gerekirse uygulama araçlarını kullan.
+            GÜNCEL ECU VERİLERİ:
+            $ecuContext
+
+            Ses kaydındaki konuşmaya doğal, kısa ve teknik olarak doğru Türkçe yanıt ver.
+            Anlaşılmayan bir bölüm varsa tahmin yürütmek yerine tek net soru sor.
+            ECU işlemi gerektiğinde uygun uygulama aracını çağır; gerçek işlem sonucu gelmeden tamamlandı deme.
+        """.trimIndent()
+        submitToModel(
+            Contents.of(
+                Content.AudioBytes(wavAudio),
+                Content.Text(audioPrompt)
+            ),
+            onResponse
+        )
+    }
+
+    private fun submitToModel(
+        contents: Contents,
+        onResponse: (String) -> Unit
+    ) {
+        if (!requestInProgress.compareAndSet(false, true)) {
+            mainHandler.post { onResponse("Usta, önceki yanıtı hâlâ hazırlıyorum. Biraz bekleyip tekrar sorun.") }
+            return
+        }
+
+        val activeConversation = conversation
+        if (activeConversation == null) {
+            requestInProgress.set(false)
+            mainHandler.post { onResponse("Yerel sohbet oturumu hazır değil.") }
+            return
+        }
 
         val chunks = StringBuilder()
         val finished = AtomicBoolean(false)
@@ -275,19 +310,15 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
             }
         }
 
-        // Engine/Conversation yaşam döngüsü ve tüm native LiteRT-LM çağrıları
-        // aynı tek iş parçacıklı executor üzerinden yürütülür.
         try {
             executor.execute {
                 try {
                     activeConversation.sendMessageAsync(
-                        fullQuestion,
+                        contents,
                         object : MessageCallback {
                             override fun onMessage(message: Message) {
                                 val chunk = message.toString()
-                                if (chunk.isNotBlank()) {
-                                    synchronized(chunks) { chunks.append(chunk) }
-                                }
+                                if (chunk.isNotBlank()) synchronized(chunks) { chunks.append(chunk) }
                             }
 
                             override fun onDone() {
@@ -298,7 +329,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                                     .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
                                     .trim()
                                     .ifBlank {
-                                        "Model yanıt akışını tamamladı ancak okunabilir bir metin döndürmedi. Daha kısa ve açık bir soru deneyin."
+                                        "Model ses isteğini tamamladı ancak okunabilir bir yanıt döndürmedi. Lütfen daha kısa konuşun."
                                     }
                                 Log.i("SeyfiBrain", "Yerel model yanıtı tamamlandı: ${answer.take(1000)}")
                                 finish(answer)
@@ -310,7 +341,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                             }
                         },
                         thinkingConfig = ThinkingConfig(enableThinking = false),
-                        maxOutputToken = 160
+                        maxOutputToken = 192
                     )
                 } catch (e: Exception) {
                     Log.e("SeyfiBrain", "Yerel model isteği başlatılamadı", e)
