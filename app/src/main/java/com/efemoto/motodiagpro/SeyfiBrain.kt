@@ -92,10 +92,8 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val newConversation = newEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemPrompt),
-                        // Qwen3 bir düşünme modelidir. Düşünme açıkken 256 tokenlık
-                        // sınırın tamamını iç düşünce tüketebiliyor ve kullanıcıya
-                        // gösterilecek son yanıt boş kalabiliyor. Seyfi Usta sohbetinde
-                        // düşünmeyi kapatıp doğrudan yanıt üretmesini sağla.
+                        // Gemma 3 1B sohbetinde düşünme kanalı kullanılmaz; doğrudan
+                        // kullanıcıya gösterilecek yanıtı üretmesi için kapalı tutulur.
                         thinkingConfig = ThinkingConfig(enableThinking = false),
                         tools = if (appTools != null) listOf(appTools) else emptyList(),
                         automaticToolCalling = true,
@@ -245,7 +243,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                     "Qwen yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
                 )
 
-                // Qwen3 bazı yapılandırmalarda düşünme kanalını metinle birlikte döndürebilir.
+                // Model yanıtında düşünme etiketi bulunursa kullanıcıya gösterme.
                 // Kullanıcıya yalnızca son yanıtı göster; ham iç muhakemeyi gösterme.
                 val answer = rawAnswer
                     .substringAfter("</think>", rawAnswer)
