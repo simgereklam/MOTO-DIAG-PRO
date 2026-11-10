@@ -155,12 +155,11 @@ class MainActivity : ComponentActivity() {
                     "izin gerekli", "hazır değil", "bulunamadı", "kullanılamıyor",
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
-                val isModelProgress = status.contains(
-                    "Seyfi Usta yapay zekâ modeli indiriliyor",
-                    ignoreCase = true
-                )
+                val isModelProgress =
+                    status.contains("Gemma 4 E2B indiriliyor", ignoreCase = true) ||
+                    status.contains("Gemma 4 E2B indirildi", ignoreCase = true)
                 val isModelReady = status.contains(
-                    "Seyfi Usta yerel yapay zekâsı hazır",
+                    "Gemma 4 E2B yerel yapay zekâsı hazır",
                     ignoreCase = true
                 )
                 val isVoiceListening = status.contains(
