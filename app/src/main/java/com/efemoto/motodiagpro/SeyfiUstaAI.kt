@@ -4,6 +4,9 @@ import android.app.Activity
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import android.os.StatFs
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -12,8 +15,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Vosk ve SmolLM2 360M modelleri derleme sırasında APK assets içine paketlenir.
- * Telefonda ilk açılışta yalnızca uygulama alanına kopyalanır; internet gerekmez.
+ * Türkçe Vosk dinleme modeli APK'da kalır; Gemma 4 E2B modeli ilk açılışta
+ * uygulamanın özel depolamasına indirilir ve sonraki açılışlarda çevrimdışı kullanılır.
  */
 class SeyfiUstaAI(
     private val activity: Activity,
@@ -23,11 +26,10 @@ class SeyfiUstaAI(
 ) {
     companion object {
         private const val TAG = "SeyfiUstaAI"
-        private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
-        private const val MODEL_ASSET_NAME = "seyfi_model.litertlm"
-        // SmolLM2 360M IT int4 QAT: 584,417,280 bayt (LiteRT Community model card).
-        private const val MIN_MODEL_BYTES = 360_000_000L
-        private const val MAX_MODEL_BYTES = 390_000_000L
+        private const val MODEL_FILE_NAME = "gemma-4-E2B-it.litertlm"
+        private const val MODEL_URL = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
+        private const val MIN_MODEL_BYTES = 2_500_000_000L
+        private const val MAX_MODEL_BYTES = 2_800_000_000L
     }
 
     private val voice = OfflineVoiceAssistant(
@@ -53,7 +55,7 @@ class SeyfiUstaAI(
     private val chatInProgress = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
-    @Volatile private var modelStatus = "APK içindeki Seyfi Usta yapay zekâsı hazırlanıyor."
+    @Volatile private var modelStatus = "Gemma 4 E2B modeli kontrol ediliyor."
 
     fun initialize(onReady: () -> Unit) {
         if (initialized) {
@@ -105,11 +107,14 @@ class SeyfiUstaAI(
         }
     }
 
-    /** Model APK assets içinden kopyalanır; çalışma anında internet bağlantısı kullanılmaz. */
+    /**
+     * Gemma 4 E2B ilk kurulumda Hugging Face'ten uygulamanın özel alanına indirilir.
+     * İndirme tamamlanmadan .part dosyası motor tarafından kullanılmaz.
+     */
     private fun ensureModelFile(): File {
         val target = File(activity.filesDir, MODEL_FILE_NAME)
         if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-            publishModelStatus("Seyfi Usta yapay zekâ modeli uygulamada hazır.")
+            publishModelStatus("Gemma 4 E2B telefonda kurulu; çevrimdışı başlatılıyor.")
             return target
         }
         if (target.exists()) target.delete()
@@ -117,38 +122,68 @@ class SeyfiUstaAI(
         val partial = File(activity.filesDir, "$MODEL_FILE_NAME.part")
         if (partial.exists()) partial.delete()
 
-        publishModelStatus("APK içindeki yapay zekâ modeli telefona hazırlanıyor.")
+        val freeBytes = StatFs(activity.filesDir.absolutePath).availableBytes
+        if (freeBytes < MIN_MODEL_BYTES + 500_000_000L) {
+            throw IllegalStateException("Gemma 4 için en az 3 GB boş depolama alanı gerekli.")
+        }
+
+        publishModelStatus("Gemma 4 E2B indiriliyor (yaklaşık 2,6 GB). Wi-Fi kullanmanız önerilir.")
+        var connection: HttpURLConnection? = null
         try {
-            activity.assets.open(MODEL_ASSET_NAME).use { input ->
+            connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = true
+                connectTimeout = 30_000
+                readTimeout = 90_000
+                requestMethod = "GET"
+                setRequestProperty("User-Agent", "MOTO-DIAG-PRO/1.0")
+            }
+            connection.connect()
+            val response = connection.responseCode
+            if (response != HttpURLConnection.HTTP_OK) {
+                throw IllegalStateException("Model sunucusu HTTP $response yanıtı verdi.")
+            }
+
+            val expectedBytes = connection.contentLengthLong
+            if (expectedBytes !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
+                throw IllegalStateException("Model dosyasının sunucu boyutu beklenenden farklı: $expectedBytes bayt.")
+            }
+
+            var total = 0L
+            var lastPercent = -1
+            connection.inputStream.use { input ->
                 FileOutputStream(partial).use { output ->
                     val buffer = ByteArray(1024 * 1024)
-                    var total = 0L
                     while (true) {
                         val count = input.read(buffer)
                         if (count < 0) break
                         total += count
                         if (total > MAX_MODEL_BYTES) {
-                            throw IllegalStateException("APK içindeki yapay zekâ modeli beklenen boyutu aşıyor.")
+                            throw IllegalStateException("İndirilen model izin verilen boyutu aştı.")
                         }
                         output.write(buffer, 0, count)
+                        val percent = (total * 100L / expectedBytes).toInt()
+                        if (percent != lastPercent && percent % 5 == 0) {
+                            lastPercent = percent
+                            publishModelStatus("Gemma 4 E2B indiriliyor: %$percent")
+                        }
                     }
                     output.fd.sync()
                 }
             }
 
-            if (partial.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-                throw IllegalStateException(
-                    "APK içindeki yapay zekâ modeli eksik veya geçersiz (${partial.length()} bayt)."
-                )
+            if (total != expectedBytes || partial.length() != expectedBytes) {
+                throw IllegalStateException("Model indirmesi eksik. Gelen: $total / Beklenen: $expectedBytes bayt.")
             }
             if (!partial.renameTo(target)) {
-                throw IllegalStateException("Yapay zekâ modeli uygulama alanına kopyalanamadı.")
+                throw IllegalStateException("Gemma 4 modeli uygulama alanına taşınamadı.")
             }
-            publishModelStatus("APK içindeki yapay zekâ modeli hazır; yerel motor başlatılıyor.")
+            publishModelStatus("Gemma 4 E2B indirildi; yerel motor başlatılıyor.")
             return target
         } catch (e: Exception) {
             partial.delete()
             throw e
+        } finally {
+            connection?.disconnect()
         }
     }
 
@@ -172,7 +207,7 @@ class SeyfiUstaAI(
             return
         }
 
-        publishModelStatus("Yerel model hazırlanıyor; mesaj sıraya alındı.")
+        publishModelStatus("Gemma 4 hazırlanıyor; mesaj sıraya alındı.")
         // Model yükleme başarısız veya takılmışsa bekleyen isteği sonsuza kadar tutma.
         chatTimeoutExecutor.schedule({
             if (pendingChats.remove(pending)) {
