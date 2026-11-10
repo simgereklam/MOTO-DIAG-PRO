@@ -55,6 +55,8 @@ class SeyfiUstaAI(
     private val chatInProgress = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
+    @Volatile private var voiceReady = false
+    @Volatile private var initializationCallback: (() -> Unit)? = null
     @Volatile private var modelStatus = "Gemma 4 E2B modeli kontrol ediliyor."
 
     fun initialize(onReady: () -> Unit) {
@@ -63,14 +65,27 @@ class SeyfiUstaAI(
             return
         }
         initialized = true
-        // Ses tanıma başlatılırken APK'ya gömülü yapay zekâ da arka planda
-        // hazırlanır. İlk sohbet için internetten model indirme beklenmez.
+        initializationCallback = onReady
+        // Mikrofonu, Gemma 4 gerçekten açılıp deneme çıkarımı tamamlanmadan
+        // komut dinlemeye başlatma. İlk kurulumda model indirmesi beklenir.
         try {
-            voice.initialize(onReady)
+            voice.initialize {
+                voiceReady = true
+                completeStartupIfReady()
+            }
             startModelLoading()
         } catch (e: Exception) {
             Log.e(TAG, "Asistan başlatılamadı", e)
             onReady()
+        }
+    }
+
+    private fun completeStartupIfReady() {
+        if (!voiceReady || !brain.isReady()) return
+        val callback = initializationCallback ?: return
+        initializationCallback = null
+        activity.runOnUiThread {
+            if (!activity.isFinishing && !activity.isDestroyed) callback()
         }
     }
 
@@ -96,7 +111,12 @@ class SeyfiUstaAI(
                         "Seyfi Usta yapay zekâ başlatılamadı: $message"
                     }
                     publishModelStatus(modelStatus)
-                    if (success) drainPendingChats() else failPendingChats(modelStatus)
+                    if (success) {
+                        completeStartupIfReady()
+                        drainPendingChats()
+                    } else {
+                        failPendingChats(modelStatus)
+                    }
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
@@ -357,5 +377,7 @@ class SeyfiUstaAI(
         modelExecutor.shutdownNow()
         chatTimeoutExecutor.shutdownNow()
         initialized = false
+        voiceReady = false
+        initializationCallback = null
     }
 }
