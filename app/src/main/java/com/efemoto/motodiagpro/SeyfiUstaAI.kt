@@ -102,13 +102,13 @@ class SeyfiUstaAI(
         modelExecutor.execute {
             try {
                 val modelFile = ensureModelFile()
-                publishModelStatus("Seyfi Usta yerel yapay zekâsı başlatılıyor.")
+                publishModelStatus("Gemma 4 E2B yerel yapay zekâsı başlatılıyor.")
                 brain.initialize(modelFile) { success, message ->
                     modelStatus = if (success) {
-                        "Seyfi Usta yerel yapay zekâsı hazır."
+                        "Gemma 4 E2B yerel yapay zekâsı hazır."
                     } else {
                         modelTaskStarted.set(false)
-                        "Seyfi Usta yapay zekâ başlatılamadı: $message"
+                        "Gemma 4 E2B başlatılamadı: $message"
                     }
                     publishModelStatus(modelStatus)
                     if (success) {
@@ -120,7 +120,7 @@ class SeyfiUstaAI(
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
-                val failure = "APK içindeki Seyfi Usta modeli hazırlanamadı: ${e.message}"
+                val failure = "Gemma 4 E2B modeli hazırlanamadı: ${e.message}"
                 publishModelStatus(failure)
                 activity.runOnUiThread { failPendingChats(failure) }
             }
