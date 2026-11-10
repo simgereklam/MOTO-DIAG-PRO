@@ -3,6 +3,7 @@ package com.efemoto.motodiagpro
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
@@ -29,6 +30,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     @Volatile private var ready = false
     @Volatile private var ecuContext = "Henüz ECU verisi alınmadı."
     private val requestInProgress = AtomicBoolean(false)
+    private val resourcesCloseStarted = AtomicBoolean(false)
     @Volatile private var closeRequested = false
 
     private val systemPrompt = """
@@ -253,8 +255,11 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
             if (!finished.compareAndSet(false, true)) return
             requestInProgress.set(false)
             mainHandler.post {
-                onResponse(answer)
-                if (closeRequested) closeResources()
+                try {
+                    onResponse(answer)
+                } finally {
+                    if (closeRequested) closeResources()
+                }
             }
         }
 
@@ -306,7 +311,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     }
 
     private fun closeResources() {
-        if (!closeRequested) return
+        if (!closeRequested || !resourcesCloseStarted.compareAndSet(false, true)) return
         executor.execute {
             try {
                 conversation?.close()
