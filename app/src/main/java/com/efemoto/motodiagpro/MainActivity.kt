@@ -95,6 +95,7 @@ class MainActivity : ComponentActivity() {
     private var lastSeyfiPartialToastAt = 0L
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
+    @Volatile private var seyfiChatMode = false
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -342,7 +343,33 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        // "Sohbet" özel bir oturum açar. Oturum boyunca doğal cümleler
+        // yerel Qwen'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
+        val normalizedInput = commandInput.lowercase(java.util.Locale("tr", "TR")).trim()
+        if (normalizedInput in setOf("sohbet", "sohbet modu", "sohbete gec", "sohbet baslat")) {
+            seyfiChatMode = true
+            seyfiAwaitingCommand = false
+            log("Seyfi Usta sohbet modu açıldı.")
+            assistant.speak("Sohbet modundayım ustam. Bana istediğinizi doğal şekilde sorabilirsiniz.")
+            return
+        }
+
+        val exitChat = normalizedInput in setOf(
+            "sohbeti kapat", "sohbeti bitir", "sohbet modundan cik",
+            "komut moduna gec", "normal komut modu"
+        )
+        if (seyfiChatMode && exitChat) {
+            seyfiChatMode = false
+            seyfiAwaitingCommand = false
+            assistant.speak("Sohbet modundan çıktım. Komutlarınızı dinliyorum.")
+            return
+        }
+
         seyfiAwaitingCommand = false
+        if (seyfiChatMode && commandInput.isNotBlank()) {
+            sendSeyfiChatMessage(commandInput)
+            return
+        }
         val command = seyfiCommandHandler.handle(commandInput)
 
         log("Seyfi Usta komutu: $rawCommand → ${command.action}")
@@ -432,23 +459,23 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Genel soruyu doğrudan yerel Qwen modeline gönder.
-                // Sabit bir sesli karşılama cümlesi kullanma: kullanıcıya her seferinde
-                // aynı cevabı veriyormuş izlenimi oluşturuyordu.
-                seyfiChatHistory.append("SİZ: ").append(commandInput).append("\n\n")
-                Toast.makeText(
-                    this,
-                    "SEYFİ USTA: Soru yerel yapay zekâya gönderildi.",
-                    Toast.LENGTH_LONG
-                ).show()
-
-                assistant.chat(commandInput) { answer ->
-                    log("Seyfi Usta yanıtı: $answer")
-                    seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
-                    if (currentScreen == "SEYFI") showSeyfiChat()
-                    Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
-                }
+                // Komut olmayan doğal dil mesajlarını yerel Qwen'e aktar.
+                sendSeyfiChatMessage(commandInput)
             }
+        }
+    }
+
+    private fun sendSeyfiChatMessage(message: String) {
+        val assistant = seyfiUstaAI ?: return
+        if (message.isBlank()) return
+        seyfiChatHistory.append("SİZ: ").append(message).append("\n\n")
+        if (currentScreen == "SEYFI") showSeyfiChat()
+        Toast.makeText(this, "SEYFİ USTA: Yerel yapay zekâ yanıt hazırlıyor.", Toast.LENGTH_SHORT).show()
+        assistant.chat(message) { answer ->
+            log("Seyfi Usta yanıtı: $answer")
+            seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
+            if (currentScreen == "SEYFI") showSeyfiChat()
+            Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
         }
     }
 
