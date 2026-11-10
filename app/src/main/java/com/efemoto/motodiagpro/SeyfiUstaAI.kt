@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Vosk ve Qwen modelleri derleme sırasında APK assets içine paketlenir.
+ * Vosk ve Gemma 3 1B modelleri derleme sırasında APK assets içine paketlenir.
  * Telefonda ilk açılışta yalnızca uygulama alanına kopyalanır; internet gerekmez.
  */
 class SeyfiUstaAI(
@@ -25,8 +25,9 @@ class SeyfiUstaAI(
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "seyfi_model.litertlm"
         private const val MODEL_ASSET_NAME = "seyfi_model.litertlm"
-        private const val MIN_MODEL_BYTES = 300_000_000L
-        private const val MAX_MODEL_BYTES = 400_000_000L
+        // Gemma 3 1B IT int4 QAT: 584,417,280 bayt (LiteRT Community model card).
+        private const val MIN_MODEL_BYTES = 570_000_000L
+        private const val MAX_MODEL_BYTES = 600_000_000L
     }
 
     private val voice = OfflineVoiceAssistant(
