@@ -11,6 +11,9 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ThinkingConfig
 import com.google.ai.edge.litertlm.ToolProvider
+import com.google.ai.edge.litertlm.Message
+import com.google.ai.edge.litertlm.MessageCallback
+import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -25,6 +28,8 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     @Volatile private var conversation: Conversation? = null
     @Volatile private var ready = false
     @Volatile private var ecuContext = "Henüz ECU verisi alınmadı."
+    private val requestInProgress = AtomicBoolean(false)
+    @Volatile private var closeRequested = false
 
     private val systemPrompt = """
         Sen SEYFİ USTA'sın: EFE MOTO için çalışan profesyonel motosiklet teşhis ve servis asistanısın.
@@ -202,82 +207,114 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         question: String,
         onResponse: (String) -> Unit
     ) {
-        executor.execute {
-            try {
-                val activeConversation = conversation
-                    ?: throw IllegalStateException(
-                        "Yapay zekâ henüz başlatılmadı. Model dosyasını kontrol edin."
-                    )
-
-                val serviceReference = buildServiceReference(question)
-                val fullQuestion = """
-                    GÜNCEL ECU VERİLERİ:
-                    $ecuContext
-
-                    İLGİLİ TEKNİK REFERANS:
-                    $serviceReference
-
-                    KULLANICININ SORUSU:
-                    $question
-
-                    Yalnızca soruyla ilgili gerçek ECU verilerini ve teknik referansı kullan.
-                    Eksik bilgi veya üreticiye özel doğrulanmamış bilgi uydurma.
-                    Teknik referans yoksa bunu doğal Türkçeyle, yalnızca gerektiğinde belirt.
-                    Bu bağlam başlıklarını veya yönergeleri cevabında tekrar etme.
-                """.trimIndent()
-
-                val response = activeConversation.sendMessage(
-                    fullQuestion,
-                    thinkingConfig = ThinkingConfig(enableThinking = false)
-                )
-                // Bazı LiteRT-LM model şablonları metni contents yerine
-                // final/answer kanalında döndürebilir. İkisini de kontrol et.
-                val contentAnswer = response.contents.toString().trim()
-                val channelAnswer = sequenceOf("final", "answer", "response", "output")
-                    .mapNotNull { response.channels[it] }
-                    .firstOrNull { it.isNotBlank() }
-                    .orEmpty()
-                val rawAnswer = contentAnswer.ifBlank { channelAnswer }
-                android.util.Log.i(
-                    "SeyfiBrain",
-                    "SmolLM2 yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
-                )
-
-                // Model yanıtında düşünme etiketi bulunursa kullanıcıya gösterme.
-                // Kullanıcıya yalnızca son yanıtı göster; ham iç muhakemeyi gösterme.
-                val answer = rawAnswer
-                    .substringAfter("</think>", rawAnswer)
-                    .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
-                    .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
-                    .trim()
-                    .ifBlank { "Bu konuda güvenilir bir yanıt oluşturamadım. Soruyu biraz daha açık anlatır mısınız?" }
-
-                mainHandler.post {
-                    onResponse(answer)
-                }
-
-            } catch (e: Exception) {
-                mainHandler.post {
-                    onResponse(
-                        "Usta şu anda cevap üretemedi: ${e.message}"
-                    )
-                }
+        if (!ready || conversation == null) {
+            mainHandler.post {
+                onResponse("Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin.")
             }
+            return
+        }
+
+        // Tek model, tek etkin istek: ikinci istek yerel motoru üst üste bindiremez.
+        if (!requestInProgress.compareAndSet(false, true)) {
+            mainHandler.post {
+                onResponse("Usta, önceki yanıtı hâlâ hazırlıyorum. Biraz bekleyip tekrar sorun.")
+            }
+            return
+        }
+
+        val activeConversation = conversation
+        if (activeConversation == null) {
+            requestInProgress.set(false)
+            mainHandler.post { onResponse("Yerel sohbet oturumu hazır değil.") }
+            return
+        }
+
+        val serviceReference = buildServiceReference(question)
+        val fullQuestion = """
+            GÜNCEL ECU VERİLERİ:
+            $ecuContext
+
+            İLGİLİ TEKNİK REFERANS:
+            $serviceReference
+
+            KULLANICININ SORUSU:
+            $question
+
+            Yalnızca soruyla ilgili gerçek ECU verilerini ve teknik referansı kullan.
+            Eksik bilgi veya üreticiye özel doğrulanmamış bilgi uydurma.
+            Teknik referans yoksa bunu doğal Türkçeyle, yalnızca gerektiğinde belirt.
+            Bu bağlam başlıklarını veya yönergeleri cevabında tekrar etme.
+        """.trimIndent()
+
+        val chunks = StringBuilder()
+        val finished = AtomicBoolean(false)
+
+        fun finish(answer: String) {
+            if (!finished.compareAndSet(false, true)) return
+            requestInProgress.set(false)
+            mainHandler.post {
+                onResponse(answer)
+                if (closeRequested) closeResources()
+            }
+        }
+
+        try {
+            activeConversation.sendMessageAsync(
+                fullQuestion,
+                object : MessageCallback {
+                    override fun onMessage(message: Message) {
+                        // LiteRT-LM her çağrıda yalnızca yeni metin parçasını verir.
+                        val chunk = message.toString()
+                        if (chunk.isNotBlank()) {
+                            synchronized(chunks) { chunks.append(chunk) }
+                        }
+                    }
+
+                    override fun onDone() {
+                        val raw = synchronized(chunks) { chunks.toString() }
+                        val answer = raw
+                            .substringAfter("</think>", raw)
+                            .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+                            .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
+                            .trim()
+                            .ifBlank {
+                                "Model yanıt akışını tamamladı ancak okunabilir bir metin döndürmedi. Daha kısa ve açık bir soru deneyin."
+                            }
+                        Log.i("SeyfiBrain", "Yerel model yanıtı tamamlandı: ${answer.take(1000)}")
+                        finish(answer)
+                    }
+
+                    override fun onError(throwable: Throwable) {
+                        Log.e("SeyfiBrain", "Yerel model akış hatası", throwable)
+                        finish("Yerel yapay zekâ yanıt üretirken hata verdi: ${throwable.message ?: "Bilinmeyen model hatası"}")
+                    }
+                },
+                thinkingConfig = ThinkingConfig(enableThinking = false)
+            )
+        } catch (e: Exception) {
+            Log.e("SeyfiBrain", "Yerel model isteği başlatılamadı", e)
+            finish("Yerel yapay zekâ başlatılamadı: ${e.message ?: "Bilinmeyen hata"}")
         }
     }
 
     fun close() {
         ready = false
+        closeRequested = true
+        // Devam eden native üretim varken Engine'i kapatma. Yanıtın onDone/onError
+        // callback'i geldiğinde kaynaklar güvenli biçimde kapatılır.
+        if (!requestInProgress.get()) closeResources()
+    }
 
+    private fun closeResources() {
+        if (!closeRequested) return
         executor.execute {
             try {
                 conversation?.close()
                 conversation = null
-
                 engine?.close()
                 engine = null
-
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w("SeyfiBrain", "Model kaynakları kapatılırken hata", e)
             } finally {
                 executor.shutdown()
             }
