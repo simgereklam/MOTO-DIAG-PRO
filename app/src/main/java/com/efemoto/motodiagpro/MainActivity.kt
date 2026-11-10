@@ -341,7 +341,12 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
             // TTS tamamlanınca ses katmanı mikrofonu yeniden açar.
             // Telefonun TTS sesi duyulurken mikrofon kapalı kalır.
-            assistant.speak("Dinliyorum.")
+            assistant.listenDirectAudio { answer ->
+                log("Seyfi Usta doğrudan ses yanıtı: $answer")
+                seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
+                if (currentScreen == "SEYFI") showSeyfiChat()
+                Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
+            }
             return
         }
 
