@@ -351,11 +351,15 @@ class SeyfiUstaCommandHandler {
             )
         }
 
-        if (containsAny(
+        // Tek kelimelik sesli "test" komutunu sohbet modeline göndermeden
+        // doğrudan Sistem Testleri ekranına yönlendir.
+        if (commandText == "test" || containsAny(
                 commandText,
                 "test yap",
                 "testleri goster",
+                "testleri ac",
                 "sistem testi",
+                "sistem testlerini ac",
                 "testler",
                 "iletisim testi"
             )
