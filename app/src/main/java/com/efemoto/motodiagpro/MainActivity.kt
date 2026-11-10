@@ -339,6 +339,8 @@ class MainActivity : ComponentActivity() {
         if (commandInput.isBlank() && wakeDetected) {
             seyfiAwaitingCommand = true
             Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
+            // TTS tamamlanınca ses katmanı mikrofonu yeniden açar.
+            // Telefonun TTS sesi duyulurken mikrofon kapalı kalır.
             assistant.speak("Dinliyorum.")
             return
         }
