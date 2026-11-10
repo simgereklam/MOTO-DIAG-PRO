@@ -115,10 +115,15 @@ class OfflineVoiceAssistant(
 
     private fun initializeTts() {
         try {
-            tts = TextToSpeech(activity) { status ->
-                if (released) return@TextToSpeech
-                val engine = tts
-                if (status == TextToSpeech.SUCCESS && engine != null) {
+            // Android belgesine göre TTS başlatma hatasında onInit(), kurucu
+            // tamamen dönmeden ve tts alanına nesne atanmadan çağrılabilir.
+            // Callback içeriğini ana kuyruğa ertelemek, atama tamamlandıktan
+            // sonra motoru kontrol etmemizi sağlar.
+            val createdEngine = TextToSpeech(activity.applicationContext) { status ->
+                mainHandler.post {
+                    if (released) return@post
+                    val engine = tts
+                    if (status == TextToSpeech.SUCCESS && engine != null) {
                     try {
                         // Önce dili ayarla. Android setLanguage() çağrısı varsayılan sesi
                         // yeniden seçtiği için özel sesi bundan SONRA seçmek gerekir.
@@ -227,9 +232,13 @@ class OfflineVoiceAssistant(
                     ttsReady = false
                     reportStatus("Telefonun metin okuma motoru başlatılamadı.")
                 }
-                ttsInitialized = true
-                completeInitializationIfReady()
+                    ttsInitialized = true
+                    completeInitializationIfReady()
+                }
             }
+            // onInit callback'i yukarıda post edildiği için bu atama callback
+            // işlenmeden önce tamamlanır.
+            tts = createdEngine
         } catch (e: Exception) {
             ttsReady = false
             ttsInitialized = true
@@ -487,7 +496,11 @@ class OfflineVoiceAssistant(
 
         val engine = tts
         if (!ttsReady || engine == null) {
-            reportStatus("Türkçe telefon sesi kullanılamıyor.")
+            val defaultEngine = TextToSpeech.getDefaultEngine() ?: "varsayılan motor yok"
+            reportStatus(
+                "TTS hazır değil (motor: $defaultEngine). " +
+                    "Başlatma sonucu veya motor bağlantısı başarısız; uygulama günlüklerini kontrol edin."
+            )
             onDone?.invoke()
             resumeRecognition()
             return
