@@ -477,7 +477,6 @@ class MainActivity : ComponentActivity() {
             if (currentScreen == "SEYFI") showSeyfiChat()
             Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
         }
-        requestTechnicalResearch(message)
     }
 
     /**
@@ -1917,144 +1916,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun showResearchApiKeyDialog() {
-        val input = EditText(this).apply {
-            hint = "Gemini API anahtarını buraya yapıştırın"
-            setTextColor(white)
-            setHintTextColor(muted)
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setSingleLine(true)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("GEMINI İNTERNET ARAŞTIRMA")
-            .setMessage(
-                "Google AI Studio'dan kendi Gemini API anahtarınızı oluşturup buraya girin. " +
-                    "Anahtar uygulama içinde Android Keystore ile şifrelenerek saklanır. " +
-                    "Google API kullanımı ve arama sorguları ücret veya kota tüketebilir; anahtarınızı kimseyle paylaşmayın."
-            )
-            .setView(input)
-            .setNegativeButton("VAZGEÇ", null)
-            .setNeutralButton("ANAHTARI SİL") { _, _ ->
-                TechnicalResearchAssistant.clearApiKey(this)
-                Toast.makeText(this, "Gemini anahtarı silindi.", Toast.LENGTH_SHORT).show()
-                if (currentScreen == "SEYFI") showSeyfiChat()
-            }
-            .setPositiveButton("ANAHTARI KAYDET") { _, _ ->
-                val key = input.text.toString().trim()
-                try {
-                    TechnicalResearchAssistant.saveApiKey(this, key)
-                    Toast.makeText(this, "İnternet araştırma anahtarı güvenli alana kaydedildi.", Toast.LENGTH_LONG).show()
-                    if (currentScreen == "SEYFI") showSeyfiChat()
-                } catch (e: Exception) {
-                    Toast.makeText(this, "Anahtar kaydedilemedi: " + e.message, Toast.LENGTH_LONG).show()
-                }
-            }
-            .show()
-    }
-
-    private fun shouldUseTechnicalResearch(question: String): Boolean {
-        val q = question.lowercase(Locale("tr", "TR"))
-        val hasDtc = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE).containsMatchIn(question)
-        val terms = listOf(
-            "parça", "parca", "oem", "yedek", "parça numarası", "parca numarasi",
-            "parça kodu", "parca kodu", "katalog", "uyumlu", "uyumluluk",
-            "arıza kodu", "ariza kodu", "dtc", "servis bülteni", "servis dokümanı",
-            "teknik doküman", "internetten", "internette ara", "araştır", "arastir",
-            "teşhis", "teshis"
-        )
-        return hasDtc || terms.any { q.contains(it) }
-    }
-
-    private fun requestTechnicalResearch(question: String) {
-        if (!shouldUseTechnicalResearch(question)) return
-        if (!TechnicalResearchAssistant.hasApiKey(this)) {
-            val message = "İnternet araştırma uzmanı henüz kurulmadı. Seyfi Usta ekranındaki Gemini ayarlarından API anahtarını kaydedin."
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-            seyfiUstaAI?.speak("İnternet araştırması için Gemini anahtarı henüz ayarlanmamış. Seyfi Usta ekranından anahtarı kaydedebilirsiniz.")
-            return
-        }
-
-        val ecuFaultSnapshot = if (hasCompletedScan) faults.toList() else emptyList()
-        val liveSnapshot = liveValues.toMap()
-        log("Gemini internet araştırması başlatıldı: " + question.take(180))
-        if (currentScreen == "SEYFI") {
-            seyfiChatHistory.append("İNTERNET UZMANI: Teknik kaynaklar ve OEM parça bilgileri araştırılıyor...\n\n")
-            showSeyfiChat()
-        }
-
-        TechnicalResearchAssistant.research(
-            context = this,
-            question = question,
-            ecuFaults = ecuFaultSnapshot,
-            liveValues = liveSnapshot
-        ) { result ->
-            val section = buildString {
-                append("GEMINI İNTERNET ARAŞTIRMASI:\n")
-                append(result.answer)
-                if (result.sources.isNotEmpty()) {
-                    append("\n\nKAYNAKLAR:\n")
-                    result.sources.forEach { source ->
-                        append("• ").append(source.title).append(" — ").append(source.url).append('\n')
-                    }
-                } else {
-                    append("\n\nKaynak bağlantısı alınamadı; OEM parça numarası doğrulanmış kabul edilmemelidir.")
-                }
-            }
-            seyfiChatHistory.append(section).append("\n\n")
-            log(
-                if (result.error == null) "Gemini araştırması tamamlandı • " + result.sources.size + " kaynak"
-                else "Gemini araştırması başarısız: " + result.error
-            )
-            if (currentScreen == "SEYFI") showSeyfiChat()
-            showTechnicalResearchResult(result)
-            if (result.error == null) {
-                seyfiUstaAI?.speak("İnternet araştırması tamamlandı. Bulduğum teknik bilgileri ve kaynakları ekranda gösteriyorum.")
-            }
-        }
-    }
-
-    private fun showTechnicalResearchResult(result: TechnicalResearchResult) {
-        fun escapeHtml(value: String): String = value
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&#39;")
-            .replace("\n", "<br>")
-
-        val sourcesHtml = result.sources.joinToString("") { source ->
-            "<li><a href=\"" + escapeHtml(source.url) + "\">" +
-                escapeHtml(source.title) + "</a><br><small>" +
-                escapeHtml(source.url) + "</small></li>"
-        }
-        val html = """
-            <!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              body{background:#041023;color:#eef6ff;font-family:Arial,sans-serif;padding:14px;line-height:1.5}
-              h3{color:#00dcff} a{color:#54cfff;word-break:break-all}
-              li{margin:12px 0} .answer{white-space:normal}
-            </style></head><body>
-            <h3>GEMINI TEKNİK ARAŞTIRMA</h3>
-            <div class="answer">
-        """.trimIndent() + escapeHtml(result.answer) + """
-            </div><h3>KAYNAKLAR</h3><ul>
-        """.trimIndent() + sourcesHtml + "</ul>" + result.searchSuggestionsHtml + "</body></html>"
-
-        val web = android.webkit.WebView(this).apply {
-            settings.javaScriptEnabled = false
-            settings.allowFileAccess = false
-            settings.allowContentAccess = false
-            isVerticalScrollBarEnabled = true
-            loadDataWithBaseURL("https://www.google.com/", html, "text/html", "UTF-8", null)
-        }
-        AlertDialog.Builder(this)
-            .setTitle(if (result.error == null) "İNTERNET ARAŞTIRMASI • GEMINI" else "ARAŞTIRMA HATASI")
-            .setView(web)
-            .setPositiveButton("KAPAT", null)
-            .show()
-    }
-
     private fun showSeyfiChat() {
         val c = baseScreen("SEYFI")
         c.addView(header("SEYFİ USTA • YEREL YAPAY ZEKÂ"))
@@ -2082,26 +1943,9 @@ class MainActivity : ComponentActivity() {
                 assistant.speak("Ses testi. Ben Seyfi Usta. Beni net duyabiliyor musunuz?")
             }
         })
-        statusCard.addView(actionButton("TÜRKÇE SES PAKETİNİ KONTROL ET", blue) {
-            try {
-                startActivity(android.content.Intent(android.speech.tts.TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA))
-            } catch (_: Exception) {
-                try {
-                    startActivity(android.content.Intent("com.android.settings.TTS_SETTINGS"))
-                } catch (_: Exception) {
-                    Toast.makeText(this, "Telefonun Ayarlar bölümünden Metin Okuma / TTS ayarlarını açın.", Toast.LENGTH_LONG).show()
-                }
-            }
-        })
-        statusCard.addView(actionButton("GEMINI İNTERNET ARAŞTIRMA AYARLARI", cyan) {
-            showResearchApiKeyDialog()
-        })
         statusCard.addView(text(
-            if (TechnicalResearchAssistant.hasApiKey(this))
-                "İNTERNET UZMANI: Gemini anahtarı kayıtlı • Google Search araştırması kullanılabilir."
-            else
-                "İNTERNET UZMANI: Kurulum bekliyor • Google AI Studio anahtarı gerekli.",
-            11, muted
+            "SES MOTORU: Bu sürüm Android TTS kullanıyor. Bağımsız, APK içine gömülü Piper sesi henüz eklenmedi.",
+            11, yellow
         ))
         c.addView(statusCard)
 
@@ -2165,7 +2009,6 @@ class MainActivity : ComponentActivity() {
                         status.text = combinedAssistantStatus()
                         transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
                     }
-                    requestTechnicalResearch(prompt)
                 }
             }
         })
