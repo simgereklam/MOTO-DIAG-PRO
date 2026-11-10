@@ -62,16 +62,10 @@ jobs:
           echo "Türkçe Vosk model assets hazır."
           du -sh app/src/main/assets/model-tr
 
-      - name: SmolLM2 360M çevrimdışı sohbet modelini ekle
+      - name: APK içinde eski SmolLM2 modeli bulunmadığını doğrula
         run: |
-          mkdir -p app/src/main/assets
-          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
-            "https://huggingface.co/litert-community/SmolLM2-360M-Instruct/resolve/main/SmolLM2_360M_instruct.litertlm?download=true" \
-            --output app/src/main/assets/seyfi_model.litertlm
-          MODEL_BYTES="$(stat -c%s app/src/main/assets/seyfi_model.litertlm)"
-          test "$MODEL_BYTES" -ge 360000000
-          test "$MODEL_BYTES" -le 390000000
-          echo "SmolLM2 360M LiteRT-LM modeli APK assets içine alındı: $MODEL_BYTES bayt"
+          test ! -f app/src/main/assets/seyfi_model.litertlm
+          echo "Gemma 4 ilk açılışta uygulama alanına indirilecek; büyük model APK'ya gömülmeyecek."
 
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace
