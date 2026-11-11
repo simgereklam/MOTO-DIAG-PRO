@@ -177,11 +177,23 @@ class OfflineVoiceAssistant(
                     if (released) return@post
                     if (result == TextToSpeech.SUCCESS && engine != null) {
                         val language = engine.setLanguage(Locale("tr", "TR"))
-                        // Önceki çalışan sürümdeki sistem TTS seçimini aynen koru.
-                        // Android API sesin cinsiyetini güvenilir biçimde bildirmez;
-                        // bu nedenle burada erkek sesi olduğu iddia edilmez.
                         ttsReady = language != TextToSpeech.LANG_MISSING_DATA &&
                             language != TextToSpeech.LANG_NOT_SUPPORTED
+                        // Varsa kurulu Türkçe erkek sesini tercih et. Android her ses
+                        // için cinsiyet alanı sunmadığından yalnızca ses adı belirtiyorsa seçilir.
+                        val maleVoice = engine.voices
+                            ?.filter { it.locale.language.equals("tr", ignoreCase = true) }
+                            ?.filter {
+                                val n = it.name.lowercase(Locale.ROOT)
+                                n.contains("male") || n.contains("masculine") || n.contains("erkek")
+                            }
+                            ?.maxByOrNull { it.quality }
+                        if (maleVoice != null) {
+                            engine.voice = maleVoice
+                            status("Erkek Türkçe ses seçildi: ${maleVoice.name}")
+                        } else if (ttsReady) {
+                            status("Türkçe ses hazır; erkek Türkçe ses paketi bulunamadı. Telefonun TTS ayarlarından erkek Türkçe ses yüklenmeli.")
+                        }
                         engine.setSpeechRate(0.94f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
