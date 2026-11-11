@@ -30,8 +30,6 @@ object EcuPidCatalog {
         fun add(pid: Int, label: String, unit: String = "", decode: (List<Int>) -> Double?) {
             put(pid, Spec(label, unit, decode))
         }
-        add(0x01, "Monitor status / MIL / DTC sayısı") { u(it) }
-        add(0x03, "Yakıt sistemi durumu") { u(it) }
         add(0x04, "Hesaplanan motor yükü", "%") { pct(it) }
         add(0x05, "Motor soğutma suyu sıcaklığı", "°C") { temp(it) }
         add(0x06, "Kısa dönem yakıt düzeltmesi B1", "%") { trim(it) }
@@ -46,14 +44,11 @@ object EcuPidCatalog {
         add(0x0F, "Emme havası sıcaklığı", "°C") { temp(it) }
         add(0x10, "Kütlesel hava akışı", "g/s") { word(it)?.div(100.0) }
         add(0x11, "Gaz kelebeği konumu", "%") { pct(it) }
-        add(0x12, "İkincil hava sistemi durumu") { u(it) }
-        add(0x13, "Oksijen sensörü konum bitleri") { u(it) }
         for (pid in 0x14..0x1B) {
             add(pid, "Oksijen sensörü ${pid - 0x13} voltajı", "V") { b ->
                 if (b.size >= 2) b[0] * 0.005 else null
             }
         }
-        add(0x1C, "OBD standardı") { u(it) }
         add(0x1F, "Motor çalışma süresi", "s") { word(it) }
         add(0x21, "MIL yanarken katedilen mesafe", "km") { word(it) }
         add(0x22, "Yakıt rayı basıncı (vakum referanslı)", "kPa") { word(it)?.times(0.079) }
@@ -85,9 +80,6 @@ object EcuPidCatalog {
         add(0x4C, "Komutlanan gaz kelebeği aktüatörü", "%") { pct(it) }
         add(0x4D, "MIL açıkken geçen süre", "min") { word(it) }
         add(0x4E, "DTC silindikten sonra geçen süre", "min") { word(it) }
-        add(0x4F, "Maksimum değerler / eşdeğer oran") { word(it) }
-        add(0x50, "Maksimum hava akışı", "g/s") { word(it)?.times(10.0) }
-        add(0x51, "Yakıt tipi") { u(it) }
         add(0x52, "Etanol yakıt oranı", "%") { u(it)?.times(100.0 / 255.0) }
         add(0x53, "EVAP mutlak basıncı", "kPa") { word(it)?.div(200.0) }
         add(0x54, "EVAP sistem buhar basıncı", "Pa") { word(it)?.let { v -> if (v >= 32768) (v - 65536) * 0.25 else v * 0.25 } }
@@ -100,40 +92,10 @@ object EcuPidCatalog {
         add(0x5C, "Motor yağı sıcaklığı", "°C") { temp(it) }
         add(0x5D, "Yakıt enjeksiyon zamanlaması", "°") { word(it)?.div(128.0)?.minus(210.0) }
         add(0x5E, "Motor yakıt debisi", "L/h") { word(it)?.div(20.0) }
-        add(0x5F, "Emisyon gereksinimleri / motor tipi") { u(it) }
         add(0x61, "Sürücü talep edilen motor torku", "%") { u(it)?.minus(125.0) }
         add(0x62, "Gerçek motor torku", "%") { u(it)?.minus(125.0) }
         add(0x63, "Motor referans torku", "Nm") { word(it) }
         add(0x64, "Motor torku yüzdeleri") { u(it) }
-        add(0x66, "MAF sensör grubu") { word(it) }
-        add(0x67, "Motor soğutma sıcaklık sensörü grubu") { u(it) }
-        add(0x68, "Emme havası sıcaklık sensörü grubu") { u(it) }
-        add(0x6C, "Gaz kelebeği aktüatör kontrol grubu") { u(it) }
-        add(0x6D, "Yakıt basınç kontrol grubu") { u(it) }
-        add(0x6E, "Yakıt enjeksiyon zamanlama grubu") { u(it) }
-        add(0x6F, "Emisyon sistemi sensör grubu") { u(it) }
-        add(0x70, "Takviye basıncı kontrol grubu") { u(it) }
-        add(0x71, "Değişken geometrili turbo kontrol grubu") { u(it) }
-        add(0x72, "Turbo hız kontrol grubu") { u(it) }
-        add(0x73, "Turbo basınç sensörü grubu") { u(it) }
-        add(0x74, "Turbo sıcaklık sensörü grubu") { u(it) }
-        add(0x75, "Turbo aktüatör grubu") { u(it) }
-        add(0x76, "Turbo aktüatör grubu 2") { u(it) }
-        add(0x77, "Egzoz basınç sensörü grubu") { u(it) }
-        add(0x78, "Egzoz sıcaklık sensörü grubu") { u(it) }
-        add(0x79, "Egzoz sıcaklık sensörü grubu 2") { u(it) }
-        add(0x7A, "Dizel partikül filtresi grubu") { u(it) }
-        add(0x7B, "Dizel partikül filtresi grubu 2") { u(it) }
-        add(0x7C, "Dizel partikül filtresi sıcaklığı", "°C") { temp(it) }
-        add(0x7D, "NOx sensör grubu") { u(it) }
-        add(0x7E, "PM sensör grubu") { u(it) }
-        add(0x7F, "Motor çalışma süresi / sayaç grubu") { word(it) }
-        add(0x82, "MIL talep edilen durum / süre") { u(it) }
-        add(0x83, "NOx kontrol sistemi grubu") { u(it) }
-        add(0x84, "Emme manifoldu mutlak basıncı 2", "kPa") { word(it)?.div(10.0) }
-        add(0x85, "Enjeksiyon zamanlaması 2", "°") { word(it)?.div(128.0)?.minus(210.0) }
-        add(0x86, "Motor yakıt oranı 2") { u(it) }
-        add(0x87, "Emisyon sensörü 2") { u(it) }
         add(0xA6, "Odometre", "km") { if (it.size >= 4) (it[0] * 16777216.0 + it[1] * 65536.0 + it[2] * 256.0 + it[3]) / 10.0 else null }
     }
 
