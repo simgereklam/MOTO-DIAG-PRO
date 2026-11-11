@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Türkçe Vosk dinleme modeli APK'da kalır; Gemma 4 E2B modeli ilk açılışta
+ * Türkçe Vosk dinleme modeli APK'da kalır; Qwen3 0.6B modeli ilk açılışta
  * uygulamanın özel depolamasına indirilir ve sonraki açılışlarda çevrimdışı kullanılır.
  */
 class SeyfiUstaAI(
@@ -26,10 +26,10 @@ class SeyfiUstaAI(
 ) {
     companion object {
         private const val TAG = "SeyfiUstaAI"
-        private const val MODEL_FILE_NAME = "gemma-4-E2B-it.litertlm"
-        private const val MODEL_URL = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it.litertlm"
-        private const val MIN_MODEL_BYTES = 2_500_000_000L
-        private const val MAX_MODEL_BYTES = 2_800_000_000L
+        private const val MODEL_FILE_NAME = "Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
+        private const val MODEL_URL = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
+        private const val MIN_MODEL_BYTES = 320_000_000L
+        private const val MAX_MODEL_BYTES = 360_000_000L
     }
 
     private val voice = OfflineVoiceAssistant(
@@ -57,7 +57,7 @@ class SeyfiUstaAI(
     @Volatile private var initialized = false
     @Volatile private var voiceReady = false
     @Volatile private var initializationCallback: (() -> Unit)? = null
-    @Volatile private var modelStatus = "Gemma 4 E2B modeli kontrol ediliyor."
+    @Volatile private var modelStatus = "Qwen3 0.6B modeli kontrol ediliyor."
 
     fun initialize(onReady: () -> Unit) {
         if (initialized) {
@@ -66,7 +66,7 @@ class SeyfiUstaAI(
         }
         initialized = true
         initializationCallback = onReady
-        // Mikrofonu, Gemma 4 gerçekten açılıp deneme çıkarımı tamamlanmadan
+        // Mikrofonu, Qwen3 0.6B gerçekten açılıp deneme çıkarımı tamamlanmadan
         // komut dinlemeye başlatma. İlk kurulumda model indirmesi beklenir.
         try {
             voice.initialize {
@@ -104,13 +104,13 @@ class SeyfiUstaAI(
         modelExecutor.execute {
             try {
                 val modelFile = ensureModelFile()
-                publishModelStatus("Gemma 4 E2B yerel yapay zekâsı başlatılıyor.")
+                publishModelStatus("Qwen3 0.6B yerel yapay zekâsı başlatılıyor.")
                 brain.initialize(modelFile) { success, message ->
                     modelStatus = if (success) {
-                        "Gemma 4 E2B yerel yapay zekâsı hazır."
+                        "Qwen3 0.6B yerel yapay zekâsı hazır."
                     } else {
                         modelTaskStarted.set(false)
-                        "Gemma 4 E2B başlatılamadı: $message"
+                        "Qwen3 0.6B başlatılamadı: $message"
                     }
                     publishModelStatus(modelStatus)
                     if (success) {
@@ -122,7 +122,7 @@ class SeyfiUstaAI(
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
-                val failure = "Gemma 4 E2B modeli hazırlanamadı: ${e.message}"
+                val failure = "Qwen3 0.6B modeli hazırlanamadı: ${e.message}"
                 publishModelStatus(failure)
                 activity.runOnUiThread { failPendingChats(failure) }
             }
@@ -130,7 +130,7 @@ class SeyfiUstaAI(
     }
 
     /**
-     * Gemma 4 E2B ilk kurulumda Hugging Face'ten uygulamanın özel alanına indirilir.
+     * Qwen3 0.6B ilk kurulumda Hugging Face'ten uygulamanın özel alanına indirilir.
      * İndirme tamamlanmadan .part dosyası motor tarafından kullanılmaz.
      */
     private fun modelStorageDirectories(): List<File> {
@@ -145,7 +145,7 @@ class SeyfiUstaAI(
         directories.forEach { dir ->
             val installed = File(dir, MODEL_FILE_NAME)
             if (installed.isFile && installed.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-                publishModelStatus("Gemma 4 E2B telefonda kurulu; çevrimdışı başlatılıyor.")
+                publishModelStatus("Qwen3 0.6B telefonda kurulu; çevrimdışı başlatılıyor.")
                 return installed
             }
         }
@@ -159,14 +159,14 @@ class SeyfiUstaAI(
             }
         }.maxByOrNull { it.second }
 
-        val minimumFreeBytes = MIN_MODEL_BYTES + 150_000_000L
+        val minimumFreeBytes = MIN_MODEL_BYTES + 100_000_000L
         if (available == null || available.second < minimumFreeBytes) {
             val freeGb = (available?.second ?: 0L) / 1_000_000_000.0
             val needGb = minimumFreeBytes / 1_000_000_000.0
             throw IllegalStateException(
-                "Gemma 4 E2B yaklaşık 2,6 GB. Kurulum için en az %.1f GB boş alan gerekiyor. " +
+                "Qwen3 0.6B yaklaşık 330 MB. Kurulum için en az %.1f GB boş alan gerekiyor. " +
                 "Uygulamanın erişebildiği en geniş depolama alanında %.1f GB boş yer var. " +
-                "En az 3 GB boşaltıp tekrar deneyin.".format(java.util.Locale.US, needGb, freeGb)
+                "En az 500 MB boşaltıp tekrar deneyin.".format(java.util.Locale.US, needGb, freeGb)
             )
         }
 
@@ -177,7 +177,7 @@ class SeyfiUstaAI(
         if (partial.exists()) partial.delete()
 
         publishModelStatus(
-            "Gemma 4 E2B indiriliyor. Uygun depolama alanı: %.1f GB".format(
+            "Qwen3 0.6B indiriliyor. Uygun depolama alanı: %.1f GB".format(
                 java.util.Locale("tr", "TR"), available.second / 1_000_000_000.0
             )
         )
@@ -200,7 +200,7 @@ class SeyfiUstaAI(
             if (expectedBytes !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
                 throw IllegalStateException("Model dosyasının sunucu boyutu beklenenden farklı: $expectedBytes bayt.")
             }
-            if (StatFs(modelDirectory.absolutePath).availableBytes < expectedBytes + 100_000_000L) {
+            if (StatFs(modelDirectory.absolutePath).availableBytes < expectedBytes + 80_000_000L) {
                 throw IllegalStateException("İndirme başladıktan önce depolama alanı yetersiz kaldı. En az 3 GB boş alan açın.")
             }
 
@@ -220,7 +220,7 @@ class SeyfiUstaAI(
                         val percent = (total * 100L / expectedBytes).toInt()
                         if (percent != lastPercent && percent % 5 == 0) {
                             lastPercent = percent
-                            publishModelStatus("Gemma 4 E2B indiriliyor: %$percent")
+                            publishModelStatus("Qwen3 0.6B indiriliyor: %$percent")
                         }
                     }
                     output.fd.sync()
@@ -231,9 +231,9 @@ class SeyfiUstaAI(
                 throw IllegalStateException("Model indirmesi eksik. Gelen: $total / Beklenen: $expectedBytes bayt.")
             }
             if (!partial.renameTo(target)) {
-                throw IllegalStateException("Gemma 4 modeli uygulama alanına taşınamadı.")
+                throw IllegalStateException("Qwen3 0.6B modeli uygulama alanına taşınamadı.")
             }
-            publishModelStatus("Gemma 4 E2B indirildi; yerel motor başlatılıyor.")
+            publishModelStatus("Qwen3 0.6B indirildi; yerel motor başlatılıyor.")
             return target
         } catch (e: Exception) {
             partial.delete()
@@ -244,27 +244,14 @@ class SeyfiUstaAI(
     }
 
     /**
-     * Uyandırma sözü sonrasında kullanıcı sesini metne çevirmeden Gemma 4'e aktarır.
+     * Qwen3 metin tabanlıdır. Uyandırma ve konuşma tanıma Vosk ile çevrimdışı yapılır.
+     * Tanınan Türkçe metin daha sonra chat() üzerinden yerel modele gönderilir.
      */
     fun listenDirectAudio(onAnswer: (String) -> Unit = {}) {
-        if (!brain.isReady()) {
-            val message = if (modelStatus.contains("indiriliyor", ignoreCase = true)) {
-                "Yerel yapay zekâ modeli henüz indiriliyor. İndirme tamamlandığında doğrudan sesli sohbet açılacak."
-            } else {
-                "Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin."
-            }
-            activity.runOnUiThread {
-                try { onAnswer(message) } finally { speak(message) }
-            }
-            return
-        }
-        voice.speakAndRecordDirectAudio { audio ->
-            publishModelStatus("Gemma 4 konuşmayı doğrudan anlıyor...")
-            brain.askAudio(audio) { answer ->
-                activity.runOnUiThread {
-                    try { onAnswer(answer) } finally { speak(answer) }
-                }
-            }
+        val message = "Sesli sohbet için Vosk metin tanıma hattı kullanılıyor."
+        activity.runOnUiThread {
+            onAnswer(message)
+            speak("Dinliyorum.")
         }
     }
 
@@ -288,7 +275,7 @@ class SeyfiUstaAI(
             return
         }
 
-        publishModelStatus("Gemma 4 hazırlanıyor; mesaj sıraya alındı.")
+        publishModelStatus("Qwen3 0.6B hazırlanıyor; mesaj sıraya alındı.")
         // Model yükleme başarısız veya takılmışsa bekleyen isteği sonsuza kadar tutma.
         chatTimeoutExecutor.schedule({
             if (pendingChats.remove(pending)) {
