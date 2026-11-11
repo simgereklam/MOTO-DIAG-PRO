@@ -7,9 +7,6 @@ android {
     namespace = "com.efemoto.motodiagpro"
     compileSdk = 36
 
-    androidResources {
-        noCompress += "litertlm"
-    }
     defaultConfig {
         applicationId = "com.efemoto.motodiagpro"
         minSdk = 26
@@ -45,7 +42,5 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
 
-    // Seyfi Usta: cihaz üzerinde çalışan LiteRT-LM yerel model motoru.
-    implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
 
 }
