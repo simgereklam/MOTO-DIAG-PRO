@@ -66,8 +66,8 @@ jobs:
         run: |
           MODEL="app/src/main/assets/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
           mkdir -p app/src/main/assets
-          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \\
-            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm" \\
+          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
+            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm" \
             --output "$MODEL"
           echo "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9  $MODEL" | sha256sum --check
           test "$(stat -c%s "$MODEL")" -eq 344686592
