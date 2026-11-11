@@ -156,10 +156,10 @@ class MainActivity : ComponentActivity() {
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
                 val isModelProgress =
-                    status.contains("Gemma 4 E2B indiriliyor", ignoreCase = true) ||
-                    status.contains("Gemma 4 E2B indirildi", ignoreCase = true)
+                    status.contains("Qwen3 0.6B indiriliyor", ignoreCase = true) ||
+                    status.contains("Qwen3 0.6B indirildi", ignoreCase = true)
                 val isModelReady = status.contains(
-                    "Gemma 4 E2B yerel yapay zekâsı hazır",
+                    "Qwen3 0.6B yerel yapay zekâsı hazır",
                     ignoreCase = true
                 )
                 val isVoiceListening = status.contains(
@@ -340,17 +340,14 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
             // TTS tamamlanınca ses katmanı mikrofonu yeniden açar.
             // Telefonun TTS sesi duyulurken mikrofon kapalı kalır.
-            assistant.listenDirectAudio { answer ->
-                log("Seyfi Usta doğrudan ses yanıtı: $answer")
-                seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
-                if (currentScreen == "SEYFI") showSeyfiChat()
-                Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
-            }
+            // Qwen3 metin modelidir: uyandırma sonrasında Vosk yeniden dinler
+            // ve tanıdığı Türkçe komutu/sohbeti yerel modele aktarır.
+            assistant.speak("Dinliyorum.")
             return
         }
 
         // "Sohbet" özel bir oturum açar. Oturum boyunca doğal cümleler
-        // yerel Gemma 4'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
+        // yerel Qwen3 0.6B'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
         val normalizedInput = commandInput.lowercase(java.util.Locale("tr", "TR")).trim()
         if (normalizedInput in setOf("sohbet", "sohbet modu", "sohbete gec", "sohbet baslat")) {
             seyfiChatMode = true
@@ -467,7 +464,7 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Serbest konuşma yerel Gemma 4'e aktarılır; boş metin sessizce yutulmaz.
+                // Serbest konuşma yerel Qwen3 0.6B'e aktarılır; boş metin sessizce yutulmaz.
                 if (commandInput.isNotBlank()) {
                     sendSeyfiChatMessage(commandInput)
                 } else {
@@ -492,7 +489,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Gemma 4'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
+     * Qwen3 0.6B'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
      * Model sadece izin verilen eylemleri seçebilir; gerçek ECU işlemlerini
      * mevcut teşhis yöneticisi yürütür.
      */
