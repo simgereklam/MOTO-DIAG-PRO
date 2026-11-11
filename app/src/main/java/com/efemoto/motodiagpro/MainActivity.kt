@@ -198,8 +198,7 @@ class MainActivity : ComponentActivity() {
                         if (isProblem) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
                     ).show()
                 }
-            },
-            onAppAction = { action -> executeSeyfiAppAction(action) }
+            }
         )
         seyfiUstaAI = assistant
         assistant.initializeVoiceOnly {
@@ -1123,7 +1122,7 @@ class MainActivity : ComponentActivity() {
                         tps = (diagnosticSnapshot["tps"] ?: -1.0).toFloat(),
                         ect = diagnosticSnapshot["coolant"]?.toInt() ?: -999,
                         map = (diagnosticSnapshot["map"] ?: -1.0).toFloat(),
-                        voltage = diagnosticSnapshot["voltage"] ?: -1.0,
+                        voltage = (diagnosticSnapshot["voltage"] ?: -1.0).toFloat(),
                         dtcs = found
                     )
 
