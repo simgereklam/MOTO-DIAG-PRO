@@ -13,6 +13,10 @@ on:
       - seyfi-offline-stability
   workflow_dispatch:
 
+concurrency:
+  group: moto-diag-pro-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
