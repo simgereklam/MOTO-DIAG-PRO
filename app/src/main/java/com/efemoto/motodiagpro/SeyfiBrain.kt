@@ -211,7 +211,26 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
             .toList()
 
         if (codes.isEmpty()) {
-            return "Soruda veya güncel ECU bağlamında standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak; ham ECU kodu ve model/yıl servis tablosu gerekir."
+            val symptomMatches = YamahaKnowledgeBase.search(appContext, question, limit = 4)
+            if (symptomMatches.isEmpty()) {
+                return "Soruda veya güncel ECU bağlamında standart P-kodu bulunmadı ve yerel Yamaha bilgi bankasında yeterli belirti eşleşmesi yok. Üreticiye özel prosedür veya parça arızası uydurulmayacak; model/yıl ve servis belgesi gerekir."
+            }
+            return buildString {
+                appendLine("Yerel Yamaha bilgi bankasında belirti metnine göre bulunan referanslar:")
+                symptomMatches.forEach { record ->
+                    appendLine()
+                    appendLine("=== ${record.code} • ${record.title} ===")
+                    appendLine("Sistem: ${record.system}")
+                    appendLine("Açıklama: ${record.description}")
+                    appendLine("Olası nedenler: ${record.possibleCauses.joinToString("; ")}")
+                    appendLine("Güvenli kontroller: ${record.checks.joinToString("; ")}")
+                    appendLine("Kod standardı: ${record.codeStandard}")
+                    appendLine("Doğrulama seviyesi: ${record.verification}")
+                    appendLine("Kaynak: ${record.source}")
+                }
+                appendLine()
+                append("Bu kayıtlar belirtiye göre bulunan referanslardır; ECU taraması veya doğrulanmış arıza teşhisi değildir. Model/yıl/ECU uyumu ayrıca doğrulanmalı.")
+            }
         }
 
         return buildString {
