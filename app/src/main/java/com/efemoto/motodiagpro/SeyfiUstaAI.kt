@@ -17,8 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class SeyfiUstaAI(
     private val activity: Activity,
     private val onCommandRecognized: (String) -> Unit,
-    private val onVoiceStatusChanged: (String) -> Unit = {},
-    private val onAppAction: (String) -> String = { "Uygulama işlem köprüsü hazır değil." }
+    private val onVoiceStatusChanged: (String) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "SeyfiUstaAI"
