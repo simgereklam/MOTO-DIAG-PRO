@@ -203,10 +203,12 @@ class MainActivity : ComponentActivity() {
             onAppAction = { action -> executeSeyfiAppAction(action) }
         )
         seyfiUstaAI = assistant
-        assistant.initialize {
-            val compatibilityFailures = assistant.runCompatibilitySelfTest()
+        assistant.initializeVoiceOnly {
+            val voiceFailures = mutableListOf<String>()
+            if (!assistant.isTtsReady()) voiceFailures += "Türkçe TTS hazır değil."
+            if (!assistant.isRecognitionAvailable()) voiceFailures += "Cihaz içi konuşma tanıma servisi bulunamadı."
             val parserFailures = seyfiCommandHandler.selfTest()
-            val allFailures = compatibilityFailures + parserFailures
+            val allFailures = voiceFailures + parserFailures
             if (allFailures.isEmpty()) {
                 log("SEYFİ ÖZ TEST: Yerel model deneme yanıtı, Android konuşma servisi, Türkçe TTS ve komut sözlüğü başarılı. Gerçek mikrofon anlaşılırlığı ilk sesli komutta doğrulanacak.")
             } else {
@@ -219,17 +221,18 @@ class MainActivity : ComponentActivity() {
             }
             if (startVoice) {
                 val startupMessage = when {
-                    allFailures.isEmpty() ->
-                        "Merhaba. Ben Seyfi Usta. Yapay zekâ deneme yanıtı başarılı. Ses servisi hazır. " +
-                            "Şimdi mikrofonu açıyorum. Bana Seyfi Usta diye seslenin."
-                    compatibilityFailures.isNotEmpty() ->
-                        "Merhaba. Ben Seyfi Usta. Açılış öz testinde eksik var. " +
-                            compatibilityFailures.joinToString(". ") + " Sesli komutlar tam hazır değil."
+                    !assistant.isTtsReady() ->
+                        "Merhaba. Ben Seyfi Usta. Türkçe ses motoru hazır değil; telefonun metin okuma ayarını kontrol edin."
+                    voiceFailures.isNotEmpty() ->
+                        "Merhaba. Ben Seyfi Usta. Sesli komut servisi hazır değil. " +
+                            voiceFailures.joinToString(". ")
+                    parserFailures.isNotEmpty() ->
+                        "Merhaba. Ben Seyfi Usta. Ses sistemim hazır; komut sözlüğünde uyarı var."
                     else ->
-                        "Merhaba. Ben Seyfi Usta. Yapay zekâ ve ses servisleri hazır; komut sözlüğü testinde hata var."
+                        "Merhaba. Ben Seyfi Usta. Ses sistemim hazır. Şimdi mikrofonu açıyorum. Bana Seyfi Usta diye seslenin."
                 }
                 assistant.speak(startupMessage) {
-                    if (assistant.runCompatibilitySelfTest().isEmpty()) assistant.startListening()
+                    if (assistant.isRecognitionAvailable()) assistant.startListening()
                 }
             }
         }
@@ -237,8 +240,10 @@ class MainActivity : ComponentActivity() {
 
     private fun greetAndListen() {
         val assistant = seyfiUstaAI ?: return
-        assistant.initialize {
-            val failures = assistant.runCompatibilitySelfTest()
+        assistant.initializeVoiceOnly {
+            val failures = mutableListOf<String>()
+            if (!assistant.isTtsReady()) failures += "Türkçe TTS hazır değil."
+            if (!assistant.isRecognitionAvailable()) failures += "Cihaz içi konuşma tanıma servisi bulunamadı."
             if (failures.isNotEmpty()) {
                 val message = "Seyfi Usta henüz hazır değil. " + failures.joinToString(". ")
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
@@ -246,10 +251,10 @@ class MainActivity : ComponentActivity() {
                 return@initialize
             }
             assistant.speak(
-                "Merhaba. Ben Seyfi Usta. Yapay zekâ ve ses sistemleri test edildi. " +
+                "Merhaba. Ben Seyfi Usta. Ses sistemim hazır. " +
                     "Sizi dinliyorum. Bana Seyfi Usta diye seslenebilirsiniz."
             ) {
-                assistant.startListening()
+                if (assistant.isRecognitionAvailable()) assistant.startListening()
             }
         }
     }
