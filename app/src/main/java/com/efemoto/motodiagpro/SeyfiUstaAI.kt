@@ -77,6 +77,8 @@ class SeyfiUstaAI(
         }
     }
 
+    fun refreshRecognition(onReady: (() -> Unit)? = null) = voice.refreshRecognition(onReady)
+
     fun isTtsReady(): Boolean = voice.isTtsReady()
     fun isRecognitionAvailable(): Boolean = voice.isRecognitionAvailable()
 
