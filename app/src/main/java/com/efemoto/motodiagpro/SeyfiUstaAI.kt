@@ -57,7 +57,19 @@ class SeyfiUstaAI(
 
     fun initialize(onReady: () -> Unit) {
         if (initialized) {
-            onReady()
+            if (voiceReady && modelInitializationFinished) {
+                activity.runOnUiThread { onReady() }
+            } else {
+                val previous = initializationCallback
+                initializationCallback = if (previous == null) {
+                    onReady
+                } else {
+                    {
+                        previous()
+                        onReady()
+                    }
+                }
+            }
             return
         }
         initialized = true
