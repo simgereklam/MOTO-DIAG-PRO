@@ -57,6 +57,14 @@ class SeyfiUstaAI(
     fun stopListening() = voice.stopListening()
     fun isListening(): Boolean = voice.isListening()
 
+    fun runCompatibilitySelfTest(): List<String> {
+        val failures = mutableListOf<String>()
+        if (!voice.isRecognitionAvailable()) failures += "Cihaz içi konuşma tanıma servisi bulunamadı."
+        if (!voice.isTtsReady()) failures += "Türkçe metin okuma motoru hazır değil."
+        failures += SeyfiUstaCommandHandler().selfTest()
+        return failures
+    }
+
     fun runModelSelfTest(onResult: (Boolean, String) -> Unit) {
         val errors = SeyfiUstaCommandHandler().selfTest()
         val ok = errors.isEmpty() && brain.isReady()
