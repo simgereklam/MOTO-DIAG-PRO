@@ -110,16 +110,25 @@ class DiagnosticManager(
             val details = result.dtcCodes.map { code ->
 
                 val catalog = YamahaFaultCodes.find(code)
+                val genericTitle = DtcDatabase.title(code)
+                val isKnownGeneric = !genericTitle.startsWith("Üreticiye özel")
 
                 FaultDetail(
                     code = code,
-                    title = catalog?.title ?: "Tanımlanmamış arıza kodu",
+                    title = catalog?.title
+                        ?: if (isKnownGeneric) genericTitle else "Tanımlanmamış arıza kodu",
                     description = catalog?.description
-                        ?: "Bu kod için Yamaha kataloğunda açıklama bulunamadı.",
+                        ?: if (isKnownGeneric) {
+                            DtcDatabase.description(code)
+                        } else {
+                            "Bu kod için doğrulanmış açıklama bulunamadı. ECU kimliği ve motosikletin model/yıl servis tablosu kontrol edilmeli."
+                        },
                     possibleCauses = catalog?.possibleCauses
-                        ?: listOf("Model ve ECU servis dokümanı kontrol edilmeli."),
+                        ?: if (isKnownGeneric) DtcDatabase.causes(code)
+                        else listOf("Model ve ECU servis dokümanı kontrol edilmeli."),
                     checks = catalog?.checks
-                        ?: listOf("Üretici teşhis prosedürü uygulanmalı.")
+                        ?: if (isKnownGeneric) DtcDatabase.checks(code)
+                        else listOf("Üretici teşhis prosedürü uygulanmalı.")
                 )
             }
 
