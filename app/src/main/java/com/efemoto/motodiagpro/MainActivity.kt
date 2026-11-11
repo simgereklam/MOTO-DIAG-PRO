@@ -271,7 +271,14 @@ class MainActivity : ComponentActivity() {
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
             ) {
                 if (seyfiUstaAI == null) initializeSeyfiAssistant(startVoice = false)
-                greetAndListen()
+                val assistant = seyfiUstaAI
+                if (assistant != null) {
+                    assistant.refreshRecognition {
+                        greetAndListen()
+                    }
+                } else {
+                    initializeSeyfiAssistant(startVoice = true)
+                }
             } else {
                 Toast.makeText(
                     this,
