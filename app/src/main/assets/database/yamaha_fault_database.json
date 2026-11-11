@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 1,
+  "brand": "Yamaha",
+  "language": "tr-TR",
+  "note": "Başlangıç veri kümesi. Bu kayıtlar genel SAE/J1979 OBD-II P-kodu açıklamalarıdır; Yamaha'ya özgü servis kodu veya tüm Yamaha modellerinin eksiksiz listesi değildir. Model/yıl/ECU uyumu servis dokümanından doğrulanmalıdır.",
+  "records": [
+    {
+      "code": "P0030",
+      "title": "Oksijen sensörü ısıtıcı devresi",
+      "description": "Oksijen sensörünün ısıtıcı kontrol devresinde arıza algılanır.",
+      "system": "Emisyon ve yakıt kontrolü",
+      "possibleCauses": [
+        "Oksijen sensörü ısıtıcı elemanı",
+        "Besleme sigortası veya röle",
+        "Kablo veya soket hasarı"
+      ],
+      "checks": [
+        "Sensör soketini ve kabloyu inceleyin.",
+        "Isıtıcı beslemesini ve şasesini elektrik şemasına göre ölçün.",
+        "Isıtıcı direncini yalnızca ilgili modelin servis değeriyle karşılaştırın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0107",
+      "title": "MAP sensörü düşük giriş",
+      "description": "Manifold mutlak basınç sensörü sinyali beklenen aralığın altındadır.",
+      "system": "Emme sistemi",
+      "possibleCauses": [
+        "MAP sensörü",
+        "Sinyal hattında kısa devre",
+        "5 V referans veya sensör şasesi sorunu"
+      ],
+      "checks": [
+        "MAP soketini ve hortumunu inceleyin.",
+        "5 V referans, şase ve sinyal hattını şemaya göre ölçün.",
+        "Kontak açık motor kapalı basınç değerini atmosfer basıncıyla karşılaştırın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0108",
+      "title": "MAP sensörü yüksek giriş",
+      "description": "Manifold mutlak basınç sensörü sinyali beklenen aralığın üzerindedir.",
+      "system": "Emme sistemi",
+      "possibleCauses": [
+        "MAP sensörü",
+        "Sinyal hattında beslemeye kısa devre",
+        "Soket veya şase temassızlığı"
+      ],
+      "checks": [
+        "Sensör soketini ve kabloyu inceleyin.",
+        "Sinyal hattının beslemeye kısa devre yapmadığını kontrol edin.",
+        "Canlı MAP değerini motor durumu ve atmosfer basıncıyla karşılaştırın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0112",
+      "title": "Emme havası sıcaklık sensörü düşük giriş",
+      "description": "Emme havası sıcaklık sensörü devresinden düşük elektrik sinyali algılanır.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "Sensör devresinde kısa devre",
+        "Sensör arızası",
+        "Soket veya kablo hasarı"
+      ],
+      "checks": [
+        "Soket ve kabloyu kontrol edin.",
+        "Canlı emme havası sıcaklığını ortam sıcaklığıyla karşılaştırın.",
+        "Direnç ve sinyal ölçümünü model servis verisine göre yapın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0113",
+      "title": "Emme havası sıcaklık sensörü yüksek giriş",
+      "description": "Emme havası sıcaklık sensörü devresinden yüksek elektrik sinyali algılanır.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "Açık devre veya bağlantı kopukluğu",
+        "Sensör arızası",
+        "Soket pin temassızlığı"
+      ],
+      "checks": [
+        "Sensör soketini kontrol edin.",
+        "Kablo sürekliliğini elektrik şemasına göre ölçün.",
+        "Canlı sıcaklık değerini motor soğukken ortam sıcaklığıyla karşılaştırın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0117",
+      "title": "Motor soğutma sıcaklığı sensörü düşük giriş",
+      "description": "Motor sıcaklık sensörü devresinden düşük elektrik sinyali algılanır.",
+      "system": "Motor sıcaklığı",
+      "possibleCauses": [
+        "Sinyal hattında kısa devre",
+        "Sensör arızası",
+        "Kablo veya soket hasarı"
+      ],
+      "checks": [
+        "Sensör soketini ve tesisatı inceleyin.",
+        "Soğuk motorda canlı sıcaklık değerini ortam sıcaklığıyla karşılaştırın.",
+        "Direnç ve sinyal değerini model servis verisine göre ölçün."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0118",
+      "title": "Motor soğutma sıcaklığı sensörü yüksek giriş",
+      "description": "Motor sıcaklık sensörü devresinden yüksek elektrik sinyali algılanır.",
+      "system": "Motor sıcaklığı",
+      "possibleCauses": [
+        "Açık devre veya bağlantı kopukluğu",
+        "Sensör arızası",
+        "Soket veya kablo problemi"
+      ],
+      "checks": [
+        "Sensör bağlantısını kontrol edin.",
+        "Kablo sürekliliğini ve referans devresini şemaya göre ölçün.",
+        "Sensör direncini model servis verisiyle karşılaştırın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0122",
+      "title": "Gaz kelebeği konum sensörü A düşük giriş",
+      "description": "Gaz kelebeği konum sensörü A devresinin sinyali beklenen seviyenin altındadır.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü veya konnektörü",
+        "5 V referans veya sensör şasesi sorunu",
+        "Sinyal hattında kısa devre"
+      ],
+      "checks": [
+        "TPS soketini ve kabloyu inceleyin.",
+        "5 V referans, şase ve sinyal değerlerini ölçün.",
+        "Gaz açıldıkça TPS değerinin düzgün değiştiğini canlı veride kontrol edin."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0123",
+      "title": "Gaz kelebeği konum sensörü A yüksek giriş",
+      "description": "Gaz kelebeği konum sensörü A devresinin sinyali beklenen seviyenin üzerindedir.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü",
+        "Sinyal hattında beslemeye kısa devre",
+        "Soket veya kablo temassızlığı"
+      ],
+      "checks": [
+        "TPS bağlantısını kontrol edin.",
+        "Sinyal hattını beslemeye kısa devre açısından inceleyin.",
+        "Canlı TPS verisinin gaz hareketiyle tutarlı değiştiğini doğrulayın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0335",
+      "title": "Krank mili konum sensörü A devresi",
+      "description": "ECU krank mili konum sensörü A devresinden beklenen sinyali algılayamaz.",
+      "system": "Motor konum/senkron",
+      "possibleCauses": [
+        "Krank sensörü veya tetikleyici çark",
+        "Sensör kablosunda kopukluk veya kısa devre",
+        "Sokette oksitlenme veya gevşek pin",
+        "Sensör hava aralığı veya mekanik hasar"
+      ],
+      "checks": [
+        "Krank sensörü soketini ve kablo hattını inceleyin.",
+        "Sensör direncini yalnızca modelin servis değeriyle karşılaştırın.",
+        "Marş sırasında sensör sinyalini uygun ölçüm cihazıyla kontrol edin.",
+        "Tetik çarkı ve sensör aralığını servis prosedürüne göre inceleyin."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0340",
+      "title": "Eksantrik mili konum sensörü A devresi",
+      "description": "Eksantrik mili konum sensörü A devresinde elektriksel sinyal problemi algılanır.",
+      "system": "Motor konum/senkron",
+      "possibleCauses": [
+        "Eksantrik sensörü",
+        "Kablo veya soket sorunu",
+        "Besleme, şase veya sinyal hattı problemi"
+      ],
+      "checks": [
+        "Sensör soketini ve tesisatı inceleyin.",
+        "Besleme ve sinyal ölçümünü elektrik şemasına göre yapın.",
+        "Krank/eksantrik senkronunu üretici prosedürüyle kontrol edin."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0351",
+      "title": "Ateşleme bobini A birincil/ikincil devresi",
+      "description": "A bobini kontrol devresinde elektriksel arıza algılanır.",
+      "system": "Ateşleme",
+      "possibleCauses": [
+        "Ateşleme bobini veya buji",
+        "Bobin soketi veya besleme hattı",
+        "ECU sürücü kablosu"
+      ],
+      "checks": [
+        "Bobin ve buji bağlantılarını inceleyin.",
+        "Bobin direncini model servis değerine göre ölçün.",
+        "Besleme ve ECU kontrol hattını uygun test prosedürüyle doğrulayın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0352",
+      "title": "Ateşleme bobini B birincil/ikincil devresi",
+      "description": "B bobini kontrol devresinde elektriksel arıza algılanır.",
+      "system": "Ateşleme",
+      "possibleCauses": [
+        "Ateşleme bobini veya buji",
+        "Bobin soketi veya besleme hattı",
+        "ECU sürücü kablosu"
+      ],
+      "checks": [
+        "Bobin ve buji bağlantılarını inceleyin.",
+        "Bobin direncini model servis değerine göre ölçün.",
+        "Besleme ve ECU kontrol hattını uygun test prosedürüyle doğrulayın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0500",
+      "title": "Araç hız sensörü devresi",
+      "description": "ECU araç hız sensöründen beklenen sinyali alamaz veya devre hatası algılar.",
+      "system": "Araç hızı",
+      "possibleCauses": [
+        "Hız sensörü",
+        "Sensör kablosu veya soketi",
+        "Sensör hedefi/dişlisi veya beslemesi"
+      ],
+      "checks": [
+        "Sensörün fiziksel bağlantısını ve kabloyu inceleyin.",
+        "Besleme, şase ve sinyal ölçümünü model şemasına göre yapın.",
+        "Canlı hız verisini güvenli ve uygun test koşulunda doğrulayın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P0560",
+      "title": "Sistem voltajı",
+      "description": "ECU besleme sisteminde beklenen aralığın dışında voltaj durumu algılanır.",
+      "system": "Elektrik/şarj",
+      "possibleCauses": [
+        "Zayıf veya hasarlı akü",
+        "Regülatör/doğrultucu veya stator sorunu",
+        "Akü kutup başı, şase veya ana besleme bağlantısı"
+      ],
+      "checks": [
+        "Akü voltajını dinlenme ve marş koşulunda ölçün.",
+        "Şarj sistemini ilgili modelin servis aralığına göre kontrol edin.",
+        "Akü kutup başı, ana sigorta ve şase bağlantılarını inceleyin."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "P2135",
+      "title": "Gaz kelebeği konum sensörleri A/B korelasyonu",
+      "description": "Gaz kelebeği konum sensörü A ve B sinyalleri arasında beklenen korelasyon sağlanmaz.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörlerinden biri veya ikisi",
+        "5 V referans/şase veya kablo problemi",
+        "Gaz kelebeği mekanizması veya adaptasyon koşulu"
+      ],
+      "checks": [
+        "İki TPS sinyalini aynı anda canlı veride karşılaştırın.",
+        "Referans, şase ve sinyal kablolarını elektrik şemasına göre ölçün.",
+        "Mekanik sıkışmayı kontrol edin; adaptasyonu yalnızca model prosedürü destekliyorsa uygulayın."
+      ],
+      "models": [],
+      "years": [],
+      "codeStandard": "SAE_J1979_GENERIC",
+      "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
+      "verification": "GENERIC_ONLY"
+    }
+  ]
+}
