@@ -237,11 +237,20 @@ class MainActivity : ComponentActivity() {
 
     private fun greetAndListen() {
         val assistant = seyfiUstaAI ?: return
-        assistant.speak(
-            "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
-                "Bana Seyfi Usta diye seslenin."
-        ) {
-            assistant.startListening()
+        assistant.initialize {
+            val failures = assistant.runCompatibilitySelfTest()
+            if (failures.isNotEmpty()) {
+                val message = "Seyfi Usta henüz hazır değil. " + failures.joinToString(". ")
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                assistant.speak(message)
+                return@initialize
+            }
+            assistant.speak(
+                "Merhaba. Ben Seyfi Usta. Yapay zekâ ve ses sistemleri test edildi. " +
+                    "Sizi dinliyorum. Bana Seyfi Usta diye seslenebilirsiniz."
+            ) {
+                assistant.startListening()
+            }
         }
     }
 
