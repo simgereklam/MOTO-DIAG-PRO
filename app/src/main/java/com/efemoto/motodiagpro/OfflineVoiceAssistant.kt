@@ -105,6 +105,9 @@ class OfflineVoiceAssistant(
                             SpeechRecognizer.ERROR_NO_MATCH -> "Söylenen ifade anlaşılamadı; tekrar dinliyorum."
                             SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Ses algılanmadı; tekrar dinliyorum."
                             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Mikrofon izni verilmedi."
+                            SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
+                            SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+                                "Telefonda Türkçe cihaz içi konuşma modeli yüklü değil veya bu servis Türkçeyi desteklemiyor."
                             else -> "Konuşma tanıma hatası: $error. Yeniden deniyorum."
                         }
                         status(message)
