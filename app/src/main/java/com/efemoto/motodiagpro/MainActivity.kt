@@ -511,13 +511,25 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this, report, Toast.LENGTH_LONG).show()
                 }
                 val quickTest = SeyfiDiagnosticTestCatalog.find("basic_live_data")
-                if (quickTest != null && !busy.get() && !scanRunning.get()) {
-                    assistant.speak("Sistem testleri ekranını açtım. Şimdi gerçek ECU üzerinden salt-okunur temel sensör kontrolünü başlatıyorum.")
-                    runReadOnlyTest(quickTest.title, quickTest.description, quickTest.queries)
-                } else {
-                    assistant.speak(
-                        if (busy.get() || scanRunning.get()) "Sistem testleri ekranını açtım. Başka bir ECU işlemi sürdüğü için test başlamadı."
-                        else "Sistem testleri ekranını açtım ancak hızlı test tanımı bulunamadı."
+                when {
+                    busy.get() || scanRunning.get() -> assistant.speak(
+                        "Sistem testleri ekranını açtım. Başka bir ECU işlemi sürdüğü için test başlatılamadı."
+                    )
+                    quickTest == null -> assistant.speak(
+                        "Sistem testleri ekranını açtım ancak temel sensör testinin tanımı bulunamadı."
+                    )
+                    else -> assistant.speak(
+                        "Sistem testleri ekranını açtım. Şimdi gerçek ECU üzerinden temel sensör kontrolünü başlatıyorum.",
+                        onDone = {
+                            if (!isFinishing && !isDestroyed) {
+                                runReadOnlyTest(
+                                    quickTest.title,
+                                    quickTest.description,
+                                    quickTest.queries,
+                                    voiceTriggered = true
+                                )
+                            }
+                        }
                     )
                 }
             }
@@ -1839,10 +1851,14 @@ class MainActivity : ComponentActivity() {
     private fun runReadOnlyTest(
         title: String,
         subtitle: String,
-        queries: List<Triple<String, String, String>>
+        queries: List<Triple<String, String, String>>,
+        voiceTriggered: Boolean = false
     ) {
         if (!busy.compareAndSet(false, true)) {
             Toast.makeText(this, "Başka bir ECU işlemi sürüyor.", Toast.LENGTH_SHORT).show()
+            if (voiceTriggered) {
+                seyfiUstaAI?.speak("Başka bir ECU işlemi devam ettiği için test başlatılamadı. İşlem bitince tekrar test yap diyebilirsiniz.")
+            }
             return
         }
         Toast.makeText(this, "$title başlatıldı…", Toast.LENGTH_SHORT).show()
@@ -1893,11 +1909,21 @@ class MainActivity : ComponentActivity() {
                 mainHandler.post {
                     // Test sonucu yalnızca gerçek adaptör yanıtlarından oluşur; sonraki AI sorularında kanıt olarak kullanılır.
                     seyfiUstaAI?.updateDiagnosticTestResult(completedReport)
-                    AlertDialog.Builder(this)
-                        .setTitle(title)
-                        .setMessage(completedReport)
-                        .setPositiveButton("TAMAM", null)
-                        .show()
+                    if (voiceTriggered) {
+                        val summary = if (passed > 0) {
+                            "$title tamamlandı. $passed sorgudan olumlu yanıt alındı, $unsupported sorgu desteklenmedi veya yanıt vermedi. Ayrıntılar hata dökümüne kaydedildi."
+                        } else {
+                            "$title tamamlandı ancak ECU'dan doğrulanmış olumlu yanıt alınamadı. $unsupported sorgu yanıtsız veya desteklenmiyor. Adaptör ve kontak bağlantısını kontrol edin."
+                        }
+                        log("Seyfi Usta sesli test sonucu: $summary")
+                        seyfiUstaAI?.speak(summary)
+                    } else {
+                        AlertDialog.Builder(this)
+                            .setTitle(title)
+                            .setMessage(completedReport)
+                            .setPositiveButton("TAMAM", null)
+                            .show()
+                    }
                 }
             }
         }
