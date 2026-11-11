@@ -69,23 +69,23 @@ class OfflineVoiceAssistant(
 
     private fun initializeRecognizer() {
         try {
-            recognitionAvailable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
-            } else {
-                SpeechRecognizer.isRecognitionAvailable(activity)
+            // Bulut/karma tanıma yedeği kesinlikle kullanılmaz.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                recognitionAvailable = false
+                status("Bu Android sürümünde güvenilir cihaz içi konuşma tanıma API'si yok. İnternet üzerinden tanımaya geçilmeyecek.")
+                recognizerInitialized = true
+                finishInitializationIfReady()
+                return
             }
+            recognitionAvailable = SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
             if (!recognitionAvailable) {
-                status("Bu telefonda kullanılabilir çevrimdışı konuşma servisi bulunamadı. Türkçe dil paketini kontrol edin.")
+                status("Cihaz içi konuşma servisi bulunamadı. Türkçe çevrimdışı dil paketini yükleyin.")
                 recognizerInitialized = true
                 finishInitializationIfReady()
                 return
             }
             recognizer?.destroy()
-            val speechEngine = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(activity)
-            }
+            val speechEngine = SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
             recognizer = speechEngine.also { speech ->
                 speech.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: android.os.Bundle?) {
@@ -159,9 +159,25 @@ class OfflineVoiceAssistant(
                     if (released) return@post
                     if (result == TextToSpeech.SUCCESS && engine != null) {
                         val language = engine.setLanguage(Locale("tr", "TR"))
+                        val maleVoice = engine.voices
+                            ?.filter { voice ->
+                                voice.locale.language.equals("tr", ignoreCase = true) &&
+                                    voice.locale.country.equals("TR", ignoreCase = true) &&
+                                    Regex("(^|[^a-z])male([^a-z]|$)", RegexOption.IGNORE_CASE)
+                                        .containsMatchIn(voice.name) &&
+                                    voice.features.none {
+                                        it.contains("network", ignoreCase = true) ||
+                                            it.contains("notInstalled", ignoreCase = true)
+                                    }
+                            }
+                            ?.sortedBy { it.name }
+                            ?.firstOrNull()
+                        // Cinsiyeti ses kimliğinde açıkça belirtilmeyen hiçbir sese izin verilmez.
+                        // Varsayılan sistem sesi (kadın olabilir) asla yedek olarak kullanılmaz.
                         ttsReady = language != TextToSpeech.LANG_MISSING_DATA &&
-                            language != TextToSpeech.LANG_NOT_SUPPORTED
-                        // Ses seçimini zorlamıyoruz: Android'in sistemde seçili TTS sesini koruyoruz.
+                            language != TextToSpeech.LANG_NOT_SUPPORTED &&
+                            maleVoice != null &&
+                            engine.setVoice(maleVoice) == TextToSpeech.SUCCESS
                         engine.setSpeechRate(0.94f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
@@ -189,8 +205,8 @@ class OfflineVoiceAssistant(
                             }
                         })
                         status(
-                            if (ttsReady) "Türkçe TTS hazır; telefonun sistemde seçili sesi kullanılacak."
-                            else "Türkçe TTS dili telefonda yüklü değil."
+                            if (ttsReady) "Türkçe erkek TTS sesi seçildi: ${maleVoice?.name}"
+                            else "Türkçe erkek ses bulunamadı. Kadın/varsayılan ses kullanılmayacak; Piper erkek ses paketi gerekir."
                         )
                     } else {
                         ttsReady = false
@@ -270,7 +286,7 @@ class OfflineVoiceAssistant(
         main.post {
             val engine = tts
             if (!ttsReady || engine == null) {
-                status("Sesli yanıt verilemiyor; Türkçe TTS hazır değil.")
+                status("Sesli yanıt verilemiyor: doğrulanmış Türkçe erkek TTS sesi hazır değil. Kadın/varsayılan ses kullanılmadı.")
                 onDone?.invoke()
                 return@post
             }
