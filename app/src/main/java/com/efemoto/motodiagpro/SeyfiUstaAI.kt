@@ -12,8 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Türkçe Vosk dinleme modeli APK'da kalır; Qwen3 0.6B modeli ilk açılışta
- * uygulamanın özel depolamasına indirilir ve sonraki açılışlarda çevrimdışı kullanılır.
+ * Android konuşma tanıma + sistem TTS + APK içine gömülü Qwen3 yerel metin modeli.
  */
 class SeyfiUstaAI(
     private val activity: Activity,
@@ -186,6 +185,18 @@ class SeyfiUstaAI(
 
     fun getModelStatus(): String = modelStatus
     fun getVoiceStatus(): String = voice.getStatus()
+
+    /**
+     * Donanım/servis düzeyinde açılış öz testi. Gerçek mikrofon anlaşılırlığı,
+     * ancak kullanıcı bir cümle söylediğinde doğrulanabilir.
+     */
+    fun runCompatibilitySelfTest(): List<String> {
+        val failures = mutableListOf<String>()
+        if (!brain.isReady()) failures += "Yerel yapay zekâ modeli deneme yanıtını tamamlamadı."
+        if (!voice.isRecognitionAvailable()) failures += "Android konuşma tanıma servisi bulunamadı."
+        if (!voice.isTtsReady()) failures += "Türkçe metin okuma motoru hazır değil."
+        return failures
+    }
     fun speak(text: String, onDone: (() -> Unit)? = null) = voice.speak(text, onDone)
     fun startListening() = voice.startListening()
     fun pauseForProcessing() = voice.pauseForProcessing()
@@ -208,7 +219,7 @@ class SeyfiUstaAI(
         // Model yükleme başarısız veya takılmışsa bekleyen isteği sonsuza kadar tutma.
         chatTimeoutExecutor.schedule({
             if (pendingChats.remove(pending)) {
-                val failure = "Yerel yapay zekâ 30 saniye içinde hazır olmadı. Model yükleme durumunu kontrol edin."
+                val failure = "Yerel yapay zekâ 3 dakika içinde hazır olmadı. Model dosyası veya cihaz belleği kontrol edilmeli."
                 publishModelStatus("Model hazır olmadığı için bekleyen mesaj sonlandırıldı.")
                 activity.runOnUiThread {
                     try {
@@ -218,7 +229,7 @@ class SeyfiUstaAI(
                     }
                 }
             }
-        }, 30, TimeUnit.SECONDS)
+        }, 180, TimeUnit.SECONDS)
 
         if (!modelTaskStarted.get()) startModelLoading()
     }
