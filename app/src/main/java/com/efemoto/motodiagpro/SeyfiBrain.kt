@@ -186,34 +186,59 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     }
 
     private fun buildServiceReference(question: String): String {
-        val code = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
-            .find(question)?.value?.uppercase()
-            ?: return "Soruda açık bir standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak."
+        // Tek bir soruda geçen kodla sınırlı kalma: gerçek ECU taramasında bulunan
+        // bütün P-kodlarını da bilgi bankasına bağla.
+        val codeRegex = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
+        val codes = (codeRegex.findAll(ecuContext).map { it.value.uppercase() } +
+            codeRegex.findAll(question).map { it.value.uppercase() })
+            .distinct()
+            .take(20)
+            .toList()
 
-        val yamaha = YamahaFaultCodes.find(code)
-        if (yamaha != null) {
-            return buildString {
-                appendLine("Kod: ${yamaha.code}")
-                appendLine("Başlık: ${yamaha.title}")
-                appendLine("Açıklama: ${yamaha.description}")
-                appendLine("Olası nedenler: ${yamaha.possibleCauses.joinToString("; ")}")
-                appendLine("Kontroller: ${yamaha.checks.joinToString("; ")}")
-                append("Kaynak: uygulamadaki Yamaha referans kaydı; model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
-            }
-        }
-
-        val title = DtcDatabase.title(code)
-        if (title.startsWith("Üreticiye özel")) {
-            return "Kod: $code. Yerel DTC kütüphanesinde doğrulanmış açıklama bulunamadı."
+        if (codes.isEmpty()) {
+            return "Soruda veya güncel ECU bağlamında standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak; ham ECU kodu ve model/yıl servis tablosu gerekir."
         }
 
         return buildString {
-            appendLine("Kod: $code")
-            appendLine("Genel açıklama: $title")
-            appendLine("Teknik not: ${DtcDatabase.description(code)}")
-            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
-            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
-            append("Kaynak: uygulamadaki genel SAE/OBD referansı; motosiklet üreticisi ve ECU varyantı ile teyit edilmeli.")
+            appendLine("Bilgi bankasında incelenen gerçek ECU/soru kodları:")
+            codes.forEach { code ->
+                appendLine()
+                appendLine("=== $code ===")
+                val localRecord = YamahaKnowledgeBase.find(appContext, code)
+                if (localRecord != null) {
+                    appendLine("Başlık: ${localRecord.title}")
+                    appendLine("Açıklama: ${localRecord.description}")
+                    appendLine("Sistem: ${localRecord.system}")
+                    appendLine("Olası nedenler: ${localRecord.possibleCauses.joinToString("; ")}")
+                    appendLine("Kontroller: ${localRecord.checks.joinToString("; ")}")
+                    appendLine("Kod standardı: ${localRecord.codeStandard}")
+                    appendLine("Doğrulama seviyesi: ${localRecord.verification}")
+                    appendLine("Kaynak: ${localRecord.source}")
+                } else {
+                    val legacyYamaha = YamahaFaultCodes.find(code)
+                    if (legacyYamaha != null) {
+                        appendLine("Başlık: ${legacyYamaha.title}")
+                        appendLine("Açıklama: ${legacyYamaha.description}")
+                        appendLine("Olası nedenler: ${legacyYamaha.possibleCauses.joinToString("; ")}")
+                        appendLine("Kontroller: ${legacyYamaha.checks.joinToString("; ")}")
+                        appendLine("Kaynak notu: Mevcut uygulama referansı; Yamaha model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
+                    } else {
+                        val title = DtcDatabase.title(code)
+                        if (title.startsWith("Üreticiye özel")) {
+                            appendLine("Sonuç: Bu kod için yerel bilgi bankasında doğrulanmış açıklama bulunamadı.")
+                        } else {
+                            appendLine("Genel OBD açıklaması: $title")
+                            appendLine("Teknik not: ${DtcDatabase.description(code)}")
+                            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
+                            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
+                            appendLine("Kaynak notu: Genel SAE/OBD referansı; Yamaha'ya özgü uygulama olarak kabul edilmemeli.")
+                        }
+                    }
+                }
+                appendLine("Parça eşleştirmesi: ${PartsAdvisor.statusMessage()}")
+            }
+            appendLine()
+            append("Önemli: Genel SAE kod açıklaması, Yamaha'ya özgü arıza kodu veya belirli model/yıl uyumluluğu anlamına gelmez. Model ve üretim yılı bilinmeden OEM/muadil parça numarası önerme.")
         }
     }
 
