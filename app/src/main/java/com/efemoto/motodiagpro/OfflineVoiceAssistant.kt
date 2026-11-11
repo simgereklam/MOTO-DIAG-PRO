@@ -67,6 +67,23 @@ class OfflineVoiceAssistant(
         callback?.invoke()
     }
 
+    /**
+     * Mikrofon izni sonradan verildiğinde eski, izinsiz oluşturulmuş
+     * SpeechRecognizer örneğini atıp izinli olarak yeniden kurar.
+     */
+    fun refreshRecognition(onReady: (() -> Unit)? = null) {
+        if (released) return
+        main.post {
+            try { recognizer?.cancel() } catch (_: Exception) {}
+            try { recognizer?.destroy() } catch (_: Exception) {}
+            recognizer = null
+            recognitionAvailable = false
+            recognizerInitialized = false
+            initCallback = onReady
+            initializeRecognizer()
+        }
+    }
+
     private fun initializeRecognizer() {
         try {
             // Bulut/karma tanıma yedeği kesinlikle kullanılmaz.
