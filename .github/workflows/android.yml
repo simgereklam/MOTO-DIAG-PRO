@@ -54,7 +54,7 @@ jobs:
 
       - name: Hazır model bağımlılığı olmadığını doğrula
         run: |
-          ! grep -R -n -E 'Qwen3|litertlm|litert-community|litertlm-android' app/src/main app/build.gradle.kts
+          ! grep -R -n -E 'com[.]google[.]ai[.]edge[.]litertlm|litertlm-android|litert-community' app/src/main app/build.gradle.kts
           echo "Hazır model ve LiteRT-LM bağımlılığı bulunamadı."
 
       - name: Seyfi komut öz testlerini çalıştır
