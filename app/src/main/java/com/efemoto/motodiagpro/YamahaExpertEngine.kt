@@ -80,17 +80,22 @@ object YamahaExpertEngine {
     fun analyze(
         rawCodes: List<String>,
         modelAndYear: String,
-        liveValues: Map<String, Double> = emptyMap()
+        liveValues: Map<String, Double> = emptyMap(),
+        scanCompleted: Boolean = false
     ): YamahaExpertReport {
         val codes = rawCodes.flatMap { raw ->
             codeRegex.findAll(raw).map { it.value.uppercase(Locale.US) }.toList()
         }.distinct().take(5)
 
         if (codes.isEmpty()) {
-            val message = "Bu rapora doğrulanmış bir ECU arıza kodu aktarılmadı. Önce gerçek ECU taramasını tamamlayın; yalnızca canlı verilerden arıza kodu varmış gibi sonuç çıkarmıyorum."
+            val message = if (scanCompleted) {
+                "Gerçek ECU taraması tamamlandı; taranan arıza hafızasından P-kodu bildirilmedi. Bu sonuç yalnızca sorgulanan ECU hafızası için geçerlidir; Yamaha'nın modele özel gösterge/servis kodları ayrıca kontrol edilmelidir."
+            } else {
+                "Bu rapora doğrulanmış bir ECU arıza kodu aktarılmadı. Önce gerçek ECU taramasını tamamlayın; yalnızca canlı verilerden arıza kodu varmış gibi sonuç çıkarmıyorum."
+            }
             return YamahaExpertReport(
                 message,
-                "Önce gerçek ECU taramasını tamamlayalım. Henüz doğrulanmış arıza kodu yok.",
+                if (scanCompleted) "Tarama tamamlandı. Sorgulanan ECU hafızasında P-kodu bildirilmedi." else "Önce gerçek ECU taramasını tamamlayalım. Henüz doğrulanmış arıza kodu yok.",
                 false
             )
         }
@@ -130,7 +135,7 @@ object YamahaExpertEngine {
                 appendLine()
             }
 
-            if (procedure == null && modelAndYear.isNotBlank()) {
+            if (codes.contains("P0335") && procedure == null && modelAndYear.isNotBlank()) {
                 appendLine("MODEL UYARISI: Girilen model/yıl için P0335 kodunda doğrulanmış Yamaha servis prosedürü bulunamadı. Başka modelin kablo rengi, sensör aralığı veya direnç değeri kullanılmamalıdır.")
             } else if (modelAndYear.isBlank()) {
                 appendLine("MODEL UYARISI: Model ve üretim yılı seçilmediği için yalnızca genel kod bilgisi verilebilir.")
