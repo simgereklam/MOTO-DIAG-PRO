@@ -204,9 +204,9 @@ class MainActivity : ComponentActivity() {
         )
         seyfiUstaAI = assistant
         assistant.initialize {
-            val parserFailures = seyfiCommandHandler.selfTest()
+            val parserFailures = seyfiCommandHandler.selfTest() + assistant.runCompatibilitySelfTest()
             if (parserFailures.isEmpty()) {
-                log("SEYFİ ÖZ TEST: Komut sözlüğü başarılı.")
+                log("SEYFİ ÖZ TEST: Yerel model, Android konuşma servisi, TTS ve komut sözlüğü kontrolleri başarılı. Gerçek mikrofon anlaşılırlığı ilk sesli komutta doğrulanacak.")
             } else {
                 log("SEYFİ ÖZ TEST HATASI: " + parserFailures.joinToString(" | "))
                 Toast.makeText(
