@@ -49,7 +49,7 @@ def read_corpus(path: Path) -> str:
 
 
 class SeyfiTransformer(nn.Module):
-    def __init__(self, width: int = 192, layers: int = 4, heads: int = 4,
+    def __init__(self, width: int = 384, layers: int = 6, heads: int = 6,
                  max_seq: int = 512, dropout: float = 0.1):
         super().__init__()
         if width % heads:
@@ -103,9 +103,9 @@ def main() -> None:
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--seq", type=int, default=512)
-    ap.add_argument("--width", type=int, default=192)
-    ap.add_argument("--layers", type=int, default=4)
-    ap.add_argument("--heads", type=int, default=4)
+    ap.add_argument("--width", type=int, default=384)
+    ap.add_argument("--layers", type=int, default=6)
+    ap.add_argument("--heads", type=int, default=6)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda", "mps"])
     ap.add_argument("--sample", default="Seyfi Usta, motosiklet neden tekliyor?")
