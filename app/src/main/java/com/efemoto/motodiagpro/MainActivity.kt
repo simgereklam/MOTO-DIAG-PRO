@@ -487,13 +487,24 @@ class MainActivity : ComponentActivity() {
                 showTests()
                 val failures = seyfiCommandHandler.selfTest() + assistant.runCompatibilitySelfTest()
                 val report = if (failures.isEmpty()) {
-                    "Seyfi Usta iç testi başarılı. Yerel yapay zekâ deneme yanıtı verdi, konuşma servisi ve Türkçe ses motoru hazır, komut sözlüğü testleri geçti. Şimdi gerçek mikrofon testi için beni duyduğunuzda söylediğiniz cümleyi ekranda kontrol edin."
+                    "Seyfi Usta yazılım öz testleri başarılı."
                 } else {
-                    "Seyfi Usta iç testinde sorun var: " + failures.joinToString(". ")
+                    "Seyfi Usta yazılım öz testinde uyarı var: " + failures.joinToString(". ")
                 }
                 log(report)
-                Toast.makeText(this, report, Toast.LENGTH_LONG).show()
-                assistant.speak(report)
+                if (failures.isNotEmpty()) {
+                    Toast.makeText(this, report, Toast.LENGTH_LONG).show()
+                }
+                val quickTest = SeyfiDiagnosticTestCatalog.find("basic_live_data")
+                if (quickTest != null && !busy.get() && !scanRunning.get()) {
+                    assistant.speak("Sistem testleri ekranını açtım. Şimdi gerçek ECU üzerinden salt-okunur temel sensör kontrolünü başlatıyorum.")
+                    runReadOnlyTest(quickTest.title, quickTest.description, quickTest.queries)
+                } else {
+                    assistant.speak(
+                        if (busy.get() || scanRunning.get()) "Sistem testleri ekranını açtım. Başka bir ECU işlemi sürdüğü için test başlamadı."
+                        else "Sistem testleri ekranını açtım ancak hızlı test tanımı bulunamadı."
+                    )
+                }
             }
 
             SeyfiAction.EXPORT_REPORT -> {
@@ -537,8 +548,11 @@ class MainActivity : ComponentActivity() {
      * mevcut teşhis yöneticisi yürütür.
      */
     private fun executeSeyfiAppAction(action: String): String {
+        val actionParts = action.split('|', limit = 2)
+        val actionName = actionParts.firstOrNull().orEmpty()
+        val requestedTestId = actionParts.getOrNull(1).orEmpty()
         val perform: () -> String = {
-            when (action) {
+            when (actionName) {
                 "start_ecu_scan" -> {
                     if (scanRunning.get()) {
                         "ECU taraması zaten devam ediyor."
@@ -608,6 +622,19 @@ class MainActivity : ComponentActivity() {
                 "show_tests" -> {
                     showTests()
                     "Sistem iletişim testleri ekranı açıldı. Testler mevcut güvenli, salt-okunur komutlarla sınırlıdır."
+                }
+
+                "run_safe_diagnostic_test" -> {
+                    val test = SeyfiDiagnosticTestCatalog.find(requestedTestId)
+                    when {
+                        test == null -> "İstenen test tanımlı değil. Hiçbir ECU komutu gönderilmedi."
+                        !SeyfiDiagnosticTestCatalog.isReadOnly(test) -> "Güvenlik nedeniyle salt-okunur olmayan test reddedildi."
+                        busy.get() || scanRunning.get() -> "Başka bir ECU işlemi sürdüğü için test başlatılmadı."
+                        else -> {
+                            runReadOnlyTest(test.title, test.description, test.queries)
+                            "Gerçek ECU üzerinde ${test.title} salt-okunur testi başlatıldı. Sonuç alındığında uygulamada gösterilecek."
+                        }
+                    }
                 }
 
                 "export_report" -> {
@@ -1081,8 +1108,24 @@ class MainActivity : ComponentActivity() {
                     log("ECU taraması tamamlandı • ${faults.size} arıza • ${faults.joinToString().ifBlank { "kod yok" }} • risk $currentRiskScore/100")
                     smartInsights.forEach { log("Akıllı teşhis: $it") }
                     
-                    // SEYFİ USTA BEYNİNİ GÜNCELLE
-                    seyfiUstaAI?.brain?.updateEcuData(rpm, tps.toInt(), coolant, mapKpa, voltage, faults, connected)
+                    // Gerçek tarama verisinden kanıta dayalı, salt-okunur sonraki test planı oluştur.
+                    val diagnosticPlan = SeyfiDiagnosticPlanner.createPlan(
+                        rawCodes = found,
+                        observedValues = diagnosticSnapshot,
+                        supportedPids = supportedPidSet
+                    )
+                    seyfiUstaAI?.updateDiagnosticPlan(
+                        diagnosticPlan.toPromptContext(supportedPidSet)
+                    )
+                    seyfiUstaAI?.brain?.updateEcuData(
+                        rpm = diagnosticSnapshot["rpm"]?.toInt() ?: -1,
+                        tps = diagnosticSnapshot["tps"]?.toInt() ?: -1,
+                        coolant = diagnosticSnapshot["coolant"]?.toInt() ?: -999,
+                        mapKpa = diagnosticSnapshot["map"]?.toInt() ?: -1,
+                        voltage = diagnosticSnapshot["voltage"] ?: -1.0,
+                        faults = found,
+                        connected = connected
+                    )
 
                     if (currentScreen == "SCAN") showFaults()
                     if (faults.isEmpty()) {
