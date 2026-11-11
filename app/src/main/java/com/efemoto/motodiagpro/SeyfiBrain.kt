@@ -242,7 +242,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         }
     }
 
-    // Qwen3 0.6B metin modelidir. Ses önce çevrimdışı Vosk tarafından metne çevrilir.
+    // Qwen3 0.6B metin modelidir. Ses önce Android cihaz içi konuşma tanıma ile metne çevrilir.
 
     fun ask(
         question: String,
