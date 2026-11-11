@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Seyfi Usta'nın uygulamadaki tek asistan giriş noktası.
- * Vosk ve Qwen modelleri derleme sırasında APK assets içine paketlenir.
+ * Sherpa-ONNX Whisper ve Qwen modelleri derleme sırasında APK assets içine paketlenir.
  * Telefonda ilk açılışta yalnızca uygulama alanına kopyalanır; internet gerekmez.
  */
 class SeyfiUstaAI(
