@@ -28,6 +28,7 @@ enum class SeyfiAction {
     SHOW_HELP,
     GO_HOME,
     SHOW_TESTS,
+    ANALYZE_ENGINE_DATA,
     EXPORT_REPORT,
     STOP,
     UNKNOWN
@@ -318,6 +319,24 @@ class SeyfiUstaCommandHandler {
 
         if (containsAny(
                 commandText,
+                "motor verilerini yorumla",
+                "motor verisini yorumla",
+                "sensorleri yorumla",
+                "sensor verilerini degerlendir",
+                "motor verilerini analiz et",
+                "verileri yapay zeka ile yorumla",
+                "motor analizi yap"
+            )
+        ) {
+            return command(
+                SeyfiAction.ANALYZE_ENGINE_DATA,
+                original,
+                "Gerçek ECU verilerini yerel yapay zekâ ile yorumluyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
                 "baglanti durumu",
                 "viecar bagli mi",
                 "ecu bagli mi",
@@ -483,7 +502,8 @@ class SeyfiUstaCommandHandler {
             "arızaları açıkla" to SeyfiAction.EXPLAIN_FAULTS,
             "arızaları sil" to SeyfiAction.CLEAR_FAULTS,
             "canlı verileri göster" to SeyfiAction.SHOW_LIVE_DATA,
-            "ana sayfa" to SeyfiAction.GO_HOME
+            "ana sayfa" to SeyfiAction.GO_HOME,
+            "motor verilerini yorumla" to SeyfiAction.ANALYZE_ENGINE_DATA
         )
         return cases.mapNotNull { (phrase, expected) ->
             val actual = handle(phrase).action
