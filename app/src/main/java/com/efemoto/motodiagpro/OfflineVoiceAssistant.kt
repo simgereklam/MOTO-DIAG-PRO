@@ -159,25 +159,17 @@ class OfflineVoiceAssistant(
                     if (released) return@post
                     if (result == TextToSpeech.SUCCESS && engine != null) {
                         val language = engine.setLanguage(Locale("tr", "TR"))
-                        val maleVoice = engine.voices
-                            ?.filter { voice ->
-                                voice.locale.language.equals("tr", ignoreCase = true) &&
-                                    voice.locale.country.equals("TR", ignoreCase = true) &&
-                                    Regex("(^|[^a-z])male([^a-z]|$)", RegexOption.IGNORE_CASE)
-                                        .containsMatchIn(voice.name) &&
-                                    voice.features.none {
-                                        it.contains("network", ignoreCase = true) ||
-                                            it.contains("notInstalled", ignoreCase = true)
-                                    }
-                            }
-                            ?.sortedBy { it.name }
-                            ?.firstOrNull()
-                        // Cinsiyeti ses kimliğinde açıkça belirtilmeyen hiçbir sese izin verilmez.
-                        // Varsayılan sistem sesi (kadın olabilir) asla yedek olarak kullanılmaz.
+                        // Android Voice API sesin kadın/erkek olduğunu güvenilir biçimde bildirmez.
+                        // Önceki çalışan sürümde kullanılan telefonun Türkçe sistem sesini koru;
+                        // yalnızca cihazda yüklü/çevrimdışı bir Türkçe ses varsa konuş.
+                        val selectedVoice = engine.voice
+                        val isTurkishVoice = selectedVoice?.locale?.language.equals("tr", ignoreCase = true)
+                        val isOfflineVoice = selectedVoice != null &&
+                            !selectedVoice.isNetworkConnectionRequired
                         ttsReady = language != TextToSpeech.LANG_MISSING_DATA &&
                             language != TextToSpeech.LANG_NOT_SUPPORTED &&
-                            maleVoice != null &&
-                            engine.setVoice(maleVoice) == TextToSpeech.SUCCESS
+                            isTurkishVoice &&
+                            isOfflineVoice
                         engine.setSpeechRate(0.94f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
@@ -205,8 +197,8 @@ class OfflineVoiceAssistant(
                             }
                         })
                         status(
-                            if (ttsReady) "Türkçe erkek TTS sesi seçildi: ${maleVoice?.name}"
-                            else "Türkçe erkek ses bulunamadı. Kadın/varsayılan ses kullanılmayacak; Piper erkek ses paketi gerekir."
+                            if (ttsReady) "Telefonun sistemde seçili çevrimdışı Türkçe sesi hazır: ${selectedVoice?.name}"
+                            else "Çevrimdışı Türkçe sistem sesi hazır değil. Ağ sesi veya başka cinsiyette ses yedeği kullanılmayacak."
                         )
                     } else {
                         ttsReady = false
