@@ -471,7 +471,15 @@ class MainActivity : ComponentActivity() {
 
             SeyfiAction.SHOW_TESTS -> {
                 showTests()
-                assistant.speak("Sistem testleri ekranını açtım.")
+                val failures = seyfiCommandHandler.selfTest() + assistant.runCompatibilitySelfTest()
+                val report = if (failures.isEmpty()) {
+                    "Seyfi Usta iç testi başarılı. Yerel yapay zekâ deneme yanıtı verdi, konuşma servisi ve Türkçe ses motoru hazır, komut sözlüğü testleri geçti. Şimdi gerçek mikrofon testi için beni duyduğunuzda söylediğiniz cümleyi ekranda kontrol edin."
+                } else {
+                    "Seyfi Usta iç testinde sorun var: " + failures.joinToString(". ")
+                }
+                log(report)
+                Toast.makeText(this, report, Toast.LENGTH_LONG).show()
+                assistant.speak(report)
             }
 
             SeyfiAction.EXPORT_REPORT -> {
