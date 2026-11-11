@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - master
+      - seyfi-usta-tablet-responsive
   workflow_dispatch:
 
 permissions:
