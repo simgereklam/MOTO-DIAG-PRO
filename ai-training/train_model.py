@@ -8,6 +8,7 @@ samples from the same ride leaking into both train and test sets.
 """
 from __future__ import annotations
 import argparse
+import json
 from pathlib import Path
 import json
 import pandas as pd
@@ -18,7 +19,19 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 from sklearn.model_selection import GroupShuffleSplit
 import joblib
 
-META = {"session_id", "fault_label", "timestamp", "vehicle", "model_year", "dtc"}
+META = {"session_id", "fault_label", "timestamp", "vehicle", "model_year", "dtc", "dtcs"}
+
+def load_data(path: str) -> pd.DataFrame:
+    source = Path(path)
+    if source.suffix.lower() in {".jsonl", ".ndjson"}:
+        rows = [json.loads(line) for line in source.read_text(encoding="utf-8").splitlines() if line.strip()]
+        frame = pd.DataFrame(rows)
+        if "values" not in frame.columns:
+            raise SystemExit("JSONL rows must contain a 'values' object.")
+        values = pd.json_normalize(frame["values"])
+        metadata = frame.drop(columns=["values", "dtcs"], errors="ignore").reset_index(drop=True)
+        return pd.concat([metadata, values.reset_index(drop=True)], axis=1)
+    return pd.read_csv(source)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -27,7 +40,7 @@ def main():
     ap.add_argument("--trees", type=int, default=400)
     args = ap.parse_args()
 
-    df = pd.read_csv(args.csv)
+    df = load_data(args.csv)
     required = {"session_id", "fault_label"}
     missing = required - set(df.columns)
     if missing:
