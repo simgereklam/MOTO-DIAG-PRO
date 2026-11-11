@@ -2,7 +2,6 @@ package com.efemoto.motodiagpro
 
 import android.app.Activity
 import android.content.Intent
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.RecognitionListener
@@ -261,12 +260,13 @@ class OfflineVoiceAssistant(
             }
             speaking = true
             val utteranceId = "seyfi-${ids.incrementAndGet()}"
-            val listener = engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {}
                 override fun onDone(id: String?) {
                     main.post {
                         if (id == utteranceId) {
                             speaking = false
+                            processing = false
                             status("Seyfi Usta yanıtını tamamladı.")
                             onDone?.invoke()
                             if (listeningEnabled && !processing) startListeningInternal(350)
@@ -277,6 +277,7 @@ class OfflineVoiceAssistant(
                     main.post {
                         if (id == utteranceId) {
                             speaking = false
+                            processing = false
                             status("Metin seslendirilemedi.")
                             onDone?.invoke()
                         }
@@ -286,6 +287,7 @@ class OfflineVoiceAssistant(
             val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
             if (result == TextToSpeech.ERROR) {
                 speaking = false
+                processing = false
                 status("Telefonun ses motoru konuşmayı başlatamadı.")
                 onDone?.invoke()
             }
