@@ -114,7 +114,7 @@ class OfflineVoiceAssistant(
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() { status("Konuşma alındı, metne çevriliyor.") }
                     override fun onError(error: Int) {
-                        if (released) return
+                        if (released || processing || speaking) return
                         val message = when (error) {
                             SpeechRecognizer.ERROR_NETWORK,
                             SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
@@ -131,6 +131,7 @@ class OfflineVoiceAssistant(
                         scheduleRestart()
                     }
                     override fun onResults(results: android.os.Bundle?) {
+                        if (released || processing || speaking) return
                         val text = results
                             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             ?.firstOrNull()
@@ -285,15 +286,21 @@ class OfflineVoiceAssistant(
             onDone?.invoke()
             return
         }
+        // Durumu main kuyruğuna girmeden kilitle: tanıma callback'i konuşma
+        // başlarken yeni bir mikrofon oturumu açamasın.
+        speaking = true
         pauseForProcessing()
         main.post {
             val engine = tts
             if (!ttsReady || engine == null) {
+                speaking = false
+                processing = false
                 status("Sesli yanıt verilemiyor: Türkçe TTS hazır değil.")
-                onDone?.invoke()
+                try { onDone?.invoke() } finally {
+                    if (listeningEnabled) startListeningInternal(350)
+                }
                 return@post
             }
-            speaking = true
             val utteranceId = "seyfi-${ids.incrementAndGet()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {}
@@ -304,9 +311,12 @@ class OfflineVoiceAssistant(
                             processing = false
                             status("Seyfi Usta yanıtını tamamladı.")
                             val hasCompletionCallback = onDone != null
-                            onDone?.invoke()
-                            if (!hasCompletionCallback && listeningEnabled && !processing) {
-                                startListeningInternal(350)
+                            try { onDone?.invoke() } catch (e: Exception) {
+                                Log.e("SeyfiVoice", "Konuşma sonrası işlem başarısız", e)
+                            } finally {
+                                if (!hasCompletionCallback && listeningEnabled && !processing) {
+                                    startListeningInternal(350)
+                                }
                             }
                         }
                     }
@@ -318,9 +328,12 @@ class OfflineVoiceAssistant(
                             processing = false
                             status("Metin seslendirilemedi.")
                             val hasCompletionCallback = onDone != null
-                            onDone?.invoke()
-                            if (!hasCompletionCallback && listeningEnabled && !processing) {
-                                startListeningInternal(350)
+                            try { onDone?.invoke() } catch (e: Exception) {
+                                Log.e("SeyfiVoice", "Konuşma sonrası işlem başarısız", e)
+                            } finally {
+                                if (!hasCompletionCallback && listeningEnabled && !processing) {
+                                    startListeningInternal(350)
+                                }
                             }
                         }
                     }
