@@ -1703,8 +1703,12 @@ class MainActivity : ComponentActivity() {
             .filter { it in 0x01..0xE0 && !EcuPidCatalog.isSupportBitmap(it) }
             .sorted()
         val readings = mutableListOf<EcuPidReading>()
-        for (pid in candidates) {
+        for ((index, pid) in candidates.withIndex()) {
             val pidHex = "%02X".format(Locale.US, pid)
+            if (candidates.isNotEmpty()) {
+                val percent = 61 + (index * 6 / candidates.size)
+                updateScan(percent, "ECU PID 01$pidHex okunuyor…")
+            }
             try {
                 val response = elm("01$pidHex", 900)
                 val bytes = ObdResponseParser.parsePidBytes(response, "41$pidHex")
