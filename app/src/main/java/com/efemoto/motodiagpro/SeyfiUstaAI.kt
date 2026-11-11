@@ -55,6 +55,31 @@ class SeyfiUstaAI(
     @Volatile private var initializationCallback: (() -> Unit)? = null
     @Volatile private var modelStatus = "Qwen3 0.6B modeli kontrol ediliyor."
 
+    /**
+     * Açılış selamı için yalnızca Android ses katmanını hazırlar.
+     * Qwen3 modeli arka planda yüklenir; model gecikmesi TTS selamını engellemez.
+     */
+    fun initializeVoiceOnly(onReady: () -> Unit) {
+        if (voiceReady) {
+            activity.runOnUiThread { onReady() }
+            if (!modelTaskStarted.get()) startModelLoading()
+            return
+        }
+        try {
+            voice.initialize {
+                voiceReady = true
+                onReady()
+            }
+            if (!modelTaskStarted.get()) startModelLoading()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ses katmanı başlatılamadı", e)
+            onReady()
+        }
+    }
+
+    fun isTtsReady(): Boolean = voice.isTtsReady()
+    fun isRecognitionAvailable(): Boolean = voice.isRecognitionAvailable()
+
     fun initialize(onReady: () -> Unit) {
         if (initialized) {
             if (voiceReady && modelInitializationFinished) {
