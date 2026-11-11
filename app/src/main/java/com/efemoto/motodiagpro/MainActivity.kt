@@ -2121,64 +2121,29 @@ class MainActivity : ComponentActivity() {
         }
         status.post(statusRefresh)
 
-        val chatCard = neonCard("SEYFİ USTA İLE SOHBET", cyan)
-        val transcript = text(
-            seyfiChatHistory.toString().ifBlank {
-                "Merhaba, ben Seyfi Usta. Yerel model hazır olduğunda motosikletin hakkında teknik sorularını yanıtlayacağım.\n\n"
-            },
-            14, white
-        ).apply {
-            gravity = Gravity.TOP
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            minHeight = dp(220)
-            background = rounded(panel2, blue, 10)
-        }
-        val transcriptScroll = ScrollView(this).apply {
-            isFillViewport = false
-            addView(transcript, ViewGroup.LayoutParams(-1, -2))
-        }
-        chatCard.addView(transcriptScroll, LinearLayout.LayoutParams(-1, dp(280)))
-
-        val question = EditText(this).apply {
-            hint = "Seyfi Usta'ya soru sor..."
-            setTextColor(white)
-            setHintTextColor(muted)
-            minLines = 2
-            maxLines = 4
-            gravity = Gravity.TOP
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = rounded(panel2, cyan, 10)
-        }
-        addGap(chatCard, 8)
-        chatCard.addView(question)
-        chatCard.addView(actionButton("SORUYU GÖNDER", green) {
-            val prompt = question.text.toString().trim()
-            if (prompt.isBlank()) {
-                Toast.makeText(this, "Önce bir soru yazın.", Toast.LENGTH_SHORT).show()
+        val analysisCard = neonCard("YAPAY ZEKÂ MOTOR VERİSİ ANALİZİ", purpleColor())
+        analysisCard.addView(text(
+            "Seyfi Usta'nın yerel yapay zekâsı genel sohbet veya uygulama komutu çalıştırmaz. Yalnızca ECU'dan gerçekten okunan motor verilerini yorumlar.",
+            13, white
+        ))
+        addGap(analysisCard, 8)
+        analysisCard.addView(actionButton("GERÇEK MOTOR VERİLERİNİ YORUMLA", purpleColor()) {
+            val assistant = seyfiUstaAI
+            if (assistant == null) {
+                Toast.makeText(this, "Yerel yapay zekâ başlatılmadı.", Toast.LENGTH_LONG).show()
+            } else if (!connected || liveValues.isEmpty()) {
+                assistant.speak("Motor verisi analizi için önce ECU'ya bağlanıp canlı verileri okumalıyız.")
             } else {
-                seyfiChatHistory.append("SİZ: ").append(prompt).append("\n\n")
-                transcript.text = seyfiChatHistory.toString()
-                question.setText("")
-                val assistant = seyfiUstaAI
-                if (assistant == null) {
-                    seyfiChatHistory.append("SEYFİ USTA: Asistan henüz başlatılmadı. Uygulamayı yeniden açıp bağlantıyı kontrol edin.\n\n")
-                    transcript.text = seyfiChatHistory.toString()
-                } else {
+                status.text = combinedAssistantStatus()
+                assistant.analyzeCurrentEngineData { success, answer ->
+                    log("Seyfi Usta motor analizi " + (if (success) "başarılı: " else "başarısız: ") + answer)
                     status.text = combinedAssistantStatus()
-                    assistant.chat(prompt) { answer ->
-                        seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
-                        transcript.text = seyfiChatHistory.toString()
-                        status.text = combinedAssistantStatus()
-                        transcriptScroll.post { transcriptScroll.fullScroll(View.FOCUS_DOWN) }
-                    }
+                    if (!success) Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
                 }
             }
         })
-        chatCard.addView(actionButton("SOHBETİ TEMİZLE", blue) {
-            seyfiChatHistory.clear()
-            showSeyfiChat()
-        })
-        c.addView(chatCard)
+        c.addView(analysisCard)
+
     }
 
     private fun showLogs() {
