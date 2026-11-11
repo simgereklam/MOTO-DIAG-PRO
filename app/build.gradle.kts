@@ -8,7 +8,7 @@ android {
     compileSdk = 36
 
     androidResources {
-        noCompress += "litertlm"
+        noCompress += listOf("litertlm", "onnx")
     }
     defaultConfig {
         applicationId = "com.efemoto.motodiagpro"
@@ -46,7 +46,7 @@ dependencies {
     // Seyfi Usta: cihaz üzerinde çalışan LiteRT-LM yerel model motoru.
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
 
-    // Seyfi Usta: sürekli çevrimdışı Türkçe ses tanıma (Vosk + Android JNA AAR).
-    implementation("com.alphacephei:vosk-android:0.3.75@aar")
-    implementation("net.java.dev.jna:jna:5.18.1@aar")
+    // Sherpa-ONNX 2.0.1; AAR SHA-256 doğrulaması CI iş akışında yapılır.
+    implementation(files("libs/sherpa-onnx-2.0.1.aar"))
+    testImplementation("junit:junit:4.13.2")
 }

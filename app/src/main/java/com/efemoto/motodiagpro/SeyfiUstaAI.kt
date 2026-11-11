@@ -2,6 +2,8 @@ package com.efemoto.motodiagpro
 
 import android.app.Activity
 import android.util.Log
+import android.os.Handler
+import android.os.Looper
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
@@ -43,6 +45,7 @@ class SeyfiUstaAI(
         com.google.ai.edge.litertlm.tool(SeyfiAppTools(onAppAction))
     )
     private val modelExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
     private val modelTaskStarted = AtomicBoolean(false)
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
@@ -54,11 +57,10 @@ class SeyfiUstaAI(
             return
         }
         initialized = true
-        // Ses tanıma başlatılırken APK'ya gömülü yapay zekâ da arka planda
-        // hazırlanır. İlk sohbet için internetten model indirme beklenmez.
+        // Büyük sohbet modeli uygulama açılışında RAM tüketmez; ilk doğal dil
+        // sorusunda yüklenir. Sesli komutlar ve ECU taraması bağımsız çalışır.
         try {
             voice.initialize(onReady)
-            startModelLoading()
         } catch (e: Exception) {
             Log.e(TAG, "Asistan başlatılamadı", e)
             onReady()
@@ -165,7 +167,20 @@ class SeyfiUstaAI(
     private fun answerWithBrain(message: String, onAnswer: (String) -> Unit) {
         publishModelStatus("Seyfi Usta düşünüyor ve yanıt hazırlıyor.")
         Log.i(TAG, "Sohbet isteği Qwen'e gönderildi: ${message.take(240)}")
+        val delivered = AtomicBoolean(false)
+        val timeout = Runnable {
+            if (delivered.compareAndSet(false, true)) {
+                val answer = "Yerel yapay zekâ zamanında yanıt veremedi. Soruyu kısaltıp tekrar deneyin."
+                try { onAnswer(answer) } catch (e: Exception) {
+                    Log.e(TAG, "Zaman aşımı yanıtı ekrana aktarılamadı", e)
+                }
+                speak(answer)
+            }
+        }
+        mainHandler.postDelayed(timeout, 45_000L)
         brain.chat(message) { answer ->
+            if (!delivered.compareAndSet(false, true)) return@chat
+            mainHandler.removeCallbacks(timeout)
             Log.i(TAG, "Qwen yanıtı alındı: ${answer.take(600)}")
             try {
                 onAnswer(answer)

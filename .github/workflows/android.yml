@@ -38,25 +38,35 @@ jobs:
       - name: Gradle sürümünü doğrula
         run: gradle --version
 
-      - name: Türkçe çevrimdışı konuşma modelini ekle
+      - name: Sherpa-ONNX ve Türkçe Whisper Base INT8 modelini APK içine ekle
         run: |
-          mkdir -p /tmp/vosk-tr app/src/main/assets/model-tr
+          mkdir -p app/libs app/src/main/assets/sherpa-whisper-base /tmp/sherpa-whisper-base
           curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
-            "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip" \
-            --output /tmp/vosk-tr/model.zip
-          echo "8c8d07cec1bce31add14967c16891c84152cdf76d391e33c08278119b9ea96e5  /tmp/vosk-tr/model.zip" | sha256sum --check
-          unzip -q /tmp/vosk-tr/model.zip -d /tmp/vosk-tr
-          MODEL_FILE="$(find /tmp/vosk-tr -type f -name final.mdl -print -quit)"
-          test -n "$MODEL_FILE"
-          MODEL_ROOT="$(dirname "$MODEL_FILE")"
-          test -f "$MODEL_ROOT/Gr.fst"
-          test -f "$MODEL_ROOT/HCLr.fst"
-          test -f "$MODEL_ROOT/word_boundary.int"
-          cp -a "$MODEL_ROOT"/. app/src/main/assets/model-tr/
-          printf '%s\n' "$GITHUB_SHA" > app/src/main/assets/model-tr/uuid
-          test -f app/src/main/assets/model-tr/uuid
-          echo "Türkçe Vosk model assets hazır."
-          du -sh app/src/main/assets/model-tr
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.1/sherpa-onnx-2.0.1.aar" \
+            --output app/libs/sherpa-onnx-2.0.1.aar
+          echo "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7  app/libs/sherpa-onnx-2.0.1.aar" | sha256sum --check
+
+          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-base.tar.bz2" \
+            --output /tmp/sherpa-whisper-base/model.tar.bz2
+          MODEL_BYTES="$(stat -c%s /tmp/sherpa-whisper-base/model.tar.bz2)"
+          test "$MODEL_BYTES" -ge 190000000
+          test "$MODEL_BYTES" -le 220000000
+          tar -xjf /tmp/sherpa-whisper-base/model.tar.bz2 -C /tmp/sherpa-whisper-base \
+            --wildcards '*base-encoder.int8.onnx' '*base-decoder.int8.onnx' '*base-tokens.txt'
+          MODEL_ROOT="$(dirname "$(find /tmp/sherpa-whisper-base -type f -name base-encoder.int8.onnx -print -quit)")"
+          test -f "$MODEL_ROOT/base-encoder.int8.onnx"
+          test -f "$MODEL_ROOT/base-decoder.int8.onnx"
+          test -f "$MODEL_ROOT/base-tokens.txt"
+          cp "$MODEL_ROOT/base-encoder.int8.onnx" app/src/main/assets/sherpa-whisper-base/
+          cp "$MODEL_ROOT/base-decoder.int8.onnx" app/src/main/assets/sherpa-whisper-base/
+          cp "$MODEL_ROOT/base-tokens.txt" app/src/main/assets/sherpa-whisper-base/
+          test "$(stat -c%s app/src/main/assets/sherpa-whisper-base/base-encoder.int8.onnx)" -ge 20000000
+          test "$(stat -c%s app/src/main/assets/sherpa-whisper-base/base-decoder.int8.onnx)" -ge 100000000
+          test "$(stat -c%s app/src/main/assets/sherpa-whisper-base/base-tokens.txt)" -ge 500000
+          cp THIRD_PARTY_NOTICES.md app/src/main/assets/THIRD_PARTY_NOTICES.txt
+          echo "Sherpa-ONNX AAR ve Whisper Base INT8 assets hazır."
+          du -sh app/libs/sherpa-onnx-2.0.1.aar app/src/main/assets/sherpa-whisper-base
 
       - name: Çevrimdışı yapay zekâ modelini APK içine ekle
         run: |
@@ -68,6 +78,9 @@ jobs:
           test "$MODEL_BYTES" -ge 300000000
           test "$MODEL_BYTES" -le 400000000
           echo "Seyfi Usta yapay zekâ modeli APK assets içine alındı: $MODEL_BYTES bayt"
+
+      - name: Komut yönlendirici birim testleri
+        run: gradle :app:testDebugUnitTest --stacktrace
 
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace

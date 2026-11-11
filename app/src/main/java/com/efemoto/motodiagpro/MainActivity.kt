@@ -305,7 +305,7 @@ class MainActivity : ComponentActivity() {
         // Türkçe konuşma modelinin sık yaptığı uyandırma sözü yazım hatalarını düzelt.
         // Vosk küçük Türkçe modelinde "Seyfi Usta" farklı yazımlarla çıkabiliyor.
         // Önce Türkçe karakterleri sadeleştir, sonra sık görülen fonetik hataları düzelt.
-        val normalizedSpeech = java.text.Normalizer.normalize(
+        val normalizedSpeechBase = java.text.Normalizer.normalize(
             rawCommand.lowercase(java.util.Locale("tr", "TR")),
             java.text.Normalizer.Form.NFD
         )
@@ -316,6 +316,11 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\b(seyfi|seyf|sefi|seifi)\\b"), "seyfi")
             .replace(Regex("\\s+"), " ")
             .trim()
+
+        val normalizedSpeech = normalizedSpeechBase.replace(
+            Regex("^e\\s*posta(?=\\s|$)"),
+            "seyfi usta"
+        )
 
         val wakeDetected = Regex("\\bseyfi\\b")
             .containsMatchIn(normalizedSpeech)
@@ -460,8 +465,21 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Komut olmayan doğal dil mesajlarını yerel Qwen'e aktar.
-                sendSeyfiChatMessage(commandInput)
+                // İşlem fiili içeren bilinmeyen ifadeler sohbet modeline gitmez.
+                val actionWords = setOf(
+                    "tara", "tarama", "basla", "baslat", "sil", "temizle",
+                    "test", "oku", "goster", "ac", "kapat", "dur", "baglan", "rapor"
+                )
+                val normalizedWords = java.text.Normalizer.normalize(
+                    commandInput.lowercase(java.util.Locale("tr", "TR")),
+                    java.text.Normalizer.Form.NFD
+                ).replace(Regex("\\p{Mn}+"), "").replace("ı", "i")
+                    .split(Regex("\\s+")).filter { it.isNotBlank() }
+                if (normalizedWords.any { it in actionWords }) {
+                    assistant.speak("Bu uygulama komutunu tam anlayamadım. Tarama için 'tarama yap' diyebilirsiniz.")
+                } else {
+                    sendSeyfiChatMessage(commandInput)
+                }
             }
         }
     }

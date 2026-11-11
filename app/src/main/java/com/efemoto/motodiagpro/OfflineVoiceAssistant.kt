@@ -1,495 +1,464 @@
 package com.efemoto.motodiagpro
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
-import org.json.JSONObject
-import org.vosk.Model
-import org.vosk.Recognizer
-import org.vosk.android.RecognitionListener
-import org.vosk.android.SpeechService
-import org.vosk.android.StorageService
+import com.k2fsa.sherpa.onnx.OfflineModelConfig
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
+import java.io.File
+import java.io.FileOutputStream
+import java.util.ArrayDeque
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.sqrt
 
-/**
- * Seyfi Usta ses katmanı:
- * - Vosk: sürekli, yerel Türkçe konuşma tanıma.
- * - Android TTS: Türkçe sesli yanıt.
- * - Tanınan metin onRecognized üzerinden SeyfiUstaAI / Qwen'e ve
- *   MainActivity komut yönlendiricisine aktarılır.
- *
- * SpeechRecognizer kullanılmaz; böylece telefonun bulut/üretici konuşma
- * servisine ve her cümleden sonra tek-atımlık dinleme döngüsüne bağlı kalmaz.
- */
+/** Sherpa-ONNX ve çok dilli Whisper Base INT8 ile yerel Türkçe ses tanıma. */
 class OfflineVoiceAssistant(
     private val activity: Activity,
     private val onRecognized: (String) -> Unit,
     private val onStatus: (String) -> Unit
 ) {
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private val turkish = Locale("tr", "TR")
-    private val utteranceIds = AtomicInteger(0)
-    private val pendingSpeechCallbacks = ConcurrentHashMap<String, () -> Unit>()
+    private val handler = Handler(Looper.getMainLooper())
+    private val worker = Executors.newSingleThreadExecutor()
+    private val captureRunning = AtomicBoolean(false)
+    private val ids = java.util.concurrent.atomic.AtomicInteger()
+    private val callbacks = ConcurrentHashMap<String, () -> Unit>()
 
-    @Volatile private var voskModel: Model? = null
-    @Volatile private var recognizer: Recognizer? = null
-    @Volatile private var speechService: SpeechService? = null
+    @Volatile private var recognizer: OfflineRecognizer? = null
+    @Volatile private var recorder: AudioRecord? = null
     @Volatile private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
-    @Volatile private var listeningEnabled = false
-    @Volatile private var processingRequested = false
-    @Volatile private var speakingRequested = false
+    @Volatile private var modelReady = false
+    @Volatile private var listening = false
+    @Volatile private var processing = false
+    @Volatile private var speaking = false
     @Volatile private var released = false
-    @Volatile private var currentStatus = "Türkçe çevrimdışı ses modeli hazırlanıyor."
+    @Volatile private var status = "Türkçe çevrimdışı ses modeli hazırlanıyor."
 
     private var modelInitialized = false
     private var ttsInitialized = false
-    private var initializedCallback: (() -> Unit)? = null
-    private var activeUtteranceId: String? = null
-    private var restartAttempts = 0
+    private var initCallback: (() -> Unit)? = null
+    private var activeUtterance: String? = null
 
-    private fun reportStatus(message: String) {
-        if (currentStatus == message) return
-        currentStatus = message
-        if (Looper.myLooper() == Looper.getMainLooper()) {
-            if (!released) onStatus(message)
-        } else {
-            mainHandler.post { if (!released) onStatus(message) }
-        }
+    private fun setStatus(value: String) {
+        status = value
+        handler.post { if (!released) onStatus(value) }
     }
 
-    fun getStatus(): String = currentStatus
+    fun getStatus(): String = status
 
     fun initialize(onInitialized: (() -> Unit)? = null) {
         if (released) return
-        initializedCallback = onInitialized
-        reportStatus("Türkçe çevrimdışı konuşma modeli yükleniyor...")
-
-        try {
-            StorageService.unpack(
-                activity,
-                "model-tr",
-                "seyfi-voice",
-                { model ->
-                    if (released) {
-                        try { model.close() } catch (_: Exception) {}
-                        return@unpack
-                    }
-                    voskModel = model
-                    modelInitialized = true
-                    reportStatus("Türkçe Vosk modeli hazır.")
-                    completeInitializationIfReady()
-                    if (listeningEnabled && !processingRequested && !speakingRequested) {
-                        startSpeechService()
-                    }
-                },
-                { error ->
-                    if (released) return@unpack
-                    modelInitialized = true
-                    reportStatus("Türkçe ses modeli açılamadı: ${error.message}")
-                    completeInitializationIfReady()
-                }
-            )
-        } catch (e: Exception) {
-            modelInitialized = true
-            reportStatus("Türkçe ses modeli başlatılamadı: ${e.message}")
-            completeInitializationIfReady()
+        initCallback = onInitialized
+        setStatus("Sherpa-ONNX Türkçe konuşma modeli yükleniyor...")
+        worker.execute {
+            try {
+                val dir = File(activity.filesDir, "seyfi-whisper-base")
+                if (!dir.exists() && !dir.mkdirs()) error("Ses modeli klasörü oluşturulamadı.")
+                val encoder = copyAsset("sherpa-whisper-base/base-encoder.int8.onnx",
+                    File(dir, "base-encoder.int8.onnx"), 20_000_000L)
+                val decoder = copyAsset("sherpa-whisper-base/base-decoder.int8.onnx",
+                    File(dir, "base-decoder.int8.onnx"), 100_000_000L)
+                val tokens = copyAsset("sherpa-whisper-base/base-tokens.txt",
+                    File(dir, "base-tokens.txt"), 500_000L)
+                val model = OfflineModelConfig(
+                    whisper = OfflineWhisperModelConfig(
+                        encoder = encoder.absolutePath,
+                        decoder = decoder.absolutePath,
+                        language = "tr",
+                        task = "transcribe"
+                    ),
+                    tokens = tokens.absolutePath,
+                    numThreads = 2,
+                    provider = "cpu",
+                    modelType = "whisper"
+                )
+                recognizer = OfflineRecognizer(
+                    config = OfflineRecognizerConfig(modelConfig = model)
+                )
+                modelReady = true
+                setStatus("Sherpa-ONNX Türkçe konuşma modeli hazır.")
+            } catch (e: Exception) {
+                modelReady = false
+                setStatus("Türkçe ses modeli başlatılamadı: ${e.message}")
+            } finally {
+                modelInitialized = true
+                completeInitialization()
+            }
         }
-
         initializeTts()
+    }
+
+    private fun copyAsset(path: String, target: File, minBytes: Long): File {
+        if (target.isFile && target.length() >= minBytes) return target
+        target.delete()
+        val part = File(target.parentFile, target.name + ".part")
+        part.delete()
+        activity.assets.open(path).use { input ->
+            FileOutputStream(part).use { output ->
+                val buffer = ByteArray(1024 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    output.write(buffer, 0, n)
+                }
+                output.fd.sync()
+            }
+        }
+        val length = part.length()
+        if (length < minBytes) {
+            part.delete()
+            error("${target.name} eksik veya bozuk: $length bayt.")
+        }
+        if (!part.renameTo(target)) {
+            part.delete()
+            error("${target.name} uygulama belleğine kopyalanamadı.")
+        }
+        return target
     }
 
     private fun initializeTts() {
         try {
-            tts = TextToSpeech(activity) { status ->
+            tts = TextToSpeech(activity) { result ->
                 if (released) return@TextToSpeech
                 val engine = tts
-                if (status == TextToSpeech.SUCCESS && engine != null) {
+                if (result == TextToSpeech.SUCCESS && engine != null) {
                     try {
-                        // Önce dili ayarla. Android setLanguage() çağrısı varsayılan sesi
-                        // yeniden seçtiği için özel sesi bundan SONRA seçmek gerekir.
-                        val languageResult = engine.setLanguage(turkish)
-                        val languageSupported =
-                            languageResult != TextToSpeech.LANG_MISSING_DATA &&
-                                languageResult != TextToSpeech.LANG_NOT_SUPPORTED
-
-                        val turkishVoices = engine.voices.orEmpty().filter {
-                            it.locale.language.equals("tr", ignoreCase = true)
+                        val languageResult = engine.setLanguage(Locale("tr", "TR"))
+                        val languageOk = languageResult != TextToSpeech.LANG_MISSING_DATA &&
+                            languageResult != TextToSpeech.LANG_NOT_SUPPORTED
+                        val offline = engine.voices.orEmpty().filter {
+                            it.locale.language.equals("tr", true) && !it.isNetworkConnectionRequired
                         }
-                        val offlineTurkish = turkishVoices.filter {
-                            !it.isNetworkConnectionRequired
-                        }
-                        val selected = offlineTurkish.firstOrNull { voice ->
-                            val details = (voice.name + " " +
-                                voice.features.orEmpty().joinToString(" "))
+                        val selected = offline.firstOrNull { v ->
+                            val desc = (v.name + " " + v.features.orEmpty().joinToString(" "))
                                 .lowercase(Locale.ROOT)
-                            details.contains("male") || details.contains("erkek")
-                        } ?: offlineTurkish.firstOrNull()
-
-                        if (selected != null) {
-                            val voiceResult = engine.setVoice(selected)
-                            if (voiceResult == TextToSpeech.ERROR) {
-                                reportStatus("Türkçe ses seçilemedi: ${selected.name}")
-                            }
-                        }
-
-                        // Medya ses seviyesini kullan; telefonun medya sesi kapalıysa
-                        // kullanıcı bunu telefonun ses tuşlarıyla kontrol edebilir.
-                        val audioResult = engine.setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_MEDIA)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                                .build()
-                        )
-
-                        ttsReady = languageSupported
+                            desc.contains("male") || desc.contains("erkek")
+                        } ?: offline.firstOrNull()
+                        if (selected != null) engine.setVoice(selected)
                         engine.setSpeechRate(0.92f)
+                        ttsReady = languageOk
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                            override fun onStart(utteranceId: String?) {
-                                mainHandler.post {
-                                    if (!released) reportStatus("SEYFİ TTS: konuşma başladı.")
-                                }
-                            }
-
-                            override fun onDone(utteranceId: String?) {
-                                finishUtterance(utteranceId, "SEYFİ TTS: konuşma tamamlandı.")
-                            }
-
-                            override fun onStop(utteranceId: String?, interrupted: Boolean) {
-                                finishUtterance(
-                                    utteranceId,
-                                    if (interrupted) "SEYFİ TTS: konuşma kesildi."
-                                    else "SEYFİ TTS: konuşma durdu."
-                                )
-                            }
-
+                            override fun onStart(utteranceId: String?) = Unit
+                            override fun onDone(utteranceId: String?) =
+                                finishSpeech(utteranceId, "Seyfi Usta konuşmayı tamamladı.")
+                            override fun onStop(utteranceId: String?, interrupted: Boolean) =
+                                finishSpeech(utteranceId, "Seyfi Usta konuşması durdu.")
                             @Deprecated("Deprecated by Android")
-                            override fun onError(utteranceId: String?) {
-                                finishUtterance(utteranceId, "SEYFİ TTS HATASI: ses üretilemedi.")
-                            }
-
-                            override fun onError(utteranceId: String?, errorCode: Int) {
-                                finishUtterance(
-                                    utteranceId,
-                                    "SEYFİ TTS HATASI: kod $errorCode."
-                                )
-                            }
+                            override fun onError(utteranceId: String?) =
+                                finishSpeech(utteranceId, "Telefonun ses motoru yanıt vermedi.")
+                            override fun onError(utteranceId: String?, errorCode: Int) =
+                                finishSpeech(utteranceId, "Telefonun ses motoru hata verdi: $errorCode.")
                         })
-
-                        reportStatus(
-                            when {
-                                !ttsReady -> "Türkçe metin okuma dili telefonda yüklü değil."
-                                selected != null ->
-                                    "SEYFİ TTS HAZIR: ${selected.name}; medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
-                                offlineTurkish.isEmpty() && turkishVoices.isEmpty() ->
-                                    "Türkçe TTS sesi bulunamadı. Telefona Türkçe ses paketi yüklenmeli."
-                                else ->
-                                    "Türkçe TTS hazır; çevrimdışı Türkçe ses bulunamadı."
-                            }
-                        )
+                        setStatus(when {
+                            !languageOk -> "Telefonda Türkçe metin okuma dili yüklü değil."
+                            selected != null -> "Türkçe çevrimdışı ses hazır: ${selected.name}"
+                            else -> "Türkçe TTS hazır; çevrimdışı Türkçe ses bulunamadı."
+                        })
                     } catch (e: Exception) {
                         ttsReady = false
-                        reportStatus("Türkçe ses motoru hazırlanamadı: ${e.message}")
+                        setStatus("Türkçe ses motoru hazırlanamadı: ${e.message}")
                     }
                 } else {
                     ttsReady = false
-                    reportStatus("Telefonun metin okuma motoru başlatılamadı.")
+                    setStatus("Telefonun metin okuma motoru başlatılamadı.")
                 }
                 ttsInitialized = true
-                completeInitializationIfReady()
+                completeInitialization()
             }
         } catch (e: Exception) {
             ttsReady = false
             ttsInitialized = true
-            reportStatus("Metin okuma motoru açılamadı: ${e.message}")
-            completeInitializationIfReady()
+            setStatus("Metin okuma motoru açılamadı: ${e.message}")
+            completeInitialization()
         }
     }
 
-    private fun completeInitializationIfReady() {
+    private fun completeInitialization() {
         if (!modelInitialized || !ttsInitialized || released) return
-        val callback = initializedCallback
-        initializedCallback = null
-        callback?.invoke()
+        val callback = initCallback
+        initCallback = null
+        handler.post { if (!released) callback?.invoke() }
     }
 
     fun startListening() {
         if (released) return
-        listeningEnabled = true
-        processingRequested = false
-        restartAttempts = 0
-        startSpeechService()
-    }
-
-    /** Uyandırma sözü veya komut işlenirken mikrofondan gelen sesi askıya alır. */
-    fun pauseForProcessing() {
-        processingRequested = true
-        mainHandler.removeCallbacks(restartRecognition)
-        speechService?.setPause(true)
-        reportStatus("Seyfi Usta komutu işliyor...")
-    }
-
-    private fun startSpeechService() {
-        if (released || !listeningEnabled || processingRequested || speakingRequested) return
-        if (speechService != null) return
-
-        if (ContextCompat.checkSelfPermission(
-                activity,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
+        listening = true
+        processing = false
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
         ) {
-            reportStatus("Mikrofon izni gerekli.")
+            setStatus("Mikrofon izni gerekli.")
             return
         }
-
-        val model = voskModel
-        if (model == null) {
-            reportStatus("Türkçe ses modeli hazır değil; yükleme tekrar kontrol ediliyor.")
-            // Model yüklemesi gecikmiş veya ilk açılışta depolama işlemi aksatılmış
-            // olabilir. Dinlemeyi sessizce kalıcı olarak kapatmak yerine yeniden dene.
-            scheduleRestart()
+        if (!modelReady || recognizer == null) {
+            setStatus("Türkçe çevrimdışı konuşma modeli hazır değil.")
             return
         }
+        startCapture()
+    }
 
+    fun pauseForProcessing() {
+        processing = true
+        handler.removeCallbacks(restart)
+        stopCapture()
+        setStatus("Seyfi Usta komutu işliyor...")
+    }
+
+    private fun startCapture() {
+        if (released || !listening || processing || speaking || !modelReady || recognizer == null) return
+        if (!captureRunning.compareAndSet(false, true)) return
+        Thread({ captureLoop() }, "SeyfiAudioCapture").start()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun captureLoop() {
+        var local: AudioRecord? = null
+        var phrase: FloatArray? = null
+        var failure: String? = null
         try {
-            val newRecognizer = Recognizer(model, SAMPLE_RATE)
-            recognizer = newRecognizer
-            val newService = SpeechService(newRecognizer, SAMPLE_RATE)
-            speechService = newService
+            val minBuffer = AudioRecord.getMinBufferSize(
+                RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
+            )
+            if (minBuffer <= 0) error("Mikrofon tamponu açılamadı.")
+            local = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                RATE,
+                AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                maxOf(minBuffer, FRAME * 8)
+            )
+            if (local.state != AudioRecord.STATE_INITIALIZED) error("Mikrofon başlatılamadı.")
+            recorder = local
+            local.startRecording()
 
-            val started = newService.startListening(voskListener)
-            if (!started) {
-                speechService = null
-                try { newService.cancel() } catch (_: Exception) {}
-                try { newService.shutdown() } catch (_: Exception) {}
-                try { newRecognizer.close() } catch (_: Exception) {}
-                recognizer = null
-                reportStatus("Mikrofon dinleme oturumu başlatılamadı; yeniden denenecek.")
-                scheduleRestart()
-                return
+            val pcm = ShortArray(FRAME)
+            val preRoll = ArrayDeque<FloatArray>()
+            val samples = ArrayList<Float>(RATE * 7)
+            var inSpeech = false
+            var silenceFrames = 0
+
+            while (!released && listening && !processing && !speaking) {
+                val n = local.read(pcm, 0, pcm.size, AudioRecord.READ_BLOCKING)
+                if (n <= 0) {
+                    if (processing || speaking || !listening || released) break
+                    error("Mikrofon akışı kesildi ($n).")
+                }
+                val chunk = FloatArray(n)
+                var energy = 0.0
+                for (i in 0 until n) {
+                    val value = pcm[i] / 32768.0f
+                    chunk[i] = value
+                    energy += value * value
+                }
+                val rms = sqrt(energy / n)
+                if (rms >= THRESHOLD) {
+                    if (!inSpeech) {
+                        while (preRoll.isNotEmpty()) {
+                            for (sample in preRoll.removeFirst()) samples.add(sample)
+                        }
+                        inSpeech = true
+                    }
+                    silenceFrames = 0
+                    for (sample in chunk) samples.add(sample)
+                } else if (inSpeech) {
+                    silenceFrames++
+                    for (sample in chunk) samples.add(sample)
+                } else {
+                    preRoll.addLast(chunk)
+                    while (preRoll.size > PRE_ROLL) preRoll.removeFirst()
+                }
+
+                if (inSpeech && (silenceFrames >= SILENCE_FRAMES ||
+                    samples.size >= MAX_SAMPLES)
+                ) {
+                    if (samples.size >= MIN_SAMPLES) {
+                        phrase = samples.toFloatArray()
+                        processing = true
+                    }
+                    break
+                }
             }
-
-            restartAttempts = 0
-            reportStatus("Seyfi Usta çevrimdışı dinliyor...")
         } catch (e: Exception) {
-            releaseSpeechService()
-            reportStatus("Mikrofon açılamadı: ${e.message}")
-            scheduleRestart()
+            if (!released && listening && !processing && !speaking) {
+                failure = e.message ?: "Bilinmeyen mikrofon hatası."
+            }
+        } finally {
+            try {
+                if (local?.recordingState == AudioRecord.RECORDSTATE_RECORDING) local.stop()
+            } catch (_: Exception) {}
+            try { local?.release() } catch (_: Exception) {}
+            if (recorder === local) recorder = null
+            captureRunning.set(false)
+        }
+
+        when {
+            phrase != null && !released -> decodePhrase(phrase!!)
+            failure != null -> {
+                setStatus("Mikrofon hatası: $failure")
+                scheduleRestart()
+            }
+            listening && !processing && !speaking && !released -> scheduleRestart()
         }
     }
 
-    private val restartRecognition = Runnable {
-        if (listeningEnabled && !processingRequested && !speakingRequested && !released) {
-            releaseSpeechService()
-            startSpeechService()
+    private fun decodePhrase(samples: FloatArray) {
+        worker.execute {
+            try {
+                val active = recognizer ?: error("Ses modeli hazır değil.")
+                val stream = active.createStream()
+                val text = try {
+                    stream.acceptWaveform(samples, RATE)
+                    active.decode(stream)
+                    active.getResult(stream).text.trim()
+                } finally {
+                    stream.release()
+                }
+                handler.post {
+                    if (released) return@post
+                    if (text.isNotBlank()) {
+                        setStatus("Seyfi Usta duydu: $text")
+                        try {
+                            onRecognized(text)
+                        } catch (e: Exception) {
+                            setStatus("Ses komutu aktarılamadı: ${e.message}")
+                            resumeListening()
+                        }
+                    } else resumeListening()
+                }
+            } catch (e: Exception) {
+                setStatus("Konuşma çözümlenemedi: ${e.message}")
+                resumeListening()
+            }
         }
+    }
+
+    private val restart = Runnable {
+        if (listening && !processing && !speaking && !released) startCapture()
     }
 
     private fun scheduleRestart() {
-        if (!listeningEnabled || processingRequested || speakingRequested || released) return
-        mainHandler.removeCallbacks(restartRecognition)
-        restartAttempts = (restartAttempts + 1).coerceAtMost(6)
-        val delay = (500L shl (restartAttempts - 1)).coerceAtMost(8000L)
-        mainHandler.postDelayed(restartRecognition, delay)
+        if (!listening || processing || speaking || released) return
+        handler.removeCallbacks(restart)
+        handler.postDelayed(restart, 600L)
     }
 
-    private fun extractText(json: String, field: String): String {
-        return try {
-            JSONObject(json).optString(field).trim()
-        } catch (_: Exception) {
-            ""
-        }
+    private fun stopCapture() {
+        try {
+            val current = recorder
+            if (current?.recordingState == AudioRecord.RECORDSTATE_RECORDING) current.stop()
+        } catch (_: Exception) {}
     }
 
-    private val voskListener = object : RecognitionListener {
-        override fun onPartialResult(hypothesis: String?) {
-            // Kısmi sonuçları komut olarak çalıştırma; ancak dinleme hattının
-            // canlı olduğunu durum bilgisinde belirt.
-            if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
-                val partial = hypothesis?.let { extractText(it, "partial") }.orEmpty()
-                if (partial.isNotBlank()) {
-                    mainHandler.post {
-                        if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
-                            reportStatus("Seyfi Usta duyuyor: $partial")
-                            // Kısmi metin yalnızca ekranda gösterilir.
-                            // Burada komut çalıştırmak mikrofonu erken durdurur:
-                            // "seyfi" algılanınca "usta" ve komutun geri kalanı kesilir.
-                            // Uyandırma sözü ve komut, Vosk onResult kesin metni verdiğinde
-                            // MainActivity'ye tek seferde aktarılır.
-                        }
-                    }
-                }
-            }
-        }
-
-        override fun onResult(hypothesis: String?) {
-            if (released || !listeningEnabled || processingRequested || speakingRequested) return
-            val recognized = hypothesis?.let { extractText(it, "text") }.orEmpty()
-            if (recognized.isBlank()) return
-
-            // SpeechService her tamamlanan ses parçası için onResult çağırır.
-            // onFinalResult yalnızca servis durdurulurken geldiğinden ikinci kez
-            // komut çalıştırmamak için burada yalnızca onResult kullanılır.
-            mainHandler.post {
-                if (!released && listeningEnabled && !processingRequested && !speakingRequested) {
-                    try {
-                        onRecognized(recognized)
-                    } catch (e: Exception) {
-                        reportStatus("Tanınan komut aktarılamadı: ${e.message}")
-                    }
-                }
-            }
-        }
-
-        override fun onFinalResult(hypothesis: String?) {
-            // Stop/cancel sonrasında gelen final paketini tekrar komut sayma.
-        }
-
-        override fun onError(exception: Exception?) {
-            mainHandler.post {
-                if (released || !listeningEnabled || processingRequested || speakingRequested) return@post
-                reportStatus("Mikrofon/ses tanıma hatası: ${exception?.message ?: "bilinmeyen hata"}")
-                releaseSpeechService()
-                scheduleRestart()
-            }
-        }
-
-        override fun onTimeout() {
-            mainHandler.post {
-                if (listeningEnabled && !processingRequested && !speakingRequested && !released) {
-                    reportStatus("Dinleme oturumu sona erdi; mikrofon yeniden açılıyor.")
-                    releaseSpeechService()
-                    scheduleRestart()
-                }
-            }
-        }
-    }
-
-    private fun finishUtterance(utteranceId: String?, status: String) {
-        mainHandler.post {
+    private fun finishSpeech(id: String?, message: String) {
+        handler.post {
             if (released) return@post
-            val callback = utteranceId?.let { pendingSpeechCallbacks.remove(it) }
-            if (utteranceId == activeUtteranceId) {
-                activeUtteranceId = null
-                speakingRequested = false
-                reportStatus(status)
+            val callback = id?.let { callbacks.remove(it) }
+            if (id == activeUtterance) {
+                activeUtterance = null
+                speaking = false
+                setStatus(message)
                 callback?.invoke()
-                resumeRecognition()
-            } else {
-                callback?.invoke()
-            }
+                resumeListening()
+            } else callback?.invoke()
         }
     }
 
-    private fun resumeRecognition() {
-        if (!listeningEnabled || released) return
-
-        // TTS sırasında Vosk SpeechService pause durumuna alınmıştı.
-        // Bazı Android cihazlarda aynı Recognizer'ı reset()+setPause(false)
-        // ile sürdürmek sonraki konuşma parçasını teslim etmeyebiliyor.
-        // Her TTS/komut sonrasında eski oturumu tamamen kapatıp yeni
-        // Recognizer + SpeechService oluşturmak daha güvenilir bir döngüdür.
-        processingRequested = false
-        mainHandler.removeCallbacks(restartRecognition)
-        releaseSpeechService()
-        reportStatus("Seyfi Usta mikrofonu yeniden açıyor...")
-        mainHandler.postDelayed({
-            if (listeningEnabled && !processingRequested && !speakingRequested && !released) {
-                startSpeechService()
-            }
-        }, 450L)
+    private fun resumeListening() {
+        if (!listening || released) return
+        processing = false
+        speaking = false
+        handler.removeCallbacks(restart)
+        handler.postDelayed({
+            if (listening && !processing && !speaking && !released) startCapture()
+        }, 400L)
     }
 
     fun stopListening() {
-        listeningEnabled = false
-        processingRequested = true
-        mainHandler.removeCallbacks(restartRecognition)
-        releaseSpeechService()
-        reportStatus("Seyfi Usta dinlemeyi durdurdu.")
+        listening = false
+        processing = true
+        handler.removeCallbacks(restart)
+        stopCapture()
+        setStatus("Seyfi Usta dinlemeyi durdurdu.")
     }
 
     fun speak(message: String, onDone: (() -> Unit)? = null) {
         if (released) return
         if (message.isBlank()) {
             onDone?.invoke()
-            resumeRecognition()
+            resumeListening()
             return
         }
-
+        processing = true
+        speaking = true
+        handler.removeCallbacks(restart)
+        stopCapture()
         val engine = tts
         if (!ttsReady || engine == null) {
-            reportStatus("Türkçe telefon sesi kullanılamıyor.")
+            setStatus("Türkçe telefon sesi kullanılamıyor.")
             onDone?.invoke()
-            resumeRecognition()
+            speaking = false
+            resumeListening()
             return
         }
-
-        processingRequested = true
-        speechService?.setPause(true)
-        speakingRequested = true
-        mainHandler.removeCallbacks(restartRecognition)
-
-        val id = "SEYFI_${utteranceIds.incrementAndGet()}"
-        activeUtteranceId = id
-        if (onDone != null) pendingSpeechCallbacks[id] = onDone
-
-        reportStatus("SEYFİ TTS: ses isteği gönderiliyor.")
-        val result = engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, id)
-        if (result == TextToSpeech.ERROR) {
-            pendingSpeechCallbacks.remove(id)
-            activeUtteranceId = null
-            speakingRequested = false
-            reportStatus("SEYFİ TTS HATASI: speak() isteği reddedildi.")
+        val id = "SEYFI_${ids.incrementAndGet()}"
+        activeUtterance = id
+        if (onDone != null) callbacks[id] = onDone
+        if (engine.speak(message, TextToSpeech.QUEUE_FLUSH, null, id) == TextToSpeech.ERROR) {
+            callbacks.remove(id)
+            activeUtterance = null
+            speaking = false
+            setStatus("Telefonun ses motoru konuşma isteğini kabul etmedi.")
             onDone?.invoke()
-            resumeRecognition()
-        } else {
-            reportStatus("SEYFİ TTS: ses isteği kabul edildi.")
-        }
+            resumeListening()
+        } else setStatus("Seyfi Usta yanıt veriyor.")
     }
 
     fun isListening(): Boolean =
-        listeningEnabled && !processingRequested && !speakingRequested && speechService != null
+        listening && !processing && !speaking && captureRunning.get()
 
     fun isSpeechReady(): Boolean = ttsReady
-
-    fun isRecognitionReady(): Boolean = voskModel != null
-
-    private fun releaseSpeechService() {
-        val service = speechService
-        speechService = null
-        try { service?.cancel() } catch (_: Exception) {}
-        try { service?.shutdown() } catch (_: Exception) {}
-        val currentRecognizer = recognizer
-        recognizer = null
-        try { currentRecognizer?.close() } catch (_: Exception) {}
-    }
+    fun isRecognitionReady(): Boolean = modelReady && recognizer != null
 
     fun release() {
         released = true
-        listeningEnabled = false
-        processingRequested = true
-        mainHandler.removeCallbacksAndMessages(null)
-        releaseSpeechService()
-        try { voskModel?.close() } catch (_: Exception) {}
-        voskModel = null
+        listening = false
+        processing = true
+        handler.removeCallbacksAndMessages(null)
+        stopCapture()
+        try { recognizer?.release() } catch (_: Exception) {}
+        recognizer = null
+        modelReady = false
         try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
         tts = null
         ttsReady = false
-        speakingRequested = false
-        activeUtteranceId = null
-        pendingSpeechCallbacks.clear()
-        initializedCallback = null
+        speaking = false
+        activeUtterance = null
+        callbacks.clear()
+        initCallback = null
+        worker.shutdownNow()
     }
 
     private companion object {
-        const val SAMPLE_RATE = 16000.0f
+        const val RATE = 16000
+        const val FRAME = 320
+        const val PRE_ROLL = 10
+        const val SILENCE_FRAMES = 30
+        const val MIN_SAMPLES = RATE * 3 / 10
+        const val MAX_SAMPLES = RATE * 7
+        const val THRESHOLD = 0.010
     }
 }

@@ -66,7 +66,8 @@ class SeyfiUstaCommandHandler {
 
     fun handle(recognizedText: String): SeyfiCommand {
         val original = recognizedText.trim()
-        val text = normalize(original)
+        val normalized = normalize(original)
+        val text = if (normalized == "e posta" || normalized == "eposta") "seyfi usta" else normalized
 
         if (text.isBlank()) {
             return command(
@@ -102,10 +103,22 @@ class SeyfiUstaCommandHandler {
             )
         }
 
+        if (commandText in setOf("tara", "tarama", "tarayalim", "taramayi baslat", "tarama baslat")) {
+            return command(
+                SeyfiAction.START_SCAN,
+                original,
+                "Gerçek ECU arıza taraması başlatılıyor."
+            )
+        }
+
         // Uyandırma kelimesi olmadan da komutları tanıyabilir.
         if (containsAny(
                 commandText,
                 "taramaya basla",
+                "taramayi baslat",
+                "tarama baslat",
+                "hemen tara",
+                "tarayalim",
                 "ariza tara",
                 "arizalari tara",
                 "arizalari taramaya basla",
