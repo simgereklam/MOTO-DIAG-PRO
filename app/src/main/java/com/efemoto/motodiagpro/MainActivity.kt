@@ -1824,7 +1824,7 @@ class MainActivity : ComponentActivity() {
         aiStatusCard.addView(voiceStatusText)
         aiStatusCard.addView(text("METİN OKUMA / SESLENDİRME", 12, cyan, true))
         aiStatusCard.addView(ttsStatusText)
-        aiStatusCard.addView(text("YEREL QWEN3 MOTORU", 12, cyan, true))
+        aiStatusCard.addView(text("SEYFİ YEREL TEŞHİS ÇEKİRDEĞİ", 12, cyan, true))
         aiStatusCard.addView(aiStatusText)
         addGap(aiStatusCard, 7)
         aiStatusCard.addView(text(
