@@ -80,6 +80,8 @@ class MainActivity : ComponentActivity() {
     @Volatile private var liveLoop = false
     private var liveValues: MutableMap<String, Double> = mutableMapOf()
     private var supportedPidSet: MutableSet<Int> = mutableSetOf()
+    @Volatile private var allPidReadings: List<EcuPidReading> = emptyList()
+    private var allPidReportView: TextView? = null
     private var liveGauge: RpmGaugeView? = null
     private val liveMetricViews = mutableMapOf<String, TextView>()
     private val liveMetricCards = mutableMapOf<String, LinearLayout>()
@@ -1073,6 +1075,11 @@ class MainActivity : ComponentActivity() {
                 }
                 updateScan(54, "Desteklenen sensörlerden teşhis verisi alınıyor…")
                 val diagnosticSnapshot = try { readLivePids() } catch (_: Exception) { emptyMap() }
+                updateScan(61, "ECU'nun desteklediği tüm standart PID verileri okunuyor…")
+                val completePidReadings = try { readAllSupportedPidReadings() } catch (e: Exception) {
+                    log("Tam PID taraması kısmi kaldı: ${e.message}")
+                    emptyList()
+                }
                 currentRiskScore = calculateRiskScore(diagnosticSnapshot)
                 updateScan(68, "Kayıtlı, bekleyen ve kalıcı arızalar okunuyor…")
                 val found = mutableListOf<String>()
@@ -1104,7 +1111,11 @@ class MainActivity : ComponentActivity() {
                 updateScan(100, "Tarama tamamlandı")
                 mainHandler.post {
                     faults = found.toMutableList()
+                    allPidReadings = completePidReadings
                     hasCompletedScan = true
+                    val fullPidReport = buildFullPidReport(completePidReadings)
+                    seyfiUstaAI?.updateDiagnosticTestResult(fullPidReport)
+                    allPidReportView?.text = fullPidReport
                     log("ECU taraması tamamlandı • ${faults.size} arıza • ${faults.joinToString().ifBlank { "kod yok" }} • risk $currentRiskScore/100")
                     smartInsights.forEach { log("Akıllı teşhis: $it") }
                     
@@ -1529,6 +1540,16 @@ class MainActivity : ComponentActivity() {
         liveEmptyState = emptyState
         c.addView(emptyState, LinearLayout.LayoutParams(-1, dp(92)))
 
+        val allPidCard = neonCard("ECU'NUN DESTEKLEDİĞİ TÜM VERİLER", cyan)
+        allPidReportView = text(buildFullPidReport(allPidReadings), 11, white).apply {
+            typeface = Typeface.MONOSPACE
+            gravity = Gravity.TOP
+            setTextIsSelectable(true)
+            setPadding(dp(3), dp(5), dp(3), dp(5))
+        }
+        allPidCard.addView(allPidReportView)
+        c.addView(allPidCard)
+
         val modules = neonCard("EK MODÜL GÖSTERGELERİ", blue)
         val moduleInfo = listOf(
             "ENJEKTÖR" to "Viecar ile ECU destekliyorsa yakıt düzeltmesi / O2 verisi okunur. Enjektör tetikleme testi CAN / üretici protokolü aşamasında açılacak.",
@@ -1645,7 +1666,8 @@ class MainActivity : ComponentActivity() {
     private fun readSupportedPids(): MutableSet<Int> {
         val supported = mutableSetOf<Int>()
         var base = 0x00
-        for (rangeIndex in 0 until 8) {
+        // SAE J1979 standard support bitmap ranges: 00 through C0.
+        for (rangeIndex in 0 until 7) {
             val bytes = pidBytes("%02X".format(Locale.US, base)) ?: break
             if (bytes.size < 4) break
             for (bit in 0 until 32) {
@@ -1658,6 +1680,47 @@ class MainActivity : ComponentActivity() {
             base += 0x20
         }
         return supported
+    }
+
+    /**
+     * Explicit full scan: request every Mode 01 PID that the ECU advertised.
+     * This is intentionally not used in the 1.1-second live loop.
+     */
+    private fun readAllSupportedPidReadings(): List<EcuPidReading> {
+        if (supportedPidSet.isEmpty()) supportedPidSet = readSupportedPids()
+        val candidates = supportedPidSet
+            .filter { it in 0x01..0xE0 && !EcuPidCatalog.isSupportBitmap(it) }
+            .sorted()
+        val readings = mutableListOf<EcuPidReading>()
+        for (pid in candidates) {
+            val pidHex = "%02X".format(Locale.US, pid)
+            try {
+                val response = elm("01$pidHex", 900)
+                val bytes = ObdResponseParser.parsePidBytes(response, "41$pidHex")
+                if (bytes != null && bytes.isNotEmpty()) {
+                    readings += EcuPidCatalog.decode(pid, bytes)
+                }
+            } catch (e: Exception) {
+                // One unanswered PID must not abort the rest of the ECU sweep.
+                log("PID 01$pidHex okunamadı: ${e.message ?: "yanıt yok"}")
+            }
+        }
+        log("Tam Mode 01 taraması: ECU ${supportedPidSet.size} PID destek biti bildirdi; ${readings.size} PID'den gerçek veri alındı.")
+        return readings
+    }
+
+    private fun buildFullPidReport(readings: List<EcuPidReading>): String = buildString {
+        appendLine("SEYFİ USTA • TAM ECU MODE 01 VERİ RAPORU")
+        appendLine("ECU'nun destek biti bildirdiği PID sayısı: ${supportedPidSet.size}")
+        appendLine("Gerçek yanıt alınan PID sayısı: ${readings.size}")
+        if (readings.isEmpty()) {
+            appendLine("Tam taramada veri alınamadı. Bu durum tek başına ECU arızası değildir.")
+        } else {
+            readings.forEach { item ->
+                appendLine("PID 01${"%02X".format(Locale.US, item.pid)} | ${item.label} | ${item.displayValue} | RAW=${item.rawHex}")
+            }
+        }
+        append("Not: Tanımı bulunmayan PID'ler ham veri olarak saklanır; üreticiye özel değerlerin birimi tahmin edilmez.")
     }
 
     private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
