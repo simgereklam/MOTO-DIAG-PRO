@@ -82,6 +82,8 @@ class MainActivity : ComponentActivity() {
     private var supportedPidSet: MutableSet<Int> = mutableSetOf()
     @Volatile private var allPidReadings: List<EcuPidReading> = emptyList()
     private var allPidReportView: TextView? = null
+    @Volatile private var livePidCursor = 0
+    @Volatile private var currentEcuSessionId = ""
     private var liveGauge: RpmGaugeView? = null
     private val liveMetricViews = mutableMapOf<String, TextView>()
     private val liveMetricCards = mutableMapOf<String, LinearLayout>()
@@ -1599,8 +1601,8 @@ class MainActivity : ComponentActivity() {
         liveGauge?.value = rpm
         liveGauge?.invalidate()
 
-        // Seyfi Usta beynine anlık sensör verilerini ilet
-        seyfiUstaAI?.updateEcuData(rpm, tps.toFloat(), coolant, mapKpa.toFloat(), voltage.toFloat(), faults)
+        // Seyfi Usta'ya bütün son ölçümleri ilet; yalnızca beş temel PID ile sınırlama.
+        seyfiUstaAI?.updateEcuDataSnapshot(liveValues.toMap(), faults)
 
         val definitions = liveMetricDefinitions()
         definitions.forEach { def ->
@@ -1632,6 +1634,8 @@ class MainActivity : ComponentActivity() {
 
     private fun startLiveRead() {
         if (liveLoop) return
+        currentEcuSessionId = java.util.UUID.randomUUID().toString()
+        livePidCursor = 0
         liveLoop = true
         if (!busy.compareAndSet(false, true)) {
             liveLoop = false
@@ -1643,6 +1647,13 @@ class MainActivity : ComponentActivity() {
                 ensureConnected()
                 while (liveLoop && currentScreen == "LIVE") {
                     val values = readLivePids(stopIfNotLive = true)
+                    EcuSessionRecorder.append(
+                        applicationContext,
+                        currentEcuSessionId,
+                        values,
+                        servicePlate,
+                        faults.toList()
+                    )
                     mainHandler.post {
                         if (currentScreen == "LIVE") updateLiveDisplay(values)
                     }
@@ -1758,6 +1769,24 @@ class MainActivity : ComponentActivity() {
                 0x4C -> data.firstOrNull()?.let { out["commandedThrottle"] = it * 100.0 / 255.0 }
                 0x5C -> data.firstOrNull()?.let { out["oilTemp"] = (it - 40).toDouble() }
             }
+        }
+        // Remaining supported PIDs are polled in rotating batches so that every
+        // advertised standard PID is sampled over time without blocking the UI loop.
+        val alreadyPolled = (core + optional).toSet()
+        val remaining = supportedPidSet
+            .filter { it in 0x01..0xE0 && it !in alreadyPolled && !EcuPidCatalog.isSupportBitmap(it) }
+            .sorted()
+        if (remaining.isNotEmpty() && !(stopIfNotLive && (!liveLoop || currentScreen != "LIVE"))) {
+            val start = livePidCursor % remaining.size
+            val count = minOf(6, remaining.size)
+            repeat(count) { offset ->
+                if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return@repeat
+                val pid = remaining[(start + offset) % remaining.size]
+                val raw = bytes(pid) ?: return@repeat
+                val reading = EcuPidCatalog.decode(pid, raw)
+                reading.value?.let { out["pid_%02X".format(Locale.US, pid)] = it }
+            }
+            livePidCursor = (start + count) % remaining.size
         }
         return out
     }
