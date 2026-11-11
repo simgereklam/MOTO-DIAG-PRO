@@ -67,7 +67,8 @@ class YamahaExpertEngineTest {
     fun emptyCodeListDoesNotClaimThatTheBikeHasNoFaults() {
         val report = YamahaExpertEngine.analyze(
             rawCodes = emptyList(),
-            modelAndYear = "Yamaha NMAX 155 2022"
+            modelAndYear = "Yamaha NMAX 155 2022",
+            scanCompleted = false
         )
 
         assertFalse(report.usedModelSpecificProcedure)
