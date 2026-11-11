@@ -97,6 +97,8 @@ class MainActivity : ComponentActivity() {
     private val seyfiChatHistory = StringBuilder()
     private var lastSeyfiPartialToastText = ""
     private var lastSeyfiPartialToastAt = 0L
+    private var seyfiOrbView: SeyfiOrbView? = null
+    private var seyfiConversationView: TextView? = null
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
 
@@ -151,6 +153,13 @@ class MainActivity : ComponentActivity() {
             activity = this,
             onCommandRecognized = { recognized -> handleSeyfiCommand(recognized) },
             onVoiceStatusChanged = { status ->
+                val orbMode = when {
+                    status.contains("konuşuyor", true) -> SeyfiOrbView.Mode.SPEAKING
+                    status.contains("düşün", true) || status.contains("metne çevriliyor", true) -> SeyfiOrbView.Mode.THINKING
+                    status.contains("dinliyor", true) || status.contains("duyuyor", true) -> SeyfiOrbView.Mode.LISTENING
+                    else -> SeyfiOrbView.Mode.IDLE
+                }
+                seyfiOrbView?.post { seyfiOrbView?.setMode(orbMode) }
                 // Mikrofon/model hatalarını yalnızca Logcat'te bırakma.
                 // Normal dinleme durumlarında ekrana bildirim basma.
                 val isProblem = listOf(
@@ -526,7 +535,13 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                assistant.speak("Bu komutu tanımadım. Uygulama komutları için yardım diyebilirsiniz. Motor verilerini yorumlamamı isterseniz motor verilerini yorumla deyin.")
+                // Bilinmeyen konuşma komut değil, serbest sohbet sorusu olarak yerel
+                // Seyfi mantık katmanına gönderilir. Mikrofon TTS bitene kadar kapalı kalır.
+                appendSeyfiConversation("SİZ", commandInput)
+                seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
+                assistant.chat(commandInput) { answer ->
+                    appendSeyfiConversation("SEYFİ USTA", answer)
+                }
             }
         }
     }
@@ -2173,9 +2188,69 @@ class MainActivity : ComponentActivity() {
 
     private fun showSeyfiChat() {
         val c = baseScreen("SEYFI")
-        c.addView(header("SEYFİ USTA • YEREL YAPAY ZEKÂ"))
+        c.addView(header("SEYFİ USTA • SESLİ SOHBET"))
 
-        val statusCard = neonCard("YEREL MODEL DURUMU", cyan)
+        // Yalnızca Seyfi ekranına eklenen canlı animasyon; mevcut ana ekran ve teşhis
+        // ekranlarının ölçülerine/yerleşimine dokunulmaz.
+        val conversationCard = neonCard("CANLI ASİSTAN", cyan)
+        val orb = SeyfiOrbView(this)
+        seyfiOrbView = orb
+        conversationCard.addView(orb, LinearLayout.LayoutParams(-1, dp(174)))
+        val voiceState = text("HAZIR • Konuşmak için DİNLE düğmesine basın", 13, cyan, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+        }
+        conversationCard.addView(voiceState)
+        val transcript = text(
+            "SEYFİ USTA: Merhaba usta. Buradayım. Bana motosikletinle veya başka bir konuyla ilgili soru sorabilirsin.\n",
+            13, white
+        )
+        transcript.setPadding(dp(10), dp(10), dp(10), dp(10))
+        transcript.minHeight = dp(92)
+        transcript.background = rounded(panel2, blue, 10)
+        seyfiConversationView = transcript
+        conversationCard.addView(transcript)
+
+        val messageInput = EditText(this).apply {
+            hint = "Seyfi Usta'ya yaz..."
+            setTextColor(white)
+            setHintTextColor(muted)
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(panel2, cyan, 10)
+            minLines = 1
+            maxLines = 3
+        }
+        addGap(conversationCard, 8)
+        conversationCard.addView(messageInput)
+        val actions = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        actions.addView(actionButton("GÖNDER", blue) {
+            val message = messageInput.text.toString().trim()
+            if (message.isNotBlank()) {
+                messageInput.text.clear()
+                sendSeyfiChatMessage(message)
+            }
+        }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(0, 0, dp(5), 0) })
+        actions.addView(actionButton("🎙 DİNLE", green) {
+            val assistant = seyfiUstaAI
+            if (assistant == null) {
+                voiceState.text = "Asistan henüz hazır değil."
+            } else if (!assistant.isRecognitionAvailable()) {
+                voiceState.text = "Cihaz içi Türkçe konuşma tanıma servisi bulunamadı. Telefonun çevrimdışı Türkçe ses paketini kontrol edin."
+                orb.setMode(SeyfiOrbView.Mode.IDLE)
+            } else {
+                seyfiAwaitingCommand = true
+                assistant.startListening()
+                voiceState.text = "DİNLİYORUM • Konuşman bitince cevap vereceğim."
+                orb.setMode(SeyfiOrbView.Mode.LISTENING)
+            }
+        }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(dp(5), 0, 0, 0) })
+        conversationCard.addView(actions)
+        c.addView(conversationCard)
+
+        val statusCard = neonCard("YEREL SES / MODEL DURUMU", cyan)
         fun combinedAssistantStatus(): String {
             val assistant = seyfiUstaAI
             return if (assistant == null) {
@@ -2184,39 +2259,36 @@ class MainActivity : ComponentActivity() {
                 "YAPAY ZEKÂ: ${assistant.getModelStatus()}\n\nSES / MİKROFON: ${assistant.getVoiceStatus()}"
             }
         }
-        val status = text(combinedAssistantStatus(), 13, white)
+        val status = text(combinedAssistantStatus(), 12, white)
         status.setPadding(dp(4), dp(6), dp(4), dp(6))
         statusCard.addView(status)
-        statusCard.addView(actionButton("MODEL DURUMUNU YENİLE", blue) {
+        statusCard.addView(actionButton("DURUMU YENİLE", blue) {
             status.text = combinedAssistantStatus()
         })
         statusCard.addView(actionButton("SESLİ CEVABI TEST ET", green) {
-            val assistant = seyfiUstaAI
-            if (assistant == null) {
-                Toast.makeText(this, "Seyfi Usta henüz başlatılmadı.", Toast.LENGTH_LONG).show()
-            } else {
-                assistant.speak("Ses testi. Ben Seyfi Usta. Beni net duyabiliyor musunuz?")
-            }
+            seyfiUstaAI?.speak("Ses testi. Ben Seyfi Usta. Beni net duyabiliyor musunuz?")
         })
-        statusCard.addView(text(
-            "SES MOTORU: Bu sürüm Android TTS kullanıyor. Bağımsız, APK içine gömülü Piper sesi henüz eklenmedi.",
-            11, yellow
-        ))
         c.addView(statusCard)
 
-        // Model indirme yüzdesi ve hata durumu ekranda kendiliğinden güncellensin.
         val statusRefresh = object : Runnable {
             override fun run() {
                 if (!status.isAttachedToWindow) return
                 status.text = combinedAssistantStatus()
-                status.postDelayed(this, 700L)
+                val current = seyfiUstaAI?.getVoiceStatus().orEmpty()
+                voiceState.text = when {
+                    current.contains("konuşuyor", true) -> "CEVAP VERİYOR"
+                    current.contains("düşün", true) || current.contains("metne çevriliyor", true) -> "DÜŞÜNÜYOR"
+                    current.contains("dinliyor", true) || current.contains("duyuyor", true) -> "DİNLİYOR"
+                    else -> "HAZIR"
+                }
+                status.postDelayed(this, 500L)
             }
         }
         status.post(statusRefresh)
 
         val analysisCard = neonCard("YAMAHA UZMAN TEŞHİS MOTORU • ÇEVRİMDIŞI", purpleColor())
         analysisCard.addView(text(
-            "Bu teşhis katmanı küçük sohbet modeline bağlı değildir. Doğrulanmış Yamaha model/yıl servis prosedürlerini ve gerçek ECU kodlarını kullanır; doğrulanmamış değerleri başka modellere taşımaz.",
+            "Bu teşhis katmanı sohbet mantığından ayrıdır. Doğrulanmış Yamaha model/yıl servis prosedürlerini ve gerçek ECU kodlarını kullanır; doğrulanmamış değerleri başka modellere taşımaz.",
             13, white
         ))
         addGap(analysisCard, 8)
@@ -2257,7 +2329,31 @@ class MainActivity : ComponentActivity() {
             }
         })
         c.addView(analysisCard)
+    }
 
+    private fun sendSeyfiChatMessage(message: String) {
+        val assistant = seyfiUstaAI
+        if (assistant == null) {
+            appendSeyfiConversation("SİSTEM", "Seyfi Usta henüz başlatılmadı.")
+            return
+        }
+        appendSeyfiConversation("SİZ", message)
+        seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
+        assistant.chat(message) { answer ->
+            appendSeyfiConversation("SEYFİ USTA", answer)
+            // TTS durum callback'i animasyonu SPEAKING moduna geçirir.
+        }
+    }
+
+    private fun appendSeyfiConversation(who: String, message: String) {
+        val view = seyfiConversationView ?: return
+        runOnUiThread {
+            val updated = (view.text.toString() + "\n$who: $message").takeLast(5000)
+            view.text = updated
+            view.post { (view.parent as? View)?.let { parent ->
+                if (parent is ScrollView) parent.post { parent.fullScroll(View.FOCUS_DOWN) }
+            } }
+        }
     }
 
     private fun showLogs() {
@@ -2532,5 +2628,83 @@ class MainActivity : ComponentActivity() {
             p.color = cyan
             canvas.drawText("RPM", cx, cy + dp(22), p)
         }
+    }
+}
+
+/** Seyfi Usta'nın dinleme/düşünme/konuşma durumlarını gösteren hafif, çevrimdışı animasyon. */
+private class SeyfiOrbView(context: Context) : View(context) {
+    enum class Mode { IDLE, LISTENING, THINKING, SPEAKING }
+    private val core = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 3.5f
+    }
+    private var mode = Mode.IDLE
+    private var phase = 0f
+    private val cyan = Color.rgb(0, 220, 255)
+    private val blue = Color.rgb(0, 113, 255)
+    private val green = Color.rgb(0, 235, 150)
+    private val purple = Color.rgb(150, 90, 255)
+
+    fun setMode(next: Mode) {
+        if (mode != next) {
+            mode = next
+            invalidate()
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val cx = width / 2f
+        val cy = height / 2f
+        val base = minOf(width, height) * 0.23f
+        phase = (phase + when(mode) {
+            Mode.IDLE -> 0.012f
+            Mode.LISTENING -> 0.075f
+            Mode.THINKING -> 0.045f
+            Mode.SPEAKING -> 0.10f
+        }) % (Math.PI.toFloat() * 2f)
+        val pulse = 1f + 0.10f * kotlin.math.sin(phase * 2f)
+        val color = when(mode) {
+            Mode.IDLE -> cyan
+            Mode.LISTENING -> green
+            Mode.THINKING -> purple
+            Mode.SPEAKING -> cyan
+        }
+        for (i in 3 downTo 1) {
+            val radius = base * (1.05f + i * 0.27f + 0.06f * kotlin.math.sin(phase + i))
+            ring.color = color
+            ring.alpha = (42 / i).coerceIn(8, 42)
+            ring.strokeWidth = 2f + i
+            canvas.drawCircle(cx, cy, radius, ring)
+        }
+        core.shader = android.graphics.RadialGradient(
+            cx - base * 0.25f, cy - base * 0.3f, base * 1.35f,
+            intArrayOf(Color.WHITE, color, blue, Color.TRANSPARENT),
+            floatArrayOf(0f, 0.25f, 0.72f, 1f),
+            android.graphics.Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(cx, cy, base * pulse, core)
+        core.shader = null
+        core.color = Color.WHITE
+        core.alpha = 220
+        canvas.drawCircle(cx - base * 0.27f, cy - base * 0.30f, base * 0.10f, core)
+        core.alpha = 255
+        val label = when(mode) {
+            Mode.IDLE -> "SEYFİ USTA"
+            Mode.LISTENING -> "DİNLİYORUM"
+            Mode.THINKING -> "DÜŞÜNÜYORUM"
+            Mode.SPEAKING -> "CEVAP VERİYORUM"
+        }
+        core.color = color
+        core.textAlign = Paint.Align.CENTER
+        core.textSize = 13f * resources.displayMetrics.density
+        core.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
+        canvas.drawText(label, cx, height - 8f * resources.displayMetrics.density, core)
+        postInvalidateDelayed(40L)
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
     }
 }
