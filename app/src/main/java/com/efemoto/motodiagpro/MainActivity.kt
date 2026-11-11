@@ -153,27 +153,26 @@ class MainActivity : ComponentActivity() {
                 val isProblem = listOf(
                     "hata", "açılamadı", "başlatılamadı", "indirilemedi",
                     "izin gerekli", "hazır değil", "bulunamadı", "kullanılamıyor",
+                    "çevrimdışı tanımayı tamamlayamadı", "dil paketi gerekli",
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
                 val isModelProgress =
-                    status.contains("Qwen3 0.6B indiriliyor", ignoreCase = true) ||
-                    status.contains("Qwen3 0.6B indirildi", ignoreCase = true)
+                    status.contains("APK içinden çevrimdışı kuruluyor", ignoreCase = true) ||
+                    status.contains("Qwen3 0.6B başlatılıyor", ignoreCase = true)
                 val isModelReady = status.contains(
                     "Qwen3 0.6B yerel yapay zekâsı hazır",
                     ignoreCase = true
                 )
-                val isVoiceListening = status.contains(
-                    "Seyfi Usta çevrimdışı dinliyor",
-                    ignoreCase = true
-                )
+                val isVoiceListening =
+                    status.contains("mikrofonu dinliyor", ignoreCase = true) ||
+                    status.contains("konuşma tanıma servisi hazır", ignoreCase = true)
                 val isWakeDetected = status.contains(
                     "Seyfi Usta uyandırma sözünü algıladı",
                     ignoreCase = true
                 )
                 val isTtsDiagnostic =
-                    status.contains("SEYFİ TTS", ignoreCase = true) ||
                     status.contains("Türkçe TTS", ignoreCase = true) ||
-                    status.contains("Türkçe metin okuma", ignoreCase = true)
+                    status.contains("telefonun sistemde seçili sesi", ignoreCase = true)
                 val isVoicePartial = status.startsWith("Seyfi Usta duyuyor:", ignoreCase = true)
                 val showVoicePartial = if (isVoicePartial) {
                     val transcript = status.substringAfter(":").trim()
@@ -205,11 +204,26 @@ class MainActivity : ComponentActivity() {
         )
         seyfiUstaAI = assistant
         assistant.initialize {
+            val parserFailures = seyfiCommandHandler.selfTest()
+            if (parserFailures.isEmpty()) {
+                log("SEYFİ ÖZ TEST: Komut sözlüğü başarılı.")
+            } else {
+                log("SEYFİ ÖZ TEST HATASI: " + parserFailures.joinToString(" | "))
+                Toast.makeText(
+                    this,
+                    "Seyfi Usta komut testi başarısız: ${parserFailures.size} ifade",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             if (startVoice) {
-                assistant.speak(
-                    "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
-                        "Bana Seyfi Usta diye seslenin."
-                ) {
+                val startupMessage = if (assistant.brain.isReady()) {
+                    "Merhaba. Ben Seyfi Usta. Yapay zekâ deneme yanıtı başarılı. " +
+                        "Ses sistemini açıyorum. Bana Seyfi Usta diye seslenin."
+                } else {
+                    "Merhaba. Ben Seyfi Usta. Sesli komutlar hazır; yerel yapay zekâ sohbeti hazır değil. " +
+                        "Durum bilgisini kontrol edin."
+                }
+                assistant.speak(startupMessage) {
                     assistant.startListening()
                 }
             }
