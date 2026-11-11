@@ -1580,7 +1580,7 @@ class MainActivity : ComponentActivity() {
         liveGauge?.invalidate()
 
         // Seyfi Usta beynine anlık sensör verilerini ilet
-        seyfiUstaAI?.updateEcuData(rpm, tps.toFloat(), coolant, mapKpa.toFloat(), voltage, faults)
+        seyfiUstaAI?.updateEcuData(rpm, tps.toFloat(), coolant, mapKpa.toFloat(), voltage.toFloat(), faults)
 
         val definitions = liveMetricDefinitions()
         definitions.forEach { def ->
@@ -1718,6 +1718,20 @@ class MainActivity : ComponentActivity() {
             seyfiUstaAI?.getModelStatus() ?: "Yapay zekâ henüz başlatılmadı.",
             13, white, true
         )
+        val voiceStatusText = text("", 12, muted)
+        val ttsStatusText = text("", 12, muted)
+        fun refreshAssistantStatuses() {
+            val assistant = seyfiUstaAI
+            voiceStatusText.text = "SES TANIMA: " + if (assistant?.isRecognitionAvailable() == true) "HAZIR" else "KULLANILAMIYOR"
+            ttsStatusText.text = "SES YANITLAMA: " + if (assistant?.isTtsReady() == true) "HAZIR" else "HAZIR DEĞİL"
+            aiStatusText.text = assistant?.getModelStatus() ?: "Yapay zekâ henüz başlatılmadı."
+        }
+        refreshAssistantStatuses()
+        aiStatusCard.addView(text("SES TANIMA VE KOMUTLAR", 12, cyan, true))
+        aiStatusCard.addView(voiceStatusText)
+        aiStatusCard.addView(text("METİN OKUMA / SESLENDİRME", 12, cyan, true))
+        aiStatusCard.addView(ttsStatusText)
+        aiStatusCard.addView(text("YEREL QWEN3 MOTORU", 12, cyan, true))
         aiStatusCard.addView(aiStatusText)
         addGap(aiStatusCard, 7)
         aiStatusCard.addView(text(
@@ -1725,6 +1739,10 @@ class MainActivity : ComponentActivity() {
             12, muted
         ))
         addGap(aiStatusCard, 7)
+        aiStatusCard.addView(actionButton("DURUMLARI YENİLE", blue) {
+            refreshAssistantStatuses()
+        })
+        addGap(aiStatusCard, 5)
         aiStatusCard.addView(actionButton("YAPAY ZEKÂYI GERÇEKTEN TEST ET", purpleColor()) {
             val assistant = seyfiUstaAI
             if (assistant == null) {
@@ -1736,6 +1754,7 @@ class MainActivity : ComponentActivity() {
                 aiStatusText.text = if (success) "BAŞARILI — Model gerçek cevap üretti.\n$result"
                     else "BAŞARISIZ — $result"
                 log("YAPAY ZEKÂ TESTİ: " + (if (success) "BAŞARILI" else "BAŞARISIZ") + " — $result")
+                refreshAssistantStatuses()
                 AlertDialog.Builder(this)
                     .setTitle(if (success) "YAPAY ZEKÂ ÇALIŞIYOR" else "YAPAY ZEKÂ TESTİ BAŞARISIZ")
                     .setMessage(result)
