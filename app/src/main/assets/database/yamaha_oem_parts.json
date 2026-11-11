@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "brand": "Yamaha",
+  "note": "Bu dosyaya yalnızca Yamaha resmi parça kataloğu veya güvenilir üretici kataloğundan model ve üretim yılı doğrulanmış OEM/muadil eşleştirmeleri eklenmelidir. Boş liste, parça bulunamadığı değil henüz doğrulanmış kayıt eklenmediği anlamına gelir.",
+  "matchingRules": [
+    "Marka + tam model varyantı + model yılı eşleşmeli",
+    "OEM numarası resmi katalogdan doğrulanmalı",
+    "Muadil üretici ve parça numarası açıkça belirtilmeli",
+    "DTC tek başına parça değişimini onaylamaz; fiziksel/elektriksel test sonucu gerekir"
+  ],
+  "records": []
+}
