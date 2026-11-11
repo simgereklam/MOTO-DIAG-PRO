@@ -1753,7 +1753,6 @@ class MainActivity : ComponentActivity() {
                 aiStatusText.text = if (success) "BAŞARILI — Model gerçek cevap üretti.\n$result"
                     else "BAŞARISIZ — $result"
                 log("YAPAY ZEKÂ TESTİ: " + (if (success) "BAŞARILI" else "BAŞARISIZ") + " — $result")
-                refreshAssistantStatuses()
                 AlertDialog.Builder(this)
                     .setTitle(if (success) "YAPAY ZEKÂ ÇALIŞIYOR" else "YAPAY ZEKÂ TESTİ BAŞARISIZ")
                     .setMessage(result)
