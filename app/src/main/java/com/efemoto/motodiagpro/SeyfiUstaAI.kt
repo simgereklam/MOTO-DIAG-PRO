@@ -405,6 +405,10 @@ class SeyfiUstaAI(
         )
     }
 
+    fun updateEcuDataSnapshot(values: Map<String, Double>, dtcs: List<String>) {
+        brain.updateEcuDataSnapshot(values, dtcs, connected = true)
+    }
+
     fun processVoiceCommand(spokenText: String) = onCommandRecognized(spokenText)
 
     fun release() {
