@@ -123,6 +123,16 @@ class MainActivity : ComponentActivity() {
         loadPersistentState()
         showHome()
         setupSeyfiAssistant()
+
+        // İlk açılışta gerçek ECU bağlantısını ve taramayı otomatik başlat.
+        // Ekran döndürülürken tekrar tarama başlatılmaz.
+        if (savedInstanceState == null) {
+            mainHandler.postDelayed({
+                if (!isFinishing && !isDestroyed && !scanRunning.get()) {
+                    startDiagnosis()
+                }
+            }, 1800L)
+        }
     }
 
     private fun setupSeyfiAssistant() {
@@ -1377,7 +1387,7 @@ class MainActivity : ComponentActivity() {
         liveMetricCards.clear()
         liveSectionGrids.clear()
         liveSectionHeaders.clear()
-        val columns = liveColumns().coerceAtMost(3)
+        val columns = liveColumns()
         val sectionNames = listOf("MOTOR / SÜRÜŞ", "ENJEKSİYON / YAKIT", "ATEŞLEME / DİĞER SENSÖRLER")
         sectionNames.forEach { section ->
             val sectionHeader = text(section, 14, cyan, true).apply {
