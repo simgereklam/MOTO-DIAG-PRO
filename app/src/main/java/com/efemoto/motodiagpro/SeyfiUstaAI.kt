@@ -124,17 +124,6 @@ class SeyfiUstaAI(
     }
 
     /**
-     * Qwen3 0.6B ilk kurulumda Hugging Face'ten uygulamanın özel alanına indirilir.
-     * İndirme tamamlanmadan .part dosyası motor tarafından kullanılmaz.
-     */
-    private fun modelStorageDirectories(): List<File> {
-        val candidates = mutableListOf<File>()
-        candidates += File(activity.filesDir, "models")
-        activity.getExternalFilesDir("models")?.let { candidates += it }
-        return candidates.distinctBy { it.absolutePath }
-    }
-
-    /**
      * Model APK assets içinden kurulur. Ağdan indirme yedeği bulunmaz.
      */
     private fun installBundledModel(): File {
