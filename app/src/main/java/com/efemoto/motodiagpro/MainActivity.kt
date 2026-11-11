@@ -210,7 +210,7 @@ class MainActivity : ComponentActivity() {
             val parserFailures = seyfiCommandHandler.selfTest()
             val allFailures = voiceFailures + parserFailures
             if (allFailures.isEmpty()) {
-                log("SEYFİ ÖZ TEST: Yerel model deneme yanıtı, Android konuşma servisi, Türkçe TTS ve komut sözlüğü başarılı. Gerçek mikrofon anlaşılırlığı ilk sesli komutta doğrulanacak.")
+                log("SEYFİ SES ÖZ TEST: Android konuşma servisi, Türkçe TTS ve komut sözlüğü kontrolleri başarılı. Qwen3 model kontrolü arka planda sürüyor.")
             } else {
                 log("SEYFİ ÖZ TEST HATASI: " + allFailures.joinToString(" | "))
                 Toast.makeText(
@@ -248,7 +248,7 @@ class MainActivity : ComponentActivity() {
                 val message = "Seyfi Usta henüz hazır değil. " + failures.joinToString(". ")
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
                 assistant.speak(message)
-                return@initialize
+                return@initializeVoiceOnly
             }
             assistant.speak(
                 "Merhaba. Ben Seyfi Usta. Ses sistemim hazır. " +
