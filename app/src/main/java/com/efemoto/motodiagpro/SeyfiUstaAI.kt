@@ -4,6 +4,7 @@ import android.app.Activity
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
+import java.io.FileNotFoundException
 import java.net.HttpURLConnection
 import java.net.URL
 import android.os.StatFs
@@ -28,7 +29,7 @@ class SeyfiUstaAI(
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
         private const val MODEL_URL = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
-        private const val MIN_MODEL_BYTES = 320_000_000L
+        private const val MIN_MODEL_BYTES = 340_000_000L
         private const val MAX_MODEL_BYTES = 360_000_000L
     }
 
@@ -140,7 +141,47 @@ class SeyfiUstaAI(
         return candidates.distinctBy { it.absolutePath }
     }
 
+    /**
+     * Qwen3 modeli derleme sırasında APK assets içine gömülür.
+     * İlk açılışta yalnızca uygulamanın özel alanına kopyalanır; internet gerekmez.
+     */
+    private fun installBundledModel(): File? {
+        val modelDirectory = File(activity.filesDir, "models")
+        if (!modelDirectory.exists() && !modelDirectory.mkdirs()) {
+            throw IllegalStateException("Yerel model klasörü oluşturulamadı.")
+        }
+        val target = File(modelDirectory, MODEL_FILE_NAME)
+        if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) return target
+
+        val partial = File(modelDirectory, "$MODEL_FILE_NAME.part")
+        try {
+            activity.assets.open(MODEL_FILE_NAME).use { input ->
+                FileOutputStream(partial).use { output ->
+                    input.copyTo(output, 1024 * 1024)
+                    output.fd.sync()
+                }
+            }
+        } catch (_: FileNotFoundException) {
+            partial.delete()
+            return null
+        }
+
+        if (partial.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
+            val actual = partial.length()
+            partial.delete()
+            throw IllegalStateException("APK içindeki Qwen3 model boyutu geçersiz: $actual bayt.")
+        }
+        if (target.exists()) target.delete()
+        if (!partial.renameTo(target)) {
+            partial.delete()
+            throw IllegalStateException("APK içindeki Qwen3 modeli uygulama alanına kopyalanamadı.")
+        }
+        publishModelStatus("Qwen3 0.6B APK içinde bulundu; çevrimdışı kuruluyor.")
+        return target
+    }
+
     private fun ensureModelFile(): File {
+        installBundledModel()?.let { return it }
         val directories = modelStorageDirectories()
         directories.forEach { dir ->
             val installed = File(dir, MODEL_FILE_NAME)
