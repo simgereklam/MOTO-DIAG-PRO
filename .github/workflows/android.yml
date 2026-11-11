@@ -62,10 +62,23 @@ jobs:
           echo "Türkçe Vosk model assets hazır."
           du -sh app/src/main/assets/model-tr
 
-      - name: APK içinde eski SmolLM2 modeli bulunmadığını doğrula
+      - name: Qwen3 0.6B yapay zekâ modelini APK içine göm
         run: |
+          MODEL="app/src/main/assets/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
+          mkdir -p app/src/main/assets
+          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \\
+            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm" \\
+            --output "$MODEL"
+          echo "96491bb0f78fa68098bf8f1d3628194c97041aff7894f8cc29303b3acdb877a9  $MODEL" | sha256sum --check
+          test "$(stat -c%s "$MODEL")" -eq 344686592
+          echo "Qwen3 0.6B modeli APK assets içine doğrulanarak eklendi."
+          du -h "$MODEL"
+
+      - name: APK içinde model ve ses dosyalarını doğrula
+        run: |
+          test -f app/src/main/assets/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm
           test ! -f app/src/main/assets/seyfi_model.litertlm
-          echo "Gemma 4 ilk açılışta uygulama alanına indirilecek; büyük model APK'ya gömülmeyecek."
+          echo "Qwen3 0.6B modeli APK içine gömüldü; ilk kurulumda internet gerekmeyecek."
 
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace
