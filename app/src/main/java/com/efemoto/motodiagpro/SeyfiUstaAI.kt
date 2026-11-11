@@ -233,7 +233,13 @@ class SeyfiUstaAI(
             onResult(false, getModelStatus())
             return
         }
-        chat("Yalnızca şu cümleyi üret: Yerel yapay zekâ testim başarılı.", onResult)
+        chat("Yalnızca şu cümleyi üret: Yerel yapay zekâ testim başarılı.") { answer ->
+            val failed = answer.contains("hata", true) ||
+                answer.contains("yanıt gelmedi", true) ||
+                answer.contains("hazır değil", true) ||
+                answer.contains("üretemedi", true)
+            onResult(!failed && answer.isNotBlank(), answer)
+        }
     }
 
     fun analyzeCurrentEngineData(onResult: (Boolean, String) -> Unit) {
