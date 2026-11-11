@@ -169,35 +169,62 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     }
 
     private fun buildServiceReference(question: String): String {
-        val code = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
-            .find(question)?.value?.uppercase()
-            ?: return "Soruda açık bir standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak."
+        // Önce kullanıcının sorduğu kodları, yoksa son gerçek ECU taramasındaki
+        // kodları kullan. Böylece "bu arızaları açıkla" sorusu da DTC bilgisi alır.
+        val questionCodes = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
+            .findAll(question).map { it.value.uppercase() }.distinct().toList()
+        val ecuCodes = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
+            .findAll(ecuContext).map { it.value.uppercase() }.distinct().toList()
+        val codes = (questionCodes.ifEmpty { ecuCodes }).take(8)
 
-        val yamaha = YamahaFaultCodes.find(code)
-        if (yamaha != null) {
-            return buildString {
-                appendLine("Kod: ${yamaha.code}")
-                appendLine("Başlık: ${yamaha.title}")
-                appendLine("Açıklama: ${yamaha.description}")
-                appendLine("Olası nedenler: ${yamaha.possibleCauses.joinToString("; ")}")
-                appendLine("Kontroller: ${yamaha.checks.joinToString("; ")}")
-                append("Kaynak: uygulamadaki Yamaha referans kaydı; model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
+        // Yamaha'nın iki haneli üretici kodları yalnızca kullanıcı açıkça
+        // "kod 14" gibi sorduğunda eşleştirilir; sıradan sayılar kod sanılmaz.
+        val yamahaTwoDigit = Regex(
+            "(?:yamaha\\s+)?(?:arıza\\s+)?kod(?:u)?\\s*[:#]?\\s*(\\d{2})",
+            RegexOption.IGNORE_CASE
+        ).find(question)?.groupValues?.getOrNull(1)
+
+        val references = codes.map { code ->
+            val yamaha = YamahaFaultCodes.find(code)
+            if (yamaha != null) {
+                buildString {
+                    appendLine("Kod: ${yamaha.code}")
+                    appendLine("Başlık: ${yamaha.title}")
+                    appendLine("Açıklama: ${yamaha.description}")
+                    appendLine("Olası nedenler: ${yamaha.possibleCauses.joinToString("; ")}")
+                    appendLine("Kontroller: ${yamaha.checks.joinToString("; ")}")
+                    append("Kaynak: Yamaha referans kaydı; model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
+                }
+            } else {
+                val title = DtcDatabase.title(code)
+                if (title.startsWith("Üreticiye özel")) {
+                    "Kod: $code. Yerel DTC kütüphanesinde doğrulanmış açıklama bulunamadı."
+                } else {
+                    buildString {
+                        appendLine("Kod: $code")
+                        appendLine("Genel açıklama: $title")
+                        appendLine("Teknik not: ${DtcDatabase.description(code)}")
+                        appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
+                        appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
+                        append("Kaynak: genel SAE/OBD referansı; motosiklet üreticisi ve ECU varyantı ile teyit edilmeli.")
+                    }
+                }
             }
+        }.toMutableList()
+
+        if (yamahaTwoDigit != null) {
+            val title = DtcDatabase.title(yamahaTwoDigit)
+            references.add(
+                if (title.startsWith("Üreticiye özel")) {
+                    "Yamaha üretici kodu $yamahaTwoDigit: doğrulanmış yerel açıklama bulunamadı."
+                } else {
+                    "Yamaha üretici kodu $yamahaTwoDigit: $title. ${DtcDatabase.description(yamahaTwoDigit)} Model yılı ve ECU servis tablosuyla doğrulanmalı."
+                }
+            )
         }
 
-        val title = DtcDatabase.title(code)
-        if (title.startsWith("Üreticiye özel")) {
-            return "Kod: $code. Yerel DTC kütüphanesinde doğrulanmış açıklama bulunamadı."
-        }
-
-        return buildString {
-            appendLine("Kod: $code")
-            appendLine("Genel açıklama: $title")
-            appendLine("Teknik not: ${DtcDatabase.description(code)}")
-            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
-            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
-            append("Kaynak: uygulamadaki genel SAE/OBD referansı; motosiklet üreticisi ve ECU varyantı ile teyit edilmeli.")
-        }
+        return references.takeIf { it.isNotEmpty() }?.joinToString("\\n\\n")
+            ?: "Son taramada veya soruda açıklanacak doğrulanmış bir arıza kodu yok. ECU taraması yapılmadan arıza varsayılmayacak."
     }
 
     fun ask(
