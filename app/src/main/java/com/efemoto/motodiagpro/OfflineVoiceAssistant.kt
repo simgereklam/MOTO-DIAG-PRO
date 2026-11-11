@@ -159,17 +159,11 @@ class OfflineVoiceAssistant(
                     if (released) return@post
                     if (result == TextToSpeech.SUCCESS && engine != null) {
                         val language = engine.setLanguage(Locale("tr", "TR"))
-                        // Android Voice API sesin kadın/erkek olduğunu güvenilir biçimde bildirmez.
-                        // Önceki çalışan sürümde kullanılan telefonun Türkçe sistem sesini koru;
-                        // yalnızca cihazda yüklü/çevrimdışı bir Türkçe ses varsa konuş.
-                        val selectedVoice = engine.voice
-                        val isTurkishVoice = selectedVoice?.locale?.language.equals("tr", ignoreCase = true)
-                        val isOfflineVoice = selectedVoice != null &&
-                            !selectedVoice.isNetworkConnectionRequired
+                        // Önceki çalışan sürümdeki sistem TTS seçimini aynen koru.
+                        // Android API sesin cinsiyetini güvenilir biçimde bildirmez;
+                        // bu nedenle burada erkek sesi olduğu iddia edilmez.
                         ttsReady = language != TextToSpeech.LANG_MISSING_DATA &&
-                            language != TextToSpeech.LANG_NOT_SUPPORTED &&
-                            isTurkishVoice &&
-                            isOfflineVoice
+                            language != TextToSpeech.LANG_NOT_SUPPORTED
                         engine.setSpeechRate(0.94f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                             override fun onStart(utteranceId: String?) {
@@ -197,8 +191,8 @@ class OfflineVoiceAssistant(
                             }
                         })
                         status(
-                            if (ttsReady) "Telefonun sistemde seçili çevrimdışı Türkçe sesi hazır: ${selectedVoice?.name}"
-                            else "Çevrimdışı Türkçe sistem sesi hazır değil. Ağ sesi veya başka cinsiyette ses yedeği kullanılmayacak."
+                            if (ttsReady) "Türkçe TTS hazır; telefonun sistemde seçili Türkçe sesi kullanılacak."
+                            else "Türkçe TTS dili telefonda yüklü değil."
                         )
                     } else {
                         ttsReady = false
@@ -278,7 +272,7 @@ class OfflineVoiceAssistant(
         main.post {
             val engine = tts
             if (!ttsReady || engine == null) {
-                status("Sesli yanıt verilemiyor: doğrulanmış Türkçe erkek TTS sesi hazır değil. Kadın/varsayılan ses kullanılmadı.")
+                status("Sesli yanıt verilemiyor: Türkçe TTS hazır değil.")
                 onDone?.invoke()
                 return@post
             }
