@@ -325,6 +325,10 @@ class SeyfiUstaAI(
         }
     }
 
+    fun updateDiagnosticPlan(planContext: String) {
+        brain.updateDiagnosticPlan(planContext)
+    }
+
     fun updateEcuData(
         rpm: Int,
         tps: Float,
