@@ -2120,25 +2120,46 @@ class MainActivity : ComponentActivity() {
         }
         status.post(statusRefresh)
 
-        val analysisCard = neonCard("YAPAY ZEKÂ MOTOR VERİSİ ANALİZİ", purpleColor())
+        val analysisCard = neonCard("YAMAHA UZMAN TEŞHİS MOTORU • ÇEVRİMDIŞI", purpleColor())
         analysisCard.addView(text(
-            "Seyfi Usta'nın yerel yapay zekâsı genel sohbet veya uygulama komutu çalıştırmaz. Yalnızca ECU'dan gerçekten okunan motor verilerini yorumlar.",
+            "Bu teşhis katmanı küçük sohbet modeline bağlı değildir. Doğrulanmış Yamaha model/yıl servis prosedürlerini ve gerçek ECU kodlarını kullanır; doğrulanmamış değerleri başka modellere taşımaz.",
             13, white
         ))
         addGap(analysisCard, 8)
-        analysisCard.addView(actionButton("GERÇEK MOTOR VERİLERİNİ YORUMLA", purpleColor()) {
-            val assistant = seyfiUstaAI
-            if (assistant == null) {
-                Toast.makeText(this, "Yerel yapay zekâ başlatılmadı.", Toast.LENGTH_LONG).show()
-            } else if (!connected || liveValues.isEmpty()) {
-                assistant.speak("Motor verisi analizi için önce ECU'ya bağlanıp canlı verileri okumalıyız.")
+        val yamahaModelInput = EditText(this).apply {
+            hint = "Yamaha model ve yıl (ör. NMAX 155 2022)"
+            setSingleLine()
+            setText(persistentPrefs().getString("yamaha_model_year", "").orEmpty())
+            setTextColor(white)
+            setHintTextColor(muted)
+            setPadding(dp(10), dp(9), dp(10), dp(9))
+            background = rounded(panel2, blue, 10)
+        }
+        analysisCard.addView(yamahaModelInput)
+        addGap(analysisCard, 6)
+        val yamahaReportView = text(
+            "İlk doğrulanmış model/yıl prosedürleri: NMAX 155 2022, MT-125 2023 ve MT-09 2021 için P0335.",
+            12, white
+        )
+        yamahaReportView.setPadding(dp(4), dp(8), dp(4), dp(8))
+        analysisCard.addView(yamahaReportView)
+        analysisCard.addView(actionButton("YAMAHA TEŞHİSİNİ ÇALIŞTIR", purpleColor()) {
+            if (!hasCompletedScan) {
+                val message = "Önce gerçek ECU taramasını tamamlayın. Teşhis motoru yalnızca okunan kodları ve canlı verileri değerlendirir."
+                yamahaReportView.text = message
+                seyfiUstaAI?.speak(message)
             } else {
-                status.text = combinedAssistantStatus()
-                assistant.analyzeCurrentEngineData { success, answer ->
-                    log("Seyfi Usta motor analizi " + (if (success) "başarılı: " else "başarısız: ") + answer)
-                    status.text = combinedAssistantStatus()
-                    if (!success) Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
-                }
+                val selectedModel = yamahaModelInput.text.toString().trim()
+                persistentPrefs().edit().putString("yamaha_model_year", selectedModel).apply()
+                val report = YamahaExpertEngine.analyze(
+                    rawCodes = faults,
+                    modelAndYear = selectedModel,
+                    liveValues = liveValues,
+                    scanCompleted = hasCompletedScan
+                )
+                yamahaReportView.text = report.displayText
+                log("Yamaha çevrimdışı uzman teşhisi: " + report.displayText)
+                seyfiUstaAI?.speak(report.speechText)
             }
         })
         c.addView(analysisCard)
