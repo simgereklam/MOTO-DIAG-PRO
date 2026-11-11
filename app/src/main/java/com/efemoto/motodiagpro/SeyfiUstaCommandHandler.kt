@@ -239,6 +239,24 @@ class SeyfiUstaCommandHandler {
 
         if (containsAny(
                 commandText,
+                "motor verilerini yorumla",
+                "motor verisini yorumla",
+                "sensorleri yorumla",
+                "sensor verilerini degerlendir",
+                "motor verilerini analiz et",
+                "verileri yapay zeka ile yorumla",
+                "motor analizi yap"
+            )
+        ) {
+            return command(
+                SeyfiAction.ANALYZE_ENGINE_DATA,
+                original,
+                "Gerçek ECU verilerini yerel yapay zekâ ile yorumluyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
                 "canli verileri goster",
                 "canli verileri oku",
                 "sensorleri goster",
@@ -314,24 +332,6 @@ class SeyfiUstaCommandHandler {
                 SeyfiAction.SHOW_MAP,
                 original,
                 "Emme manifoldu basıncını kontrol ediyorum."
-            )
-        }
-
-        if (containsAny(
-                commandText,
-                "motor verilerini yorumla",
-                "motor verisini yorumla",
-                "sensorleri yorumla",
-                "sensor verilerini degerlendir",
-                "motor verilerini analiz et",
-                "verileri yapay zeka ile yorumla",
-                "motor analizi yap"
-            )
-        ) {
-            return command(
-                SeyfiAction.ANALYZE_ENGINE_DATA,
-                original,
-                "Gerçek ECU verilerini yerel yapay zekâ ile yorumluyorum."
             )
         }
 
