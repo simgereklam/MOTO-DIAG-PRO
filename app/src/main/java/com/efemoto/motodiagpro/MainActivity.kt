@@ -1875,10 +1875,13 @@ class MainActivity : ComponentActivity() {
                 log("$title başarısız: ${e.message}")
             } finally {
                 busy.set(false)
+                val completedReport = report.toString()
                 mainHandler.post {
+                    // Test sonucu yalnızca gerçek adaptör yanıtlarından oluşur; sonraki AI sorularında kanıt olarak kullanılır.
+                    seyfiUstaAI?.updateDiagnosticTestResult(completedReport)
                     AlertDialog.Builder(this)
                         .setTitle(title)
-                        .setMessage(report.toString())
+                        .setMessage(completedReport)
                         .setPositiveButton("TAMAM", null)
                         .show()
                 }
