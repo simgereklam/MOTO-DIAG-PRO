@@ -11,6 +11,7 @@ on:
       - main
       - master
       - seyfi-offline-stability
+      - seyfi-ai-diagnostics-integration
   workflow_dispatch:
 
 concurrency:
