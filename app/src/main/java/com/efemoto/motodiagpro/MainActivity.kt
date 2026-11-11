@@ -315,7 +315,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // Türkçe konuşma modelinin sık yaptığı uyandırma sözü yazım hatalarını düzelt.
-        // Vosk küçük Türkçe modelinde "Seyfi Usta" farklı yazımlarla çıkabiliyor.
+        // Android konuşma tanıma servisinde "Seyfi Usta" farklı yazımlarla çıkabiliyor.
         // Önce Türkçe karakterleri sadeleştir, sonra sık görülen fonetik hataları düzelt.
         val normalizedSpeech = java.text.Normalizer.normalize(
             rawCommand.lowercase(java.util.Locale("tr", "TR")),
@@ -354,7 +354,7 @@ class MainActivity : ComponentActivity() {
             Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
             // TTS tamamlanınca ses katmanı mikrofonu yeniden açar.
             // Telefonun TTS sesi duyulurken mikrofon kapalı kalır.
-            // Qwen3 metin modelidir: uyandırma sonrasında Vosk yeniden dinler
+            // Qwen3 metin modelidir: uyandırma sonrasında Android konuşma tanıma yeniden dinler
             // ve tanıdığı Türkçe komutu/sohbeti yerel modele aktarır.
             assistant.speak("Dinliyorum.")
             return
@@ -362,6 +362,13 @@ class MainActivity : ComponentActivity() {
 
         // "Sohbet" özel bir oturum açar. Oturum boyunca doğal cümleler
         // yerel Qwen3 0.6B'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
+        // Uyandırma sözü olmadan ve bekleyen komut oturumu yokken arka plan
+        // konuşmalarını sohbet/uygulama komutu olarak yorumlama.
+        if (!wakeDetected && !seyfiAwaitingCommand) {
+            log("Seyfi Usta: uyandırma sözü bulunmadığı için ifade yok sayıldı: $rawCommand")
+            return
+        }
+
         val normalizedInput = commandInput.lowercase(java.util.Locale("tr", "TR")).trim()
         if (normalizedInput in setOf("sohbet", "sohbet modu", "sohbete gec", "sohbet baslat")) {
             seyfiChatMode = true
