@@ -10,11 +10,8 @@ import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
-import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.ThinkingConfig
 import com.google.ai.edge.litertlm.ToolProvider
-import com.google.ai.edge.litertlm.Message
-import com.google.ai.edge.litertlm.MessageCallback
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import java.util.Locale
@@ -91,8 +88,6 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                     EngineConfig(
                         modelPath = modelFile.absolutePath,
                         backend = Backend.CPU(),
-                        // Gemma 4'ün ses girdisi için ayrı audio backend açık olmalı.
-                        audioBackend = Backend.CPU(),
                         cacheDir = appContext.cacheDir.absolutePath
                     )
                 )
@@ -102,7 +97,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val newConversation = newEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemPrompt),
-                        // Gemma 4 E2B sohbetinde düşünme kanalı kullanılmaz; doğrudan
+                        // Qwen3 0.6B sohbetinde düşünme kanalı kullanılmaz; doğrudan
                         // kullanıcıya gösterilecek yanıtı üretmesi için kapalı tutulur.
                         thinkingConfig = ThinkingConfig(enableThinking = false),
                         tools = if (appTools != null) listOf(appTools) else emptyList(),
@@ -220,92 +215,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         }
     }
 
-    /**
-     * Gemma 4 multimodal ses girişi: WAV ses doğrudan modele verilir.
-     * Arada Vosk/STT metin dökümü kullanılmaz.
-     */
-    fun askAudio(
-        audioWav: ByteArray,
-        onResponse: (String) -> Unit
-    ) {
-        if (audioWav.isEmpty()) {
-            mainHandler.post { onResponse("Ses kaydı boş geldi. Tekrar deneyin.") }
-            return
-        }
-        if (!ready || conversation == null) {
-            mainHandler.post { onResponse("Gemma 4 henüz hazır değil. Model durumunu kontrol edin.") }
-            return
-        }
-        if (!requestInProgress.compareAndSet(false, true)) {
-            mainHandler.post { onResponse("Usta, önceki yanıtı hâlâ hazırlıyorum. Biraz bekleyin.") }
-            return
-        }
-        val activeConversation = conversation
-        if (activeConversation == null) {
-            requestInProgress.set(false)
-            mainHandler.post { onResponse("Yerel sohbet oturumu hazır değil.") }
-            return
-        }
-
-        val prompt = """
-            Bu mesajda kullanıcının konuşma sesi bulunuyor. Türkçe konuşmayı doğrudan dinle ve
-            niyetini bağlamdan anla; önce bir konuşma dökümü isteme ve duyduğunu metin olarak
-            tekrar etmekle yetinme. Doğal, anlaşılır Türkçe yanıt ver.
-            Gerekirse motosiklet teşhis bilgisi ver. Kullanıcı uygulamada işlem istiyorsa
-            mevcut moto_app_action aracını kullan. ECU verisi olmadan tarama sonucu uydurma.
-            Arıza silme için yalnızca uygulamanın güvenli onay akışını başlat.
-            GÜNCEL ECU DURUMU:
-            $ecuContext
-        """.trimIndent()
-        val contents = Contents.of(Content.AudioBytes(audioWav), Content.Text(prompt))
-        val chunks = StringBuilder()
-        val finished = AtomicBoolean(false)
-        fun finish(answer: String) {
-            if (!finished.compareAndSet(false, true)) return
-            requestInProgress.set(false)
-            mainHandler.post {
-                try { onResponse(answer) } finally {
-                    if (closeRequested) closeResources()
-                }
-            }
-        }
-
-        try {
-            executor.execute {
-                try {
-                    activeConversation.sendMessageAsync(
-                        contents,
-                        object : MessageCallback {
-                            override fun onMessage(message: Message) {
-                                val chunk = message.toString()
-                                if (chunk.isNotBlank()) synchronized(chunks) { chunks.append(chunk) }
-                            }
-                            override fun onDone() {
-                                val raw = synchronized(chunks) { chunks.toString() }
-                                val answer = raw.substringAfter("</think>", raw)
-                                    .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
-                                    .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
-                                    .trim()
-                                    .ifBlank { "Sesinizi aldım ancak okunabilir yanıt üretemedim. Bir kez daha deneyin." }
-                                finish(answer)
-                            }
-                            override fun onError(throwable: Throwable) {
-                                Log.e("SeyfiBrain", "Gemma 4 ses girişi başarısız", throwable)
-                                finish("Gemma 4 sesinizi işlerken hata verdi: ${throwable.message ?: "Bilinmeyen hata"}")
-                            }
-                        },
-                        thinkingConfig = ThinkingConfig(enableThinking = false),
-                        maxOutputToken = 220
-                    )
-                } catch (e: Exception) {
-                    Log.e("SeyfiBrain", "Gemma 4 ses isteği başlatılamadı", e)
-                    finish("Gemma 4 ses isteği başlatılamadı: ${e.message ?: "Bilinmeyen hata"}")
-                }
-            }
-        } catch (e: Exception) {
-            finish("Gemma 4 işlem kuyruğu kapalı: ${e.message ?: "Bilinmeyen hata"}")
-        }
-    }
+    // Qwen3 0.6B metin modelidir. Ses önce çevrimdışı Vosk tarafından metne çevrilir.
 
     fun ask(
         question: String,
