@@ -159,13 +159,9 @@ class MainActivity : ComponentActivity() {
                     "çevrimdışı tanımayı tamamlayamadı", "dil paketi gerekli",
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
-                val isModelProgress =
-                    status.contains("APK içinden çevrimdışı kuruluyor", ignoreCase = true) ||
-                    status.contains("Qwen3 0.6B başlatılıyor", ignoreCase = true)
-                val isModelReady = status.contains(
-                    "Qwen3 0.6B yerel yapay zekâsı hazır",
-                    ignoreCase = true
-                )
+                val isModelProgress = false
+                val isModelReady = status.contains("Erkek Türkçe ses seçildi", ignoreCase = true) ||
+                    status.contains("Türkçe ses hazır", ignoreCase = true)
                 val isVoiceListening =
                     status.contains("mikrofonu dinliyor", ignoreCase = true) ||
                     status.contains("konuşma tanıma servisi hazır", ignoreCase = true)
@@ -212,7 +208,7 @@ class MainActivity : ComponentActivity() {
             val parserFailures = seyfiCommandHandler.selfTest()
             val allFailures = voiceFailures + parserFailures
             if (allFailures.isEmpty()) {
-                log("SEYFİ SES ÖZ TEST: Android konuşma servisi, Türkçe TTS ve komut sözlüğü kontrolleri başarılı. Qwen3 model kontrolü arka planda sürüyor.")
+                log("SEYFİ SES ÖZ TEST: Android konuşma servisi, Türkçe TTS ve komut sözlüğü kontrolleri başarılı. Bağımsız yerel teşhis çekirdeği etkin.")
             } else {
                 log("SEYFİ ÖZ TEST HATASI: " + allFailures.joinToString(" | "))
                 Toast.makeText(
@@ -387,6 +383,8 @@ class MainActivity : ComponentActivity() {
 
         if (!wakeDetected && !seyfiAwaitingCommand) {
             log("Seyfi Usta: uyandırma sözü bulunmadığı için ifade yok sayıldı: $rawCommand")
+            // Uyandırma sözü olmayan konuşma işlendi ve atlandı; mikrofon döngüsünü sürdür.
+            assistant.startListening()
             return
         }
 
@@ -548,8 +546,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Qwen3 0.6B'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
-     * Model sadece izin verilen eylemleri seçebilir; gerçek ECU işlemlerini
+     * Seyfi Usta'nın izin verilen uygulama aracını ana UI thread'inde çalıştırır.
+     * Gerçek ECU işlemlerini
      * mevcut teşhis yöneticisi yürütür.
      */
     private fun executeSeyfiAppAction(action: String): String {
@@ -1830,7 +1828,7 @@ class MainActivity : ComponentActivity() {
         aiStatusCard.addView(aiStatusText)
         addGap(aiStatusCard, 7)
         aiStatusCard.addView(text(
-            "Bu test Qwen3 model dosyasını, modelin hazır durumunu ve gerçek cevap üretmesini kontrol eder. ECU bağlantısı gerekmez.",
+            "Bu test Seyfi Usta'nın bağımsız yerel teşhis çekirdeğini, Türkçe ses sistemini ve komut sözlüğünü kontrol eder. ECU bağlantısı gerekmez.",
             12, muted
         ))
         addGap(aiStatusCard, 7)
