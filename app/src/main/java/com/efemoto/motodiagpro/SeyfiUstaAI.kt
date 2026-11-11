@@ -325,6 +325,10 @@ class SeyfiUstaAI(
         }
     }
 
+    fun updateDiagnosticTestResult(result: String) {
+        brain.updateDiagnosticTestResult(result)
+    }
+
     fun updateDiagnosticPlan(planContext: String) {
         brain.updateDiagnosticPlan(planContext)
     }
