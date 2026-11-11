@@ -3,6 +3,7 @@ package com.efemoto.motodiagpro
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
@@ -11,6 +12,9 @@ import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ThinkingConfig
 import com.google.ai.edge.litertlm.ToolProvider
+import com.google.ai.edge.litertlm.Message
+import com.google.ai.edge.litertlm.MessageCallback
+import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -25,6 +29,9 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     @Volatile private var conversation: Conversation? = null
     @Volatile private var ready = false
     @Volatile private var ecuContext = "Henüz ECU verisi alınmadı."
+    private val requestInProgress = AtomicBoolean(false)
+    private val resourcesCloseStarted = AtomicBoolean(false)
+    @Volatile private var closeRequested = false
 
     private val systemPrompt = """
         Sen SEYFİ USTA'sın: EFE MOTO için çalışan profesyonel motosiklet teşhis ve servis asistanısın.
@@ -92,22 +99,32 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
                 val newConversation = newEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemPrompt),
-                        // Qwen3 bir düşünme modelidir. Düşünme açıkken 256 tokenlık
-                        // sınırın tamamını iç düşünce tüketebiliyor ve kullanıcıya
-                        // gösterilecek son yanıt boş kalabiliyor. Seyfi Usta sohbetinde
-                        // düşünmeyi kapatıp doğrudan yanıt üretmesini sağla.
+                        // Qwen3 0.6B sohbetinde düşünme kanalı kullanılmaz; doğrudan
+                        // kullanıcıya gösterilecek yanıtı üretmesi için kapalı tutulur.
                         thinkingConfig = ThinkingConfig(enableThinking = false),
                         tools = if (appTools != null) listOf(appTools) else emptyList(),
                         automaticToolCalling = true,
                     )
                 )
 
+                // Sadece model dosyasının açılması yeterli değildir. Gerçek bir
+                // ilk üretim yaparak modelin cevap verebildiğini doğrula.
+                val warmupReply = newConversation.sendMessage(
+                    "Merhaba. Hazır olduğunu tek cümleyle söyle.",
+                    thinkingConfig = ThinkingConfig(enableThinking = false)
+                ).toString().trim()
+
+                if (warmupReply.isBlank()) {
+                    throw IllegalStateException("Model açıldı ancak başlangıç deneme sorusuna boş cevap verdi.")
+                }
+
+                Log.i("SeyfiBrain", "Model başlangıç testi başarılı: ${warmupReply.take(240)}")
                 engine = newEngine
                 conversation = newConversation
                 ready = true
 
                 mainHandler.post {
-                    onResult(true, "Seyfi Usta yapay zekâ motoru hazır.")
+                    onResult(true, "Seyfi Usta yapay zekâ motoru hazır; deneme sorusu cevaplandı.")
                 }
 
             } catch (e: Exception) {
@@ -169,117 +186,188 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     }
 
     private fun buildServiceReference(question: String): String {
-        val code = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
-            .find(question)?.value?.uppercase()
-            ?: return "Soruda açık bir standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak."
+        // Tek bir soruda geçen kodla sınırlı kalma: gerçek ECU taramasında bulunan
+        // bütün P-kodlarını da bilgi bankasına bağla.
+        val codeRegex = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
+        val codes = (codeRegex.findAll(ecuContext).map { it.value.uppercase() } +
+            codeRegex.findAll(question).map { it.value.uppercase() })
+            .distinct()
+            .take(20)
+            .toList()
 
-        val yamaha = YamahaFaultCodes.find(code)
-        if (yamaha != null) {
-            return buildString {
-                appendLine("Kod: ${yamaha.code}")
-                appendLine("Başlık: ${yamaha.title}")
-                appendLine("Açıklama: ${yamaha.description}")
-                appendLine("Olası nedenler: ${yamaha.possibleCauses.joinToString("; ")}")
-                appendLine("Kontroller: ${yamaha.checks.joinToString("; ")}")
-                append("Kaynak: uygulamadaki Yamaha referans kaydı; model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
-            }
-        }
-
-        val title = DtcDatabase.title(code)
-        if (title.startsWith("Üreticiye özel")) {
-            return "Kod: $code. Yerel DTC kütüphanesinde doğrulanmış açıklama bulunamadı."
+        if (codes.isEmpty()) {
+            return "Soruda veya güncel ECU bağlamında standart P-kodu bulunmadı. Üreticiye özel kod anlamı uydurulmayacak; ham ECU kodu ve model/yıl servis tablosu gerekir."
         }
 
         return buildString {
-            appendLine("Kod: $code")
-            appendLine("Genel açıklama: $title")
-            appendLine("Teknik not: ${DtcDatabase.description(code)}")
-            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
-            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
-            append("Kaynak: uygulamadaki genel SAE/OBD referansı; motosiklet üreticisi ve ECU varyantı ile teyit edilmeli.")
+            appendLine("Bilgi bankasında incelenen gerçek ECU/soru kodları:")
+            codes.forEach { code ->
+                appendLine()
+                appendLine("=== $code ===")
+                val localRecord = YamahaKnowledgeBase.find(appContext, code)
+                if (localRecord != null) {
+                    appendLine("Başlık: ${localRecord.title}")
+                    appendLine("Açıklama: ${localRecord.description}")
+                    appendLine("Sistem: ${localRecord.system}")
+                    appendLine("Olası nedenler: ${localRecord.possibleCauses.joinToString("; ")}")
+                    appendLine("Kontroller: ${localRecord.checks.joinToString("; ")}")
+                    appendLine("Kod standardı: ${localRecord.codeStandard}")
+                    appendLine("Doğrulama seviyesi: ${localRecord.verification}")
+                    appendLine("Kaynak: ${localRecord.source}")
+                } else {
+                    val legacyYamaha = YamahaFaultCodes.find(code)
+                    if (legacyYamaha != null) {
+                        appendLine("Başlık: ${legacyYamaha.title}")
+                        appendLine("Açıklama: ${legacyYamaha.description}")
+                        appendLine("Olası nedenler: ${legacyYamaha.possibleCauses.joinToString("; ")}")
+                        appendLine("Kontroller: ${legacyYamaha.checks.joinToString("; ")}")
+                        appendLine("Kaynak notu: Mevcut uygulama referansı; Yamaha model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
+                    } else {
+                        val title = DtcDatabase.title(code)
+                        if (title.startsWith("Üreticiye özel")) {
+                            appendLine("Sonuç: Bu kod için yerel bilgi bankasında doğrulanmış açıklama bulunamadı.")
+                        } else {
+                            appendLine("Genel OBD açıklaması: $title")
+                            appendLine("Teknik not: ${DtcDatabase.description(code)}")
+                            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
+                            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
+                            appendLine("Kaynak notu: Genel SAE/OBD referansı; Yamaha'ya özgü uygulama olarak kabul edilmemeli.")
+                        }
+                    }
+                }
+                appendLine("Parça eşleştirmesi: ${PartsAdvisor.statusMessage()}")
+            }
+            appendLine()
+            append("Önemli: Genel SAE kod açıklaması, Yamaha'ya özgü arıza kodu veya belirli model/yıl uyumluluğu anlamına gelmez. Model ve üretim yılı bilinmeden OEM/muadil parça numarası önerme.")
         }
     }
+
+    // Qwen3 0.6B metin modelidir. Ses önce Android cihaz içi konuşma tanıma ile metne çevrilir.
 
     fun ask(
         question: String,
         onResponse: (String) -> Unit
     ) {
-        executor.execute {
-            try {
-                val activeConversation = conversation
-                    ?: throw IllegalStateException(
-                        "Yapay zekâ henüz başlatılmadı. Model dosyasını kontrol edin."
-                    )
+        if (!ready || conversation == null) {
+            mainHandler.post {
+                onResponse("Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin.")
+            }
+            return
+        }
 
-                val serviceReference = buildServiceReference(question)
-                val fullQuestion = """
-                    GÜNCEL ECU VERİLERİ:
-                    $ecuContext
+        // Tek model, tek etkin istek: ikinci istek yerel motoru üst üste bindiremez.
+        if (!requestInProgress.compareAndSet(false, true)) {
+            mainHandler.post {
+                onResponse("Usta, önceki yanıtı hâlâ hazırlıyorum. Biraz bekleyip tekrar sorun.")
+            }
+            return
+        }
 
-                    İLGİLİ TEKNİK REFERANS:
-                    $serviceReference
+        val activeConversation = conversation
+        if (activeConversation == null) {
+            requestInProgress.set(false)
+            mainHandler.post { onResponse("Yerel sohbet oturumu hazır değil.") }
+            return
+        }
 
-                    KULLANICININ SORUSU:
-                    $question
+        val serviceReference = buildServiceReference(question)
+        val fullQuestion = """
+            GÜNCEL ECU VERİLERİ:
+            $ecuContext
 
-                    Yalnızca soruyla ilgili gerçek ECU verilerini ve teknik referansı kullan.
-                    Eksik bilgi veya üreticiye özel doğrulanmamış bilgi uydurma.
-                    Teknik referans yoksa bunu doğal Türkçeyle, yalnızca gerektiğinde belirt.
-                    Bu bağlam başlıklarını veya yönergeleri cevabında tekrar etme.
-                """.trimIndent()
+            İLGİLİ TEKNİK REFERANS:
+            $serviceReference
 
-                val response = activeConversation.sendMessage(
-                    fullQuestion,
-                    thinkingConfig = ThinkingConfig(enableThinking = false)
-                )
-                // Bazı LiteRT-LM model şablonları metni contents yerine
-                // final/answer kanalında döndürebilir. İkisini de kontrol et.
-                val contentAnswer = response.contents.toString().trim()
-                val channelAnswer = sequenceOf("final", "answer", "response", "output")
-                    .mapNotNull { response.channels[it] }
-                    .firstOrNull { it.isNotBlank() }
-                    .orEmpty()
-                val rawAnswer = contentAnswer.ifBlank { channelAnswer }
-                android.util.Log.i(
-                    "SeyfiBrain",
-                    "Qwen yanıtı: ${rawAnswer.take(1200)} | içerikBoş=${contentAnswer.isBlank()} | kanallar=${response.channels.keys}"
-                )
+            KULLANICININ SORUSU:
+            $question
 
-                // Qwen3 bazı yapılandırmalarda düşünme kanalını metinle birlikte döndürebilir.
-                // Kullanıcıya yalnızca son yanıtı göster; ham iç muhakemeyi gösterme.
-                val answer = rawAnswer
-                    .substringAfter("</think>", rawAnswer)
-                    .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
-                    .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
-                    .trim()
-                    .ifBlank { "Bu konuda güvenilir bir yanıt oluşturamadım. Soruyu biraz daha açık anlatır mısınız?" }
+            Yalnızca soruyla ilgili gerçek ECU verilerini ve teknik referansı kullan.
+            Eksik bilgi veya üreticiye özel doğrulanmamış bilgi uydurma.
+            Teknik referans yoksa bunu doğal Türkçeyle, yalnızca gerektiğinde belirt.
+            Bu bağlam başlıklarını veya yönergeleri cevabında tekrar etme.
+        """.trimIndent()
 
-                mainHandler.post {
+        val chunks = StringBuilder()
+        val finished = AtomicBoolean(false)
+
+        fun finish(answer: String) {
+            if (!finished.compareAndSet(false, true)) return
+            requestInProgress.set(false)
+            mainHandler.post {
+                try {
                     onResponse(answer)
-                }
-
-            } catch (e: Exception) {
-                mainHandler.post {
-                    onResponse(
-                        "Usta şu anda cevap üretemedi: ${e.message}"
-                    )
+                } finally {
+                    if (closeRequested) closeResources()
                 }
             }
+        }
+
+        // Engine/Conversation yaşam döngüsü ve tüm native LiteRT-LM çağrıları
+        // aynı tek iş parçacıklı executor üzerinden yürütülür.
+        try {
+            executor.execute {
+                try {
+                    activeConversation.sendMessageAsync(
+                        fullQuestion,
+                        object : MessageCallback {
+                            override fun onMessage(message: Message) {
+                                val chunk = message.toString()
+                                if (chunk.isNotBlank()) {
+                                    synchronized(chunks) { chunks.append(chunk) }
+                                }
+                            }
+
+                            override fun onDone() {
+                                val raw = synchronized(chunks) { chunks.toString() }
+                                val answer = raw
+                                    .substringAfter("</think>", raw)
+                                    .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+                                    .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
+                                    .trim()
+                                    .ifBlank {
+                                        "Model yanıt akışını tamamladı ancak okunabilir bir metin döndürmedi. Daha kısa ve açık bir soru deneyin."
+                                    }
+                                Log.i("SeyfiBrain", "Yerel model yanıtı tamamlandı: ${answer.take(1000)}")
+                                finish(answer)
+                            }
+
+                            override fun onError(throwable: Throwable) {
+                                Log.e("SeyfiBrain", "Yerel model akış hatası", throwable)
+                                finish("Yerel yapay zekâ yanıt üretirken hata verdi: ${throwable.message ?: "Bilinmeyen model hatası"}")
+                            }
+                        },
+                        thinkingConfig = ThinkingConfig(enableThinking = false),
+                        maxOutputToken = 160
+                    )
+                } catch (e: Exception) {
+                    Log.e("SeyfiBrain", "Yerel model isteği başlatılamadı", e)
+                    finish("Yerel yapay zekâ başlatılamadı: ${e.message ?: "Bilinmeyen hata"}")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SeyfiBrain", "Model iş kuyruğuna eklenemedi", e)
+            finish("Yerel yapay zekâ işlem kuyruğu kapalı: ${e.message ?: "Bilinmeyen hata"}")
         }
     }
 
     fun close() {
         ready = false
+        closeRequested = true
+        // Devam eden native üretim varken Engine'i kapatma. Yanıtın onDone/onError
+        // callback'i geldiğinde kaynaklar güvenli biçimde kapatılır.
+        if (!requestInProgress.get()) closeResources()
+    }
 
+    private fun closeResources() {
+        if (!closeRequested || !resourcesCloseStarted.compareAndSet(false, true)) return
         executor.execute {
             try {
                 conversation?.close()
                 conversation = null
-
                 engine?.close()
                 engine = null
-
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                Log.w("SeyfiBrain", "Model kaynakları kapatılırken hata", e)
             } finally {
                 executor.shutdown()
             }

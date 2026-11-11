@@ -153,28 +153,26 @@ class MainActivity : ComponentActivity() {
                 val isProblem = listOf(
                     "hata", "açılamadı", "başlatılamadı", "indirilemedi",
                     "izin gerekli", "hazır değil", "bulunamadı", "kullanılamıyor",
+                    "çevrimdışı tanımayı tamamlayamadı", "dil paketi gerekli",
                     "HTTP "
                 ).any { status.contains(it, ignoreCase = true) }
-                val isModelProgress = status.contains(
-                    "Seyfi Usta yapay zekâ modeli indiriliyor",
-                    ignoreCase = true
-                )
+                val isModelProgress =
+                    status.contains("APK içinden çevrimdışı kuruluyor", ignoreCase = true) ||
+                    status.contains("Qwen3 0.6B başlatılıyor", ignoreCase = true)
                 val isModelReady = status.contains(
-                    "Seyfi Usta yerel yapay zekâsı hazır",
+                    "Qwen3 0.6B yerel yapay zekâsı hazır",
                     ignoreCase = true
                 )
-                val isVoiceListening = status.contains(
-                    "Seyfi Usta çevrimdışı dinliyor",
-                    ignoreCase = true
-                )
+                val isVoiceListening =
+                    status.contains("mikrofonu dinliyor", ignoreCase = true) ||
+                    status.contains("konuşma tanıma servisi hazır", ignoreCase = true)
                 val isWakeDetected = status.contains(
                     "Seyfi Usta uyandırma sözünü algıladı",
                     ignoreCase = true
                 )
                 val isTtsDiagnostic =
-                    status.contains("SEYFİ TTS", ignoreCase = true) ||
                     status.contains("Türkçe TTS", ignoreCase = true) ||
-                    status.contains("Türkçe metin okuma", ignoreCase = true)
+                    status.contains("telefonun sistemde seçili sesi", ignoreCase = true)
                 val isVoicePartial = status.startsWith("Seyfi Usta duyuyor:", ignoreCase = true)
                 val showVoicePartial = if (isVoicePartial) {
                     val transcript = status.substringAfter(":").trim()
@@ -206,12 +204,32 @@ class MainActivity : ComponentActivity() {
         )
         seyfiUstaAI = assistant
         assistant.initialize {
+            val compatibilityFailures = assistant.runCompatibilitySelfTest()
+            val parserFailures = seyfiCommandHandler.selfTest()
+            val allFailures = compatibilityFailures + parserFailures
+            if (allFailures.isEmpty()) {
+                log("SEYFİ ÖZ TEST: Yerel model deneme yanıtı, Android konuşma servisi, Türkçe TTS ve komut sözlüğü başarılı. Gerçek mikrofon anlaşılırlığı ilk sesli komutta doğrulanacak.")
+            } else {
+                log("SEYFİ ÖZ TEST HATASI: " + allFailures.joinToString(" | "))
+                Toast.makeText(
+                    this,
+                    "Seyfi Usta öz test uyarısı: " + allFailures.joinToString(". "),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             if (startVoice) {
-                assistant.speak(
-                    "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
-                        "Bana Seyfi Usta diye seslenin."
-                ) {
-                    assistant.startListening()
+                val startupMessage = when {
+                    allFailures.isEmpty() ->
+                        "Merhaba. Ben Seyfi Usta. Yapay zekâ deneme yanıtı başarılı. Ses servisi hazır. " +
+                            "Şimdi mikrofonu açıyorum. Bana Seyfi Usta diye seslenin."
+                    compatibilityFailures.isNotEmpty() ->
+                        "Merhaba. Ben Seyfi Usta. Açılış öz testinde eksik var. " +
+                            compatibilityFailures.joinToString(". ") + " Sesli komutlar tam hazır değil."
+                    else ->
+                        "Merhaba. Ben Seyfi Usta. Yapay zekâ ve ses servisleri hazır; komut sözlüğü testinde hata var."
+                }
+                assistant.speak(startupMessage) {
+                    if (assistant.runCompatibilitySelfTest().isEmpty()) assistant.startListening()
                 }
             }
         }
@@ -219,11 +237,20 @@ class MainActivity : ComponentActivity() {
 
     private fun greetAndListen() {
         val assistant = seyfiUstaAI ?: return
-        assistant.speak(
-            "Merhaba. Ben Seyfi Usta. Motosiklet teşhis asistanınızım. " +
-                "Bana Seyfi Usta diye seslenin."
-        ) {
-            assistant.startListening()
+        assistant.initialize {
+            val failures = assistant.runCompatibilitySelfTest()
+            if (failures.isNotEmpty()) {
+                val message = "Seyfi Usta henüz hazır değil. " + failures.joinToString(". ")
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+                assistant.speak(message)
+                return@initialize
+            }
+            assistant.speak(
+                "Merhaba. Ben Seyfi Usta. Yapay zekâ ve ses sistemleri test edildi. " +
+                    "Sizi dinliyorum. Bana Seyfi Usta diye seslenebilirsiniz."
+            ) {
+                assistant.startListening()
+            }
         }
     }
 
@@ -302,7 +329,7 @@ class MainActivity : ComponentActivity() {
         }
 
         // Türkçe konuşma modelinin sık yaptığı uyandırma sözü yazım hatalarını düzelt.
-        // Vosk küçük Türkçe modelinde "Seyfi Usta" farklı yazımlarla çıkabiliyor.
+        // Android konuşma tanıma servisinde "Seyfi Usta" farklı yazımlarla çıkabiliyor.
         // Önce Türkçe karakterleri sadeleştir, sonra sık görülen fonetik hataları düzelt.
         val normalizedSpeech = java.text.Normalizer.normalize(
             rawCommand.lowercase(java.util.Locale("tr", "TR")),
@@ -316,7 +343,7 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\s+"), " ")
             .trim()
 
-        val wakeDetected = Regex("\\bseyfi\\b")
+        val wakeDetected = Regex("\\b(seyfi|usta)\\b")
             .containsMatchIn(normalizedSpeech)
         val commandInput: String
 
@@ -327,7 +354,7 @@ class MainActivity : ComponentActivity() {
         commandInput = if (wakeDetected) {
             normalizedSpeech
                 .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\s+usta\\b"), " ")
-                .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı)\\b"), " ")
+                .replace(Regex("\\b(seyfi|şeyfi|sefi|seifi|seyfı|usta)\\b"), " ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
         } else if (seyfiAwaitingCommand) {
@@ -339,12 +366,23 @@ class MainActivity : ComponentActivity() {
         if (commandInput.isBlank() && wakeDetected) {
             seyfiAwaitingCommand = true
             Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
+            // TTS tamamlanınca ses katmanı mikrofonu yeniden açar.
+            // Telefonun TTS sesi duyulurken mikrofon kapalı kalır.
+            // Qwen3 metin modelidir: uyandırma sonrasında Android konuşma tanıma yeniden dinler
+            // ve tanıdığı Türkçe komutu/sohbeti yerel modele aktarır.
             assistant.speak("Dinliyorum.")
             return
         }
 
         // "Sohbet" özel bir oturum açar. Oturum boyunca doğal cümleler
-        // yerel Qwen'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
+        // yerel Qwen3 0.6B'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
+        // Uyandırma sözü olmadan ve bekleyen komut oturumu yokken arka plan
+        // konuşmalarını sohbet/uygulama komutu olarak yorumlama.
+        if (!wakeDetected && !seyfiAwaitingCommand) {
+            log("Seyfi Usta: uyandırma sözü bulunmadığı için ifade yok sayıldı: $rawCommand")
+            return
+        }
+
         val normalizedInput = commandInput.lowercase(java.util.Locale("tr", "TR")).trim()
         if (normalizedInput in setOf("sohbet", "sohbet modu", "sohbete gec", "sohbet baslat")) {
             seyfiChatMode = true
@@ -372,8 +410,10 @@ class MainActivity : ComponentActivity() {
         }
         val command = seyfiCommandHandler.handle(commandInput)
 
-        log("Seyfi Usta komutu: $rawCommand → ${command.action}")
-        Toast.makeText(this, "SEYFİ USTA komutu: ${command.action}", Toast.LENGTH_SHORT).show()
+        if (command.action != SeyfiAction.UNKNOWN) {
+            log("Seyfi Usta komutu: $rawCommand → ${command.action}")
+            Toast.makeText(this, "SEYFİ USTA: ${command.response}", Toast.LENGTH_SHORT).show()
+        }
 
         when (command.action) {
             SeyfiAction.WAKE_WORD -> {
@@ -445,7 +485,15 @@ class MainActivity : ComponentActivity() {
 
             SeyfiAction.SHOW_TESTS -> {
                 showTests()
-                assistant.speak("Sistem testleri ekranını açtım.")
+                val failures = seyfiCommandHandler.selfTest() + assistant.runCompatibilitySelfTest()
+                val report = if (failures.isEmpty()) {
+                    "Seyfi Usta iç testi başarılı. Yerel yapay zekâ deneme yanıtı verdi, konuşma servisi ve Türkçe ses motoru hazır, komut sözlüğü testleri geçti. Şimdi gerçek mikrofon testi için beni duyduğunuzda söylediğiniz cümleyi ekranda kontrol edin."
+                } else {
+                    "Seyfi Usta iç testinde sorun var: " + failures.joinToString(". ")
+                }
+                log(report)
+                Toast.makeText(this, report, Toast.LENGTH_LONG).show()
+                assistant.speak(report)
             }
 
             SeyfiAction.EXPORT_REPORT -> {
@@ -459,8 +507,12 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Komut olmayan doğal dil mesajlarını yerel Qwen'e aktar.
-                sendSeyfiChatMessage(commandInput)
+                // Serbest konuşma yerel Qwen3 0.6B'e aktarılır; boş metin sessizce yutulmaz.
+                if (commandInput.isNotBlank()) {
+                    sendSeyfiChatMessage(commandInput)
+                } else {
+                    assistant.speak("Komutu anlayamadım. Taramaya başla veya yardım de.")
+                }
             }
         }
     }
@@ -480,7 +532,7 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Qwen'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
+     * Qwen3 0.6B'in seçtiği uygulama aracını ana UI thread'inde çalıştırır.
      * Model sadece izin verilen eylemleri seçebilir; gerçek ECU işlemlerini
      * mevcut teşhis yöneticisi yürütür.
      */
@@ -1935,6 +1987,18 @@ class MainActivity : ComponentActivity() {
         statusCard.addView(actionButton("MODEL DURUMUNU YENİLE", blue) {
             status.text = combinedAssistantStatus()
         })
+        statusCard.addView(actionButton("SESLİ CEVABI TEST ET", green) {
+            val assistant = seyfiUstaAI
+            if (assistant == null) {
+                Toast.makeText(this, "Seyfi Usta henüz başlatılmadı.", Toast.LENGTH_LONG).show()
+            } else {
+                assistant.speak("Ses testi. Ben Seyfi Usta. Beni net duyabiliyor musunuz?")
+            }
+        })
+        statusCard.addView(text(
+            "SES MOTORU: Bu sürüm Android TTS kullanıyor. Bağımsız, APK içine gömülü Piper sesi henüz eklenmedi.",
+            11, yellow
+        ))
         c.addView(statusCard)
 
         // Model indirme yüzdesi ve hata durumu ekranda kendiliğinden güncellensin.

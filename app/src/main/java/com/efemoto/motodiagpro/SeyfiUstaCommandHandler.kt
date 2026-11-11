@@ -106,6 +106,12 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "taramaya basla",
+                "taramayi baslat",
+                "tarama baslat",
+                "tara",
+                "basla taramayi",
+                "ariza taramaya basla",
+                "motoru taramaya basla",
                 "ariza tara",
                 "arizalari tara",
                 "arizalari taramaya basla",
@@ -125,6 +131,28 @@ class SeyfiUstaCommandHandler {
                 "ecu tara",
                 "diagnostik baslat",
                 "diagnostik tara",
+                "tarama",
+                "tara",
+                "tarama yap",
+                "motoru tara",
+                "motorumu tara",
+                "ariza kontrol",
+                "ariza kontrol et",
+                "motor kontrol",
+                "motor kontrol et",
+                "ecu kontrol et",
+                "kontrol taramasi yap",
+                "genel tarama",
+                "ariza ara",
+                "hata ara",
+                "motor taramasi",
+                "ecu taramasi",
+                "taramayi calistir",
+                "genel taramayi baslat",
+                "motor saglik kontrolu",
+                "saglik kontrolu yap",
+                "ariza analizi yap",
+                "motoru incele",
                 "genel tarama yap",
                 "genel ariza taramasi",
                 "genel ariza kontrolu",
@@ -147,7 +175,10 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "arizalari sil",
+                "arizayi sil",
+                "ariza kodlarini temizle",
                 "ariza sil",
+                "arizalari temizle",
                 "hatalari sil",
                 "hata kodlarini sil",
                 "dtc sil",
@@ -164,6 +195,9 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "arizalari oku",
+                "arizayi oku",
+                "ariza kodu oku",
+                "hatalari oku",
                 "ariza kodlarini oku",
                 "hata kodlarini oku",
                 "arizalar neler",
@@ -171,7 +205,11 @@ class SeyfiUstaCommandHandler {
                 "ariza listesi",
                 "hata kodlari neler",
                 "kayitli hatalar",
-                "motorumdaki arizalar"
+                "motorumdaki arizalar",
+                "ecu arizalarini oku",
+                "mevcut arizalari oku",
+                "kayitli ariza kodlari",
+                "hata kodlarini oku"
             )
         ) {
             return command(
@@ -339,11 +377,33 @@ class SeyfiUstaCommandHandler {
             )
         }
 
-        if (containsAny(
+        // Tek kelimelik sesli "test" komutunu sohbet modeline göndermeden
+        // doğrudan Sistem Testleri ekranına yönlendir.
+        if (commandText == "test" || containsAny(
                 commandText,
                 "test yap",
+                "test et",
+                "test yapalim",
+                "kendini test et",
+                "kendi kendini test et",
+                "sistemi test et",
+                "sistem testi yap",
+                "ses testi",
+                "mikrofon testi",
+                "yapay zeka testi",
+                "yapay zekayi test et",
+                "komut testi",
+                "komutlari test et",
+                "ses sistemini test et",
+                "test test yap",
+                "testleri baslat",
+                "ses tanima testi",
+                "mikrofonu dene",
+                "kendi testini yap",
                 "testleri goster",
+                "testleri ac",
                 "sistem testi",
+                "sistem testlerini ac",
                 "testler",
                 "iletisim testi"
             )
@@ -392,6 +452,44 @@ class SeyfiUstaCommandHandler {
         )
     }
 
+    /**
+     * Açılışta ve test ekranında çalıştırılabilen komut sözlüğü öz testi.
+     * Bu test mikrofonun gerçekten duyduğunu veya modelin telefonda açıldığını kanıtlamaz.
+     */
+    fun selfTest(): List<String> {
+        val cases = listOf(
+            "Seyfi Usta" to SeyfiAction.WAKE_WORD,
+            "Seyfi" to SeyfiAction.WAKE_WORD,
+            "usta" to SeyfiAction.WAKE_WORD,
+            "Seyfi Usta test yap" to SeyfiAction.SHOW_TESTS,
+            "usta seyfi usta test test yap" to SeyfiAction.SHOW_TESTS,
+            "test" to SeyfiAction.SHOW_TESTS,
+            "test yap" to SeyfiAction.SHOW_TESTS,
+            "kendini test et" to SeyfiAction.SHOW_TESTS,
+            "mikrofon testi" to SeyfiAction.SHOW_TESTS,
+            "ses tanıma testi" to SeyfiAction.SHOW_TESTS,
+            "testleri başlat" to SeyfiAction.SHOW_TESTS,
+            "yapay zekayı test et" to SeyfiAction.SHOW_TESTS,
+            "tarama" to SeyfiAction.START_SCAN,
+            "tara" to SeyfiAction.START_SCAN,
+            "tarama yap" to SeyfiAction.START_SCAN,
+            "motorumu tara" to SeyfiAction.START_SCAN,
+            "arızaları taramaya başla" to SeyfiAction.START_SCAN,
+            "ariza ara" to SeyfiAction.START_SCAN,
+            "motor sağlik kontrolü" to SeyfiAction.START_SCAN,
+            "taramayı çalıştır" to SeyfiAction.START_SCAN,
+            "ECU kontrol et" to SeyfiAction.START_SCAN,
+            "arızaları oku" to SeyfiAction.READ_FAULTS,
+            "arızaları açıkla" to SeyfiAction.EXPLAIN_FAULTS,
+            "arızaları sil" to SeyfiAction.CLEAR_FAULTS,
+            "canlı verileri göster" to SeyfiAction.SHOW_LIVE_DATA,
+            "ana sayfa" to SeyfiAction.GO_HOME
+        )
+        return cases.mapNotNull { (phrase, expected) ->
+            val actual = handle(phrase).action
+            if (actual == expected) null else "\"$phrase\" bekleniyordu: $expected, bulunan: $actual"
+        }
+    }
     private fun command(
         action: SeyfiAction,
         original: String,

@@ -43,10 +43,9 @@ dependencies {
     implementation("androidx.activity:activity-ktx:1.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.9.4")
 
+    testImplementation("junit:junit:4.13.2")
+
     // Seyfi Usta: cihaz üzerinde çalışan LiteRT-LM yerel model motoru.
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.19.0")
 
-    // Seyfi Usta: sürekli çevrimdışı Türkçe ses tanıma (Vosk + Android JNA AAR).
-    implementation("com.alphacephei:vosk-android:0.3.75@aar")
-    implementation("net.java.dev.jna:jna:5.18.1@aar")
 }

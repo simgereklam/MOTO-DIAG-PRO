@@ -2,11 +2,20 @@
 name: MOTO DIAG PRO APK
 
 on:
+  pull_request:
+    branches:
+      - main
+      - master
   push:
     branches:
       - main
       - master
+      - seyfi-offline-stability
   workflow_dispatch:
+
+concurrency:
+  group: moto-diag-pro-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -37,36 +46,31 @@ jobs:
       - name: Gradle sürümünü doğrula
         run: gradle --version
 
-      - name: Türkçe çevrimdışı konuşma modelini ekle
+      - name: Vosk kullanılmadığını doğrula
         run: |
-          mkdir -p /tmp/vosk-tr app/src/main/assets/model-tr
-          curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
-            "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip" \
-            --output /tmp/vosk-tr/model.zip
-          echo "8c8d07cec1bce31add14967c16891c84152cdf76d391e33c08278119b9ea96e5  /tmp/vosk-tr/model.zip" | sha256sum --check
-          unzip -q /tmp/vosk-tr/model.zip -d /tmp/vosk-tr
-          MODEL_FILE="$(find /tmp/vosk-tr -type f -name final.mdl -print -quit)"
-          test -n "$MODEL_FILE"
-          MODEL_ROOT="$(dirname "$MODEL_FILE")"
-          test -f "$MODEL_ROOT/Gr.fst"
-          test -f "$MODEL_ROOT/HCLr.fst"
-          test -f "$MODEL_ROOT/word_boundary.int"
-          cp -a "$MODEL_ROOT"/. app/src/main/assets/model-tr/
-          printf '%s\n' "$GITHUB_SHA" > app/src/main/assets/model-tr/uuid
-          test -f app/src/main/assets/model-tr/uuid
-          echo "Türkçe Vosk model assets hazır."
-          du -sh app/src/main/assets/model-tr
+          ! grep -R -n -E 'com[.]alphacephei:vosk|org[.]vosk|vosk-android|jna:5[.]18' app/src/main app/build.gradle.kts
+          echo "Vosk bağımlılığı ve kod referansı bulunamadı."
 
-      - name: Çevrimdışı yapay zekâ modelini APK içine ekle
+      - name: Qwen3 0.6B yapay zekâ modelini APK içine göm
         run: |
+          MODEL="app/src/main/assets/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
           mkdir -p app/src/main/assets
           curl --fail --location --retry 4 --retry-delay 3 --retry-all-errors \
-            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/e6bb3e4a1eb3f663153f0c1c12b735d64be657a7/Qwen3-0.6B_dynamic_wi4b32_afp32_gpu_composites.litertlm?download=true" \
-            --output app/src/main/assets/seyfi_model.litertlm
-          MODEL_BYTES="$(stat -c%s app/src/main/assets/seyfi_model.litertlm)"
-          test "$MODEL_BYTES" -ge 300000000
-          test "$MODEL_BYTES" -le 400000000
-          echo "Seyfi Usta yapay zekâ modeli APK assets içine alındı: $MODEL_BYTES bayt"
+            "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/e6bb3e4a1eb3f663153f0c1c12b735d64be657a7/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm" \
+            --output "$MODEL"
+          echo "03e7da1eb1108b50dffaa9bb52cc7bcbad2eb0c66ca990267f480c1e545d2856  $MODEL" | sha256sum --check
+          test "$(stat -c%s "$MODEL")" -eq 344671744
+          echo "Qwen3 0.6B modeli APK assets içine doğrulanarak eklendi."
+          du -h "$MODEL"
+
+      - name: APK içinde model ve ses dosyalarını doğrula
+        run: |
+          test -f app/src/main/assets/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm
+          test ! -f app/src/main/assets/seyfi_model.litertlm
+          echo "Qwen3 0.6B modeli APK içine gömüldü; ilk kurulumda internet gerekmeyecek."
+
+      - name: Seyfi komut öz testlerini çalıştır
+        run: gradle :app:testDebugUnitTest --stacktrace
 
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace

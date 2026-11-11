@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "brand": "Yamaha",
+  "note": "Yalnızca model-yıl-ECU eşleşmesi doğrulanmış servis prosedürleri eklenir. Evrensel direnç/voltaj değerleri uydurulmaz.",
+  "procedures": []
+}

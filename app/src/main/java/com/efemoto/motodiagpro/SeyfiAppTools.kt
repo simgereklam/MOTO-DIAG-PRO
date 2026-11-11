@@ -4,7 +4,7 @@ import com.google.ai.edge.litertlm.OpenApiTool
 import org.json.JSONObject
 
 /**
- * Qwen3'in doğal dilde verdiği karara göre gerçek uygulama işlemlerini çağıran araç.
+ * Qwen3 0.6B'in doğal dilde verdiği karara göre gerçek uygulama işlemlerini çağıran araç.
  * Yalnızca MainActivity tarafından izin verilen eylemler çalıştırılır.
  */
 class SeyfiAppTools(
