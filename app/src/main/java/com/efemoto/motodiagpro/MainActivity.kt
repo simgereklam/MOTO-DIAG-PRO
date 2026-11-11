@@ -434,8 +434,11 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.START_SCAN -> {
-                assistant.speak("ECU bağlantısını kontrol ediyorum.")
-                startDiagnosis()
+                // Önce bilgilendirme cümlesi bitsin; tarama sırasında ikinci TTS
+                // çağrısı ilkini kesmesin ve mikrofon kapalı kalsın.
+                assistant.speak("Gerçek ECU taramasını başlatıyorum.", onDone = {
+                    if (!isFinishing && !isDestroyed) startDiagnosis()
+                })
             }
 
             SeyfiAction.READ_FAULTS -> {
@@ -1076,7 +1079,6 @@ class MainActivity : ComponentActivity() {
             try {
                 updateScan(8, "Viecar adaptörüne bağlanılıyor…")
                 ensureConnected()
-                mainHandler.post { seyfiUstaAI?.speak("Bağlantı kuruldu, taramayı başlatıyorum.") }
                 updateScan(35, "ECU yanıtı kontrol ediliyor…")
                 val support = elm("0100", 5000)
                 val supportHex = support.filter { it in "0123456789ABCDEF" }
