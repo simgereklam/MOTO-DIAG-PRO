@@ -3,6 +3,7 @@ package com.efemoto.motodiagpro
 import android.app.Activity
 import android.content.Intent
 import android.os.Handler
+import android.os.Build
 import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -68,15 +69,24 @@ class OfflineVoiceAssistant(
 
     private fun initializeRecognizer() {
         try {
-            recognitionAvailable = SpeechRecognizer.isRecognitionAvailable(activity)
+            recognitionAvailable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
+            } else {
+                SpeechRecognizer.isRecognitionAvailable(activity)
+            }
             if (!recognitionAvailable) {
-                status("Android konuşma tanıma servisi bu telefonda bulunamadı.")
+                status("Bu telefonda kullanılabilir çevrimdışı konuşma servisi bulunamadı. Türkçe dil paketini kontrol edin.")
                 recognizerInitialized = true
                 finishInitializationIfReady()
                 return
             }
             recognizer?.destroy()
-            recognizer = SpeechRecognizer.createSpeechRecognizer(activity).also { speech ->
+            val speechEngine = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
+            } else {
+                SpeechRecognizer.createSpeechRecognizer(activity)
+            }
+            recognizer = speechEngine.also { speech ->
                 speech.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: android.os.Bundle?) {
                         restartCount = 0
@@ -124,7 +134,12 @@ class OfflineVoiceAssistant(
                 })
             }
             recognizerInitialized = true
-            status("Android Türkçe konuşma tanıma servisi hazır; çevrimdışı tercih etkin.")
+            status(
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
+                    "Android cihaz içi Türkçe konuşma tanıma servisi hazır."
+                else
+                    "Android konuşma servisi hazır; çevrimdışı tercih etkin, bu Android sürümünde cihaz içi çalışma garanti edilemiyor."
+            )
         } catch (e: Exception) {
             recognitionAvailable = false
             recognizerInitialized = true
@@ -206,12 +221,10 @@ class OfflineVoiceAssistant(
                 return@postDelayed
             }
             try {
-                speech.cancel()
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "tr-TR")
-                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                     putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
