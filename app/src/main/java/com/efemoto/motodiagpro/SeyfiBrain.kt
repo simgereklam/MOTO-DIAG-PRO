@@ -29,6 +29,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     @Volatile private var conversation: Conversation? = null
     @Volatile private var ready = false
     @Volatile private var ecuContext = "Henüz ECU verisi alınmadı."
+    @Volatile private var diagnosticPlanContext = "Henüz teşhis planı oluşturulmadı. Önce gerçek ECU taraması ve canlı veri gerekir."
     private val requestInProgress = AtomicBoolean(false)
     private val resourcesCloseStarted = AtomicBoolean(false)
     @Volatile private var closeRequested = false
@@ -47,6 +48,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         Önce basit ve güvenli kontrolleri öner; parça değişimini ölçüm ve doğrulama olmadan önermemeye çalış.
         Kullanıcıya teşhis adımlarını, beklenen ölçümleri ve sonuçların nasıl yorumlanacağını sırayla açıkla.
         ECU taraması, arıza silme veya başka bir fiziksel işlem yaptığını ASLA iddia etme; bu işlemleri yalnızca uygulamanın gerçek komut yöneticisi yapar.
+        Teşhis isteyen kullanıcıda mevcut teşhis planındaki uygun salt-okunur testi seçebilirsin. Yalnızca run_safe_diagnostic_test aracını ve izin verilen test kimliklerini kullan; bir test sonucu gelmeden sonucu yorumlama. Asla aktüatör testi, ECU yazma veya arıza silme komutu üretme.
         Kullanıcıdan gelen isteği uygulama komutu değilse sohbet ve teknik danışmanlık olarak yanıtla.
         Bilmediğin üreticiye özel prosedürü veya PID desteğini uydurma; model/yıl/ECU bilgisi iste.
         Güvenlikle ilgili belirsizlikte sürüşe devam etmeyi garanti etme; kritik arızada motoru kullanmamasını öner.
@@ -148,6 +150,12 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         onResponse: (String) -> Unit
     ) {
         ask(question, onResponse)
+    }
+
+    fun updateDiagnosticPlan(planContext: String) {
+        diagnosticPlanContext = planContext.trim().ifBlank {
+            "Henüz güvenli teşhis planı oluşturulmadı."
+        }
     }
 
     // ECU'dan gelen gerçek verileri hafızada tutar.
@@ -277,6 +285,9 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
 
             İLGİLİ TEKNİK REFERANS:
             $serviceReference
+
+            GÜVENLİ TEŞHİS PLANI:
+            $diagnosticPlanContext
 
             KULLANICININ SORUSU:
             $question
