@@ -44,7 +44,7 @@ jobs:
 
       - name: Vosk kullanılmadığını doğrula
         run: |
-          ! grep -R -n -E 'com\\.alphacephei:vosk|org\\.vosk|vosk-android|jna:5\\.18' app/src/main app/build.gradle.kts
+          ! grep -R -n -E 'com[.]alphacephei:vosk|org[.]vosk|vosk-android|jna:5[.]18' app/src/main app/build.gradle.kts
           echo "Vosk bağımlılığı ve kod referansı bulunamadı."
 
       - name: Qwen3 0.6B yapay zekâ modelini APK içine göm
@@ -64,6 +64,9 @@ jobs:
           test -f app/src/main/assets/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm
           test ! -f app/src/main/assets/seyfi_model.litertlm
           echo "Qwen3 0.6B modeli APK içine gömüldü; ilk kurulumda internet gerekmeyecek."
+
+      - name: Seyfi komut öz testlerini çalıştır
+        run: gradle :app:testDebugUnitTest --stacktrace
 
       - name: APK oluştur
         run: gradle :app:assembleDebug --stacktrace
