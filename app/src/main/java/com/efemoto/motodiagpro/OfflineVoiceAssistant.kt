@@ -281,8 +281,11 @@ class OfflineVoiceAssistant(
                             speaking = false
                             processing = false
                             status("Seyfi Usta yanıtını tamamladı.")
+                            val hasCompletionCallback = onDone != null
                             onDone?.invoke()
-                            if (listeningEnabled && !processing) startListeningInternal(350)
+                            if (!hasCompletionCallback && listeningEnabled && !processing) {
+                                startListeningInternal(350)
+                            }
                         }
                     }
                 }
@@ -292,7 +295,20 @@ class OfflineVoiceAssistant(
                             speaking = false
                             processing = false
                             status("Metin seslendirilemedi.")
+                            val hasCompletionCallback = onDone != null
                             onDone?.invoke()
+                            if (!hasCompletionCallback && listeningEnabled && !processing) {
+                                startListeningInternal(350)
+                            }
+                        }
+                    }
+                }
+                override fun onStop(id: String?, interrupted: Boolean) {
+                    main.post {
+                        if (id == utteranceId) {
+                            speaking = false
+                            processing = false
+                            if (listeningEnabled) startListeningInternal(350)
                         }
                     }
                 }
