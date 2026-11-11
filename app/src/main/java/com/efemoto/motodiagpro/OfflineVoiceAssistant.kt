@@ -185,7 +185,8 @@ class OfflineVoiceAssistant(
                             ?.filter { it.locale.language.equals("tr", ignoreCase = true) }
                             ?.filter {
                                 val n = it.name.lowercase(Locale.ROOT)
-                                n.contains("male") || n.contains("masculine") || n.contains("erkek")
+                                n.contains("male") || n.contains("masculine") || n.contains("erkek") ||
+                                    it.features.any { feature -> feature.contains("gender=male", ignoreCase = true) }
                             }
                             ?.maxByOrNull { it.quality }
                         if (maleVoice != null) {
