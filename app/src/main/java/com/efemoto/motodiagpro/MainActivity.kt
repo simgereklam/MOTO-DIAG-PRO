@@ -95,7 +95,6 @@ class MainActivity : ComponentActivity() {
     private var lastSeyfiPartialToastAt = 0L
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
-    @Volatile private var seyfiChatMode = false
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -378,48 +377,17 @@ class MainActivity : ComponentActivity() {
         if (commandInput.isBlank() && wakeDetected) {
             seyfiAwaitingCommand = true
             Toast.makeText(this, "SEYFİ USTA: Uyandırma kelimesi algılandı.", Toast.LENGTH_SHORT).show()
-            // TTS tamamlanınca ses katmanı mikrofonu yeniden açar.
-            // Telefonun TTS sesi duyulurken mikrofon kapalı kalır.
-            // Qwen3 metin modelidir: uyandırma sonrasında Android konuşma tanıma yeniden dinler
-            // ve tanıdığı Türkçe komutu/sohbeti yerel modele aktarır.
+            // TTS tamamlanınca mikrofon yeniden açılır; komutlar yerel sözlükte çözülür.
             assistant.speak("Dinliyorum.")
             return
         }
 
-        // "Sohbet" özel bir oturum açar. Oturum boyunca doğal cümleler
-        // yerel Qwen3 0.6B'e gider; uygulama işlemleri gerektiğinde araçlarla yürütülür.
-        // Uyandırma sözü olmadan ve bekleyen komut oturumu yokken arka plan
-        // konuşmalarını sohbet/uygulama komutu olarak yorumlama.
         if (!wakeDetected && !seyfiAwaitingCommand) {
             log("Seyfi Usta: uyandırma sözü bulunmadığı için ifade yok sayıldı: $rawCommand")
             return
         }
 
-        val normalizedInput = commandInput.lowercase(java.util.Locale("tr", "TR")).trim()
-        if (normalizedInput in setOf("sohbet", "sohbet modu", "sohbete gec", "sohbet baslat")) {
-            seyfiChatMode = true
-            seyfiAwaitingCommand = false
-            log("Seyfi Usta sohbet modu açıldı.")
-            assistant.speak("Sohbet modundayım ustam. Bana istediğinizi doğal şekilde sorabilirsiniz.")
-            return
-        }
-
-        val exitChat = normalizedInput in setOf(
-            "sohbeti kapat", "sohbeti bitir", "sohbet modundan cik",
-            "komut moduna gec", "normal komut modu"
-        )
-        if (seyfiChatMode && exitChat) {
-            seyfiChatMode = false
-            seyfiAwaitingCommand = false
-            assistant.speak("Sohbet modundan çıktım. Komutlarınızı dinliyorum.")
-            return
-        }
-
         seyfiAwaitingCommand = false
-        if (seyfiChatMode && commandInput.isNotBlank()) {
-            sendSeyfiChatMessage(commandInput)
-            return
-        }
         val command = seyfiCommandHandler.handle(commandInput)
 
         if (command.action != SeyfiAction.UNKNOWN) {
@@ -487,6 +455,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
+            SeyfiAction.ANALYZE_ENGINE_DATA -> {
+                if (!connected || liveValues.isEmpty()) {
+                    assistant.speak("Yapay zekâ motor analizi için önce gerçek ECU bağlantısı ve canlı sensör verileri gerekiyor.")
+                } else {
+                    assistant.speak("Gerçek motor verilerini yerel yapay zekâ ile değerlendiriyorum.")
+                    assistant.analyzeCurrentEngineData { success, result ->
+                        log("Yapay zekâ motor analizi " + if (success) "başarılı: $result" else "başarısız: $result")
+                        if (!success) Toast.makeText(this, result, Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+
             SeyfiAction.SHOW_HELP -> assistant.speak(
                 "Taramaya başla, arızaları oku veya açıkla, arızaları sil, canlı verileri oku, motor devri, " +
                     "hararet, akü voltajı, gaz konumu, manifold basıncı, bağlantı durumu, test yap, " +
@@ -545,12 +525,7 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Serbest konuşma yerel Qwen3 0.6B'e aktarılır; boş metin sessizce yutulmaz.
-                if (commandInput.isNotBlank()) {
-                    sendSeyfiChatMessage(commandInput)
-                } else {
-                    assistant.speak("Komutu anlayamadım. Taramaya başla veya yardım de.")
-                }
+                assistant.speak("Bu komutu tanımadım. Uygulama komutları için yardım diyebilirsiniz. Motor verilerini yorumlamamı isterseniz motor verilerini yorumla deyin.")
             }
         }
     }
@@ -1143,14 +1118,13 @@ class MainActivity : ComponentActivity() {
                     seyfiUstaAI?.updateDiagnosticPlan(
                         diagnosticPlan.toPromptContext(supportedPidSet)
                     )
-                    seyfiUstaAI?.brain?.updateEcuData(
+                    seyfiUstaAI?.updateEcuData(
                         rpm = diagnosticSnapshot["rpm"]?.toInt() ?: -1,
-                        tps = diagnosticSnapshot["tps"]?.toInt() ?: -1,
-                        coolant = diagnosticSnapshot["coolant"]?.toInt() ?: -999,
-                        mapKpa = diagnosticSnapshot["map"]?.toInt() ?: -1,
+                        tps = (diagnosticSnapshot["tps"] ?: -1.0).toFloat(),
+                        ect = diagnosticSnapshot["coolant"]?.toInt() ?: -999,
+                        map = (diagnosticSnapshot["map"] ?: -1.0).toFloat(),
                         voltage = diagnosticSnapshot["voltage"] ?: -1.0,
-                        faults = found,
-                        connected = connected
+                        dtcs = found
                     )
 
                     if (currentScreen == "SCAN") showFaults()
@@ -1606,7 +1580,7 @@ class MainActivity : ComponentActivity() {
         liveGauge?.invalidate()
 
         // Seyfi Usta beynine anlık sensör verilerini ilet
-        seyfiUstaAI?.brain?.updateEcuData(rpm, tps.toInt(), coolant, mapKpa, voltage, faults, connected)
+        seyfiUstaAI?.updateEcuData(rpm, tps.toFloat(), coolant, mapKpa.toFloat(), voltage, faults)
 
         val definitions = liveMetricDefinitions()
         definitions.forEach { def ->
@@ -1738,6 +1712,38 @@ class MainActivity : ComponentActivity() {
             13, white
         ))
         c.addView(intro)
+
+        val aiStatusCard = neonCard("YEREL YAPAY ZEKÂ DURUMU", purpleColor())
+        val aiStatusText = text(
+            seyfiUstaAI?.getModelStatus() ?: "Yapay zekâ henüz başlatılmadı.",
+            13, white, true
+        )
+        aiStatusCard.addView(aiStatusText)
+        addGap(aiStatusCard, 7)
+        aiStatusCard.addView(text(
+            "Bu test Qwen3 model dosyasını, modelin hazır durumunu ve gerçek cevap üretmesini kontrol eder. ECU bağlantısı gerekmez.",
+            12, muted
+        ))
+        addGap(aiStatusCard, 7)
+        aiStatusCard.addView(actionButton("YAPAY ZEKÂYI GERÇEKTEN TEST ET", purpleColor()) {
+            val assistant = seyfiUstaAI
+            if (assistant == null) {
+                aiStatusText.text = "HATA: Sesli asistan nesnesi oluşturulmadı."
+                return@actionButton
+            }
+            aiStatusText.text = "TEST EDİLİYOR: Yerel modelden gerçek cevap bekleniyor…"
+            assistant.runModelSelfTest { success, result ->
+                aiStatusText.text = if (success) "BAŞARILI — Model gerçek cevap üretti.\n$result"
+                    else "BAŞARISIZ — $result"
+                log("YAPAY ZEKÂ TESTİ: " + (if (success) "BAŞARILI" else "BAŞARISIZ") + " — $result")
+                AlertDialog.Builder(this)
+                    .setTitle(if (success) "YAPAY ZEKÂ ÇALIŞIYOR" else "YAPAY ZEKÂ TESTİ BAŞARISIZ")
+                    .setMessage(result)
+                    .setPositiveButton("TAMAM", null)
+                    .show()
+            }
+        })
+        c.addView(aiStatusCard)
 
         fun testCard(title: String, detail: String, button: String, color: Int, action: () -> Unit) {
             val card = neonCard(null, color)
