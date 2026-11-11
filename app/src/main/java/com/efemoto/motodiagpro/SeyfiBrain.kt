@@ -30,6 +30,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
     @Volatile private var ready = false
     @Volatile private var ecuContext = "Henüz ECU verisi alınmadı."
     @Volatile private var diagnosticPlanContext = "Henüz teşhis planı oluşturulmadı. Önce gerçek ECU taraması ve canlı veri gerekir."
+    @Volatile private var latestDiagnosticTestResult = "Henüz salt-okunur test sonucu alınmadı."
     private val requestInProgress = AtomicBoolean(false)
     private val resourcesCloseStarted = AtomicBoolean(false)
     @Volatile private var closeRequested = false
@@ -150,6 +151,12 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         onResponse: (String) -> Unit
     ) {
         ask(question, onResponse)
+    }
+
+    fun updateDiagnosticTestResult(result: String) {
+        latestDiagnosticTestResult = result.trim().take(12000).ifBlank {
+            "Son salt-okunur test sonucu boş."
+        }
     }
 
     fun updateDiagnosticPlan(planContext: String) {
@@ -288,6 +295,9 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
 
             GÜVENLİ TEŞHİS PLANI:
             $diagnosticPlanContext
+
+            SON GERÇEK SALT-OKUNUR TEST SONUCU:
+            $latestDiagnosticTestResult
 
             KULLANICININ SORUSU:
             $question
