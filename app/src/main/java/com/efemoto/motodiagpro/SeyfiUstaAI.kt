@@ -38,10 +38,7 @@ class SeyfiUstaAI(
         }
     )
 
-    val brain = SeyfiBrain(
-        activity.applicationContext,
-        com.google.ai.edge.litertlm.tool(SeyfiAppTools(onAppAction))
-    )
+    val brain = SeyfiBrain(activity.applicationContext)
     private val modelExecutor = Executors.newSingleThreadExecutor()
     // Yerel model yanıt üretirken takılırsa sesli asistan sonsuza kadar mikrofonu kapalı tutmasın.
     private val chatTimeoutExecutor: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
@@ -230,6 +227,30 @@ class SeyfiUstaAI(
     fun pauseForProcessing() = voice.pauseForProcessing()
     fun stopListening() = voice.stopListening()
     fun isListening(): Boolean = voice.isListening()
+
+    fun runModelSelfTest(onResult: (Boolean, String) -> Unit) {
+        if (!brain.isReady()) {
+            onResult(false, getModelStatus())
+            return
+        }
+        chat("Yalnızca şu cümleyi üret: Yerel yapay zekâ testim başarılı.", onResult)
+    }
+
+    fun analyzeCurrentEngineData(onResult: (Boolean, String) -> Unit) {
+        if (!brain.isReady()) {
+            onResult(false, "Yerel yapay zekâ hazır değil: \${getModelStatus()}")
+            return
+        }
+        brain.analyzeCurrentEngineData { answer ->
+            val failed = answer.contains("bağlı değil", true) ||
+                answer.contains("henüz gerçek ECU", true) ||
+                answer.contains("hazır değil", true) ||
+                answer.contains("hata verdi", true) ||
+                answer.contains("yanıt üretemedi", true)
+            onResult(!failed, answer)
+            if (!failed) speak(answer)
+        }
+    }
 
     fun chat(message: String, onAnswer: (String) -> Unit) {
         val cleanMessage = message.trim()
