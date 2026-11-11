@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger
  * Seyfi Usta ses katmanı:
  * - Vosk: sürekli, yerel Türkçe konuşma tanıma.
  * - Android TTS: Türkçe sesli yanıt.
- * - Tanınan metin onRecognized üzerinden SeyfiUstaAI / Gemma 4'e ve
+ * - Tanınan metin onRecognized üzerinden SeyfiUstaAI / Qwen3 0.6B'e ve
  *   MainActivity komut yönlendiricisine aktarılır.
  *
  * SpeechRecognizer kullanılmaz; böylece telefonun bulut/üretici konuşma
@@ -461,7 +461,7 @@ class OfflineVoiceAssistant(
 
     /**
      * Uyandırma sözü Vosk tarafından algılandıktan sonra gerçek konuşma parçasını
-     * metne çevirmeden 16 kHz WAV olarak Gemma 4'e aktarır.
+     * Vosk metin tanıma hattı dışındaki eski doğrudan ses yakalama yolu artık kullanılmaz.
      */
     fun speakAndRecordDirectAudio(onAudio: (ByteArray) -> Unit) {
         if (released) return
@@ -477,7 +477,7 @@ class OfflineVoiceAssistant(
         processingRequested = true
         mainHandler.removeCallbacks(restartRecognition)
         releaseSpeechService()
-        reportStatus("Gemma 4 konuşmanızı doğrudan dinliyor...")
+        reportStatus("Qwen3 0.6B konuşmanızı doğrudan dinliyor...")
         directAudioExecutor.execute {
             var recorder: AudioRecord? = null
             try {
@@ -539,7 +539,7 @@ class OfflineVoiceAssistant(
 
                 val audioBytes = makeWav(pcm.toByteArray(), 16_000)
                 holdRecognitionAfterSpeech = false
-                reportStatus("Konuşma Gemma 4'e doğrudan gönderiliyor...")
+                reportStatus("Konuşma Qwen3 0.6B'e doğrudan gönderiliyor...")
                 mainHandler.post {
                     if (!released) {
                         val callback = directAudioCallback
