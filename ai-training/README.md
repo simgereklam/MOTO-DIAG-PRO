@@ -45,3 +45,24 @@ sessions per fault and multiple motorcycles/model-years.
   protocols, addresses and adapter support.
 - Raw unknown PID bytes are preserved for later decoding. Never guess units or
   apply car PID formulas to proprietary motorcycle data.
+
+
+## Seyfi's own Turkish language model (from scratch)
+
+The separate `train_seyfi_transformer.py` script creates a small causal Transformer
+with random initialization and its own UTF-8 byte tokenizer. It does not load
+Qwen, Gemma, Llama, pretrained weights, or a third-party tokenizer.
+
+Install its separate training dependency:
+```bash
+python -m pip install -r requirements-transformer.txt
+python train_seyfi_transformer.py --data seyfi_turkish_corpus.jsonl --steps 20000 --out seyfi_transformer.pt
+```
+
+JSONL input format: one document per line, for example
+`{"text":"Motosiklet ..."}`. Use licensed, accurate Turkish language and
+motorcycle-service documents. Do not mix unverified repair claims into the corpus.
+Training starts from random weights. The checkpoint is not automatically installed
+in Android: Android inference, quantization, memory/performance tests, and a
+real labelled ECU dataset remain separate required steps. No trained checkpoint
+is included or claimed by this repository yet.
