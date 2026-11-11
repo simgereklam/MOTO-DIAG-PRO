@@ -42,6 +42,7 @@ class SeyfiBrain(context: Context, private val appTools: ToolProvider? = null) {
         ECU verilerini yalnızca GÜNCEL ECU DURUMU bölümünde gerçekten bulunan değerlerden yorumla.
         Bir sensör değeri "Okunmadı" ise değer uydurma; kullanıcıya neden okunmamış olabileceğini anlat.
         SORUYA EKLENEN SERVİS REFERANSI bölümündeki DTC bilgilerini öncelikli kullan; referansın model/yıl uyumunu kesin kabul etme.
+        Belirti metniyle bulunan yerel bilgi bankası kayıtlarını yalnızca olası referans olarak sun; eşleşmeyi kesin teşhis sayma ve kaynak/doğrulama seviyesini dikkate al.
         Arıza kodu açıklamasını olası nedenlerden ayır; tek bir parçayı kesin arızalı ilan etme.
         Teşhis yaklaşımın: şikâyeti netleştir, arıza kodu ve canlı veriyi karşılaştır, besleme/şase/soket/kabloyu kontrol ettir, sensör sinyalini servis ölçümleriyle doğrulat, ancak bundan sonra parça ihtimalini değerlendir.
         Her ölçümde kontak açık/kapalı ve motor soğuk/sıcak koşulunu belirt; değer aralığını yalnızca üretici servis verisiyle doğrulanmışsa ver.
