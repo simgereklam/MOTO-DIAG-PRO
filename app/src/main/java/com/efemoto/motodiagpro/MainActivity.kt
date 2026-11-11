@@ -204,27 +204,32 @@ class MainActivity : ComponentActivity() {
         )
         seyfiUstaAI = assistant
         assistant.initialize {
-            val parserFailures = seyfiCommandHandler.selfTest() + assistant.runCompatibilitySelfTest()
-            if (parserFailures.isEmpty()) {
-                log("SEYFİ ÖZ TEST: Yerel model, Android konuşma servisi, TTS ve komut sözlüğü kontrolleri başarılı. Gerçek mikrofon anlaşılırlığı ilk sesli komutta doğrulanacak.")
+            val compatibilityFailures = assistant.runCompatibilitySelfTest()
+            val parserFailures = seyfiCommandHandler.selfTest()
+            val allFailures = compatibilityFailures + parserFailures
+            if (allFailures.isEmpty()) {
+                log("SEYFİ ÖZ TEST: Yerel model deneme yanıtı, Android konuşma servisi, Türkçe TTS ve komut sözlüğü başarılı. Gerçek mikrofon anlaşılırlığı ilk sesli komutta doğrulanacak.")
             } else {
-                log("SEYFİ ÖZ TEST HATASI: " + parserFailures.joinToString(" | "))
+                log("SEYFİ ÖZ TEST HATASI: " + allFailures.joinToString(" | "))
                 Toast.makeText(
                     this,
-                    "Seyfi Usta komut testi başarısız: ${parserFailures.size} ifade",
+                    "Seyfi Usta öz test uyarısı: " + allFailures.joinToString(". "),
                     Toast.LENGTH_LONG
                 ).show()
             }
             if (startVoice) {
-                val startupMessage = if (assistant.brain.isReady()) {
-                    "Merhaba. Ben Seyfi Usta. Yapay zekâ deneme yanıtı başarılı. " +
-                        "Ses sistemini açıyorum. Bana Seyfi Usta diye seslenin."
-                } else {
-                    "Merhaba. Ben Seyfi Usta. Sesli komutlar hazır; yerel yapay zekâ sohbeti hazır değil. " +
-                        "Durum bilgisini kontrol edin."
+                val startupMessage = when {
+                    allFailures.isEmpty() ->
+                        "Merhaba. Ben Seyfi Usta. Yapay zekâ deneme yanıtı başarılı. Ses servisi hazır. " +
+                            "Şimdi mikrofonu açıyorum. Bana Seyfi Usta diye seslenin."
+                    compatibilityFailures.isNotEmpty() ->
+                        "Merhaba. Ben Seyfi Usta. Açılış öz testinde eksik var. " +
+                            compatibilityFailures.joinToString(". ") + " Sesli komutlar tam hazır değil."
+                    else ->
+                        "Merhaba. Ben Seyfi Usta. Yapay zekâ ve ses servisleri hazır; komut sözlüğü testinde hata var."
                 }
                 assistant.speak(startupMessage) {
-                    assistant.startListening()
+                    if (assistant.runCompatibilitySelfTest().isEmpty()) assistant.startListening()
                 }
             }
         }
