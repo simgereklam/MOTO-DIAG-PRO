@@ -104,7 +104,18 @@ data class SeyfiDiagnosticPlan(
         if (observedValues.isEmpty()) {
             appendLine("Ölçülen canlı değer: Henüz yok.")
         } else {
-            appendLine("Ölçülen canlı değer anahtarları: \${observedValues.keys.sorted().joinToString()}")
+            val units = mapOf(
+                "rpm" to "RPM", "tps" to "%", "coolant" to "°C", "map" to "kPa",
+                "voltage" to "V", "load" to "%", "stft" to "%", "ltft" to "%",
+                "speed" to "km/h", "timing" to "°", "iat" to "°C", "maf" to "g/s",
+                "o2" to "V", "relativeThrottle" to "%", "pedal" to "%",
+                "commandedThrottle" to "%", "oilTemp" to "°C"
+            )
+            appendLine("Gerçek ECU canlı ölçümleri:")
+            observedValues.toSortedMap().forEach { (key, value) ->
+                val unit = units[key].orEmpty()
+                appendLine("- $key: ${"%.2f".format(java.util.Locale.US, value)} $unit")
+            }
         }
         appendLine("Önerilen güvenli salt-okunur kontroller:")
         recommendedTests.forEach { test ->
@@ -114,7 +125,7 @@ data class SeyfiDiagnosticPlan(
                 test.requiredPids.all { it in supportedPids } -> "gerekli PID'ler destekleniyor"
                 else -> "bazı PID'ler desteklenmiyor veya yanıt vermedi"
             }
-            appendLine("- \${test.id}: \${test.title}; \${test.description}; durum: $support")
+            appendLine("- ${test.id}: ${test.title}; ${test.description}; durum: $support")
         }
         notes.forEach { appendLine("Not: $it") }
         append(
