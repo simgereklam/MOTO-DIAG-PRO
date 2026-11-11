@@ -18,7 +18,7 @@ The first classifier is intentionally a conventional ExtraTrees model, not an
 LLM. It learns patterns from real, labelled ECU sessions. It cannot be honestly
 trained until there are enough confirmed examples.
 
-Create a CSV with one row per time sample and at least these columns:
+You can also prepare a CSV with one row per time sample and at least these columns:
 `session_id,fault_label,timestamp,rpm,tps,coolant,map,voltage,stft,ltft`
 Add any other numeric sensor columns you actually captured. Use one stable
 `session_id` per ride/session. Label only after a mechanic confirms the cause.
@@ -28,7 +28,7 @@ proof that a particular component failed.
 Install and train:
 ```bash
 python -m pip install -r requirements.txt
-python train_model.py --csv labelled_sessions.csv --out seyfi_fault_model.joblib
+python train_model.py --csv labelled_sessions.jsonl --out seyfi_fault_model.joblib
 ```
 
 The script holds out complete sessions (not random rows) to reduce data leakage.
