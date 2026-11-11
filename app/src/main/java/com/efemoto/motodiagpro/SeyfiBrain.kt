@@ -3,435 +3,139 @@ package com.efemoto.motodiagpro
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
-import com.google.ai.edge.litertlm.Backend
-import com.google.ai.edge.litertlm.Engine
-import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.Conversation
-import com.google.ai.edge.litertlm.ConversationConfig
-import com.google.ai.edge.litertlm.Contents
-import com.google.ai.edge.litertlm.ThinkingConfig
-import com.google.ai.edge.litertlm.Message
-import com.google.ai.edge.litertlm.MessageCallback
-import java.util.concurrent.atomic.AtomicBoolean
-import java.io.File
 import java.util.Locale
-import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
+/**
+ * Seyfi Usta bağımsız, cihaz içi teşhis çekirdeği.
+ * Hazır LLM veya üçüncü taraf model ağırlığı kullanmaz.
+ * Bu sürüm deterministik teşhis mantığıdır; öğrenilmiş sinir ağı henüz eğitilmemiştir.
+ */
 class SeyfiBrain(context: Context) {
-
     private val appContext = context.applicationContext
-    private val executor = Executors.newSingleThreadExecutor()
-    private val mainHandler = Handler(Looper.getMainLooper())
-
-    @Volatile private var engine: Engine? = null
-    @Volatile private var conversation: Conversation? = null
-    @Volatile private var ready = false
-    @Volatile private var ecuContext = "Henüz ECU verisi alınmadı."
+    private val main = Handler(Looper.getMainLooper())
+    private val busy = AtomicBoolean(false)
+    @Volatile private var ready = true
     @Volatile private var ecuConnected = false
-    @Volatile private var diagnosticPlanContext = "Henüz teşhis planı oluşturulmadı. Önce gerçek ECU taraması ve canlı veri gerekir."
+    @Volatile private var ecuValues: Map<String, Double> = emptyMap()
+    @Volatile private var ecuFaults: List<String> = emptyList()
+    @Volatile private var diagnosticPlanContext = "Henüz teşhis planı oluşturulmadı."
     @Volatile private var latestDiagnosticTestResult = "Henüz salt-okunur test sonucu alınmadı."
-    private val requestInProgress = AtomicBoolean(false)
-    private val resourcesCloseStarted = AtomicBoolean(false)
-    @Volatile private var closeRequested = false
 
-    private val systemPrompt = """
-        Sen SEYFİ USTA'sın: EFE MOTO için çalışan profesyonel motosiklet teşhis ve servis asistanısın.
-        Her zaman doğal, anlaşılır ve düzgün Türkçe konuş. Kullanıcıya insan gibi saygılı ve sakin davran.
-        Motosiklet sistemlerini, motor yönetimini, sensörleri, OBD/ELM327 iletişimini ve arıza teşhis mantığını açıkla.
-        ECU verilerini yalnızca GÜNCEL ECU DURUMU bölümünde gerçekten bulunan değerlerden yorumla.
-        Bu model yalnızca motor verilerini yorumlar; genel sohbet veya uygulama komutu işlemez.
-        Bir sensör değeri "Okunmadı" ise değer uydurma; kullanıcıya neden okunmamış olabileceğini anlat.
-        SORUYA EKLENEN SERVİS REFERANSI bölümündeki DTC bilgilerini öncelikli kullan; referansın model/yıl uyumunu kesin kabul etme.
-        Belirti metniyle bulunan yerel bilgi bankası kayıtlarını yalnızca olası referans olarak sun; eşleşmeyi kesin teşhis sayma ve kaynak/doğrulama seviyesini dikkate al.
-        Arıza kodu açıklamasını olası nedenlerden ayır; tek bir parçayı kesin arızalı ilan etme.
-        Teşhis yaklaşımın: şikâyeti netleştir, arıza kodu ve canlı veriyi karşılaştır, besleme/şase/soket/kabloyu kontrol ettir, sensör sinyalini servis ölçümleriyle doğrulat, ancak bundan sonra parça ihtimalini değerlendir.
-        Her ölçümde kontak açık/kapalı ve motor soğuk/sıcak koşulunu belirt; değer aralığını yalnızca üretici servis verisiyle doğrulanmışsa ver.
-        ECU'nun desteklemediği PID, ABS erişimi, aktüatör testi veya özel protokolü varmış gibi gösterme.
-        Önce basit ve güvenli kontrolleri öner; parça değişimini ölçüm ve doğrulama olmadan önermemeye çalış.
-        Kullanıcıya teşhis adımlarını, beklenen ölçümleri ve sonuçların nasıl yorumlanacağını sırayla açıkla.
-        ECU taraması, arıza silme veya başka bir fiziksel işlem yaptığını ASLA iddia etme; bu işlemleri yalnızca uygulamanın gerçek komut yöneticisi yapar.
-        Uygulama komutlarını asla yorumlama veya çalıştırma. Yalnızca gerçek verilerdeki olağan dışı noktaları temkinli biçimde belirt.
-        Eksik sensör değerlerini uydurma; desteklenmeyen PID'leri arızalı ilan etme.
-        Belirli marka/model servis değerleri doğrulanmadıysa kesin eşik veya parça arızası iddia etme.
-        Kritik ve güvenlikle ilgili belirsizlikte kesin sürüş güvenliği garantisi verme.
-        Yanıtı en fazla 4 kısa cümlede tut ve yalnızca motor verileri hakkında konuş.
-    """.trimIndent()
+    private fun normalize(value: String): String =
+        java.text.Normalizer.normalize(value.lowercase(Locale("tr", "TR")), java.text.Normalizer.Form.NFD)
+            .replace(Regex("\\p{Mn}+"), "").replace("ı", "i")
+            .replace(Regex("[^a-z0-9 ]"), " ").replace(Regex("\\s+"), " ").trim()
 
-    fun initialize(
-        modelFile: File,
-        onResult: (Boolean, String) -> Unit
-    ) {
-        executor.execute {
-            try {
-                ready = false
-
-                if (!modelFile.exists() || modelFile.length() == 0L) {
-                    throw IllegalStateException(
-                        "Seyfi Usta model dosyası bulunamadı: ${modelFile.absolutePath}"
-                    )
-                }
-
-                conversation?.close()
-                conversation = null
-
-                engine?.close()
-                engine = null
-
-                val newEngine = Engine(
-                    EngineConfig(
-                        modelPath = modelFile.absolutePath,
-                        backend = Backend.CPU(),
-                        cacheDir = appContext.cacheDir.absolutePath
-                    )
-                )
-
-                newEngine.initialize()
-
-                val newConversation = newEngine.createConversation(
-                    ConversationConfig(
-                        systemInstruction = Contents.of(systemPrompt),
-                        // Qwen3 0.6B sohbetinde düşünme kanalı kullanılmaz; doğrudan
-                        // kullanıcıya gösterilecek yanıtı üretmesi için kapalı tutulur.
-                        thinkingConfig = ThinkingConfig(enableThinking = false),
-                        tools = emptyList(),
-                        automaticToolCalling = false,
-                    )
-                )
-
-                // Sadece model dosyasının açılması yeterli değildir. Gerçek bir
-                // ilk üretim yaparak modelin cevap verebildiğini doğrula.
-                val warmupReply = newConversation.sendMessage(
-                    "Merhaba. Hazır olduğunu tek cümleyle söyle.",
-                    thinkingConfig = ThinkingConfig(enableThinking = false)
-                ).toString().trim()
-
-                if (warmupReply.isBlank()) {
-                    throw IllegalStateException("Model açıldı ancak başlangıç deneme sorusuna boş cevap verdi.")
-                }
-
-                Log.i("SeyfiBrain", "Model başlangıç testi başarılı: ${warmupReply.take(240)}")
-                engine = newEngine
-                conversation = newConversation
-                ready = true
-
-                mainHandler.post {
-                    onResult(true, "Seyfi Usta yapay zekâ motoru hazır; deneme sorusu cevaplandı.")
-                }
-
-            } catch (e: Exception) {
-                ready = false
-
-                mainHandler.post {
-                    onResult(
-                        false,
-                        "Seyfi Usta başlatılamadı: ${e.message}"
-                    )
-                }
-            }
-        }
+    // Eski çağrı noktalarıyla uyumluluk; hiçbir model dosyası açılmaz.
+    fun initialize(modelFile: java.io.File, onResult: (Boolean, String) -> Unit) {
+        ready = true
+        main.post { onResult(true, "Seyfi Usta bağımsız yerel teşhis çekirdeği hazır. Harici model yüklenmedi.") }
     }
-
     fun isReady(): Boolean = ready
 
-    // MainActivity'nin beklediği chat metodu
-    fun chat(
-        question: String,
-        onResponse: (String) -> Unit
-    ) {
-        ask(question, onResponse)
-    }
-
     fun updateDiagnosticTestResult(result: String) {
-        latestDiagnosticTestResult = result.trim().take(12000).ifBlank {
-            "Son salt-okunur test sonucu boş."
-        }
+        latestDiagnosticTestResult = result.trim().take(12000).ifBlank { "Son salt-okunur test sonucu boş." }
     }
-
     fun updateDiagnosticPlan(planContext: String) {
-        diagnosticPlanContext = planContext.trim().ifBlank {
-            "Henüz güvenli teşhis planı oluşturulmadı."
-        }
+        diagnosticPlanContext = planContext.trim().ifBlank { "Henüz güvenli teşhis planı oluşturulmadı." }
     }
 
-    // ECU'dan gelen gerçek verileri hafızada tutar.
-    // MainActivity'nin 7 parametreli çağrısıyla uyumludur.
-    fun updateEcuData(
-        rpm: Int,
-        tps: Int,
-        coolant: Int,
-        mapKpa: Int,
-        voltage: Double,
-        faults: List<String>,
-        connected: Boolean
-    ) {
-        ecuConnected = connected
-        ecuContext = buildString {
-            appendLine("ECU bağlantısı: ${if (connected) "Bağlı" else "Bağlı değil"}")
-            appendLine("Motor devri: ${if (rpm >= 0) "$rpm RPM" else "Okunmadı"}")
-            appendLine("Gaz kelebeği: ${if (tps >= 0) "%${tps}" else "Okunmadı"}")
-            appendLine("Motor sıcaklığı: ${if (coolant > -100) "$coolant °C" else "Okunmadı"}")
-            appendLine("Manifold basıncı: ${if (mapKpa >= 0) "$mapKpa kPa" else "Okunmadı"}")
-            appendLine(
-                "Akü voltajı: ${
-                    if (voltage >= 0.0) {
-                        "%.2f V".format(Locale.US, voltage)
-                    } else {
-                        "Okunmadı"
-                    }
-                }"
-            )
-            appendLine(
-                "ECU arıza kodları: ${
-                    if (faults.isEmpty()) "Kayıtlı kod yok veya henüz tarama yapılmadı."
-                    else faults.joinToString(", ")
-                }"
-            )
-        }
+    fun updateEcuData(rpm: Int, tps: Int, coolant: Int, mapKpa: Int, voltage: Double, faults: List<String>, connected: Boolean) {
+        val values = linkedMapOf<String, Double>()
+        if (rpm >= 0) values["Motor devri (RPM)"] = rpm.toDouble()
+        if (tps >= 0) values["Gaz kelebeği (%)"] = tps.toDouble()
+        if (coolant > -100) values["Soğutma suyu sıcaklığı (°C)"] = coolant.toDouble()
+        if (mapKpa >= 0) values["Manifold basıncı (kPa)"] = mapKpa.toDouble()
+        if (voltage >= 0) values["Akü/ECU voltajı (V)"] = voltage
+        updateEcuDataSnapshot(values, faults, connected)
     }
-
-    /**
-     * Replace the short legacy ECU context with the complete latest sample.
-     * Values come only from successful ECU responses; absent PIDs are omitted.
-     */
     fun updateEcuDataSnapshot(values: Map<String, Double>, faults: List<String>, connected: Boolean) {
         ecuConnected = connected
-        ecuContext = buildString {
-            appendLine("ECU bağlantısı: ${if (connected) "Bağlı" else "Bağlı değil"}")
-            appendLine("Gerçek ECU'dan son okunan sensör/PID değerleri:")
-            if (values.isEmpty()) appendLine("Henüz geçerli sensör verisi yok.")
-            values.toSortedMap().forEach { (key, value) ->
-                if (value.isFinite()) appendLine("- $key = ${"%.3f".format(Locale.US, value)}")
-            }
-            appendLine("ECU arıza kodları: ${faults.joinToString().ifBlank { "Kayıtlı kod bildirilmedi." }}")
-            appendLine("Yalnızca listelenen gerçek ölçümler kullanılmalı; bulunmayan PID'ler desteklenmiyor/okunmadı kabul edilir.")
-        }
+        ecuValues = values.filterValues { it.isFinite() }.toMap()
+        ecuFaults = faults.toList()
     }
 
     fun analyzeCurrentEngineData(onResponse: (String) -> Unit) {
         if (!ecuConnected) {
-            mainHandler.post { onResponse("ECU bağlı değil. Önce gerçek ECU bağlantısı kurup canlı verileri okuyun.") }
+            main.post { onResponse("ECU bağlantısı yok. Önce Viecar bağlantısını kurup gerçek canlı verileri almalıyız.") }
+        } else chat("Güncel ECU verilerini analiz et; ölçümleri, olası riskleri ve güvenli kontrol sırasını açıkla.", onResponse)
+    }
+    fun chat(question: String, onResponse: (String) -> Unit) = ask(question, onResponse)
+
+    fun ask(question: String, onResponse: (String) -> Unit) {
+        if (!busy.compareAndSet(false, true)) {
+            main.post { onResponse("Önce mevcut değerlendirmeyi tamamlayayım, usta.") }
             return
         }
-        ask(
-            "Yalnızca aşağıdaki güncel gerçek motor sensör verilerini yorumla. Okunmayan değerleri açıkça belirt. " +
-                "Verilerde açıkça desteklenmeyen arıza veya parça teşhisi koyma. " +
-                "Kısa bir sesli değerlendirme üret; uygulama komutu verme.",
-            onResponse
-        )
+        Thread({
+            val answer = try { reason(question) } catch (e: Exception) {
+                "Değerlendirme sırasında hata oluştu: ${e.message ?: "bilinmeyen hata"}"
+            }
+            busy.set(false)
+            main.post { onResponse(answer) }
+        }, "Seyfi-Local-Reasoner").start()
     }
 
-    private fun buildServiceReference(question: String): String {
-        // Tek bir soruda geçen kodla sınırlı kalma: gerçek ECU taramasında bulunan
-        // bütün P-kodlarını da bilgi bankasına bağla.
-        val codeRegex = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
-        val codes = (codeRegex.findAll(ecuContext).map { it.value.uppercase() } +
-            codeRegex.findAll(question).map { it.value.uppercase() })
-            .distinct()
-            .take(20)
-            .toList()
-
-        if (codes.isEmpty()) {
-            val symptomMatches = YamahaKnowledgeBase.search(appContext, question, limit = 4)
-            if (symptomMatches.isEmpty()) {
-                return "Soruda veya güncel ECU bağlamında standart P-kodu bulunmadı ve yerel Yamaha bilgi bankasında yeterli belirti eşleşmesi yok. Üreticiye özel prosedür veya parça arızası uydurulmayacak; model/yıl ve servis belgesi gerekir."
+    private fun reason(question: String): String {
+        val q = normalize(question)
+        val codePattern = Regex("\\bP[0-9A-F]{4}\\b", RegexOption.IGNORE_CASE)
+        val codes = (codePattern.findAll(question).map { it.value.uppercase(Locale.US) } + ecuFaults).distinct().take(12).toList()
+        if (q.contains("merhaba") || q == "selam" || q.contains("nasilsin"))
+            return "İyiyim usta, hazırım. ECU bağlantısı varsa canlı verileri birlikte değerlendirebiliriz."
+        if (q.contains("ne yapabilirsin") || q == "yardim" || q.contains("neler yapabilirsin"))
+            return "Gerçek ECU arıza kodlarını, desteklenen canlı sensör verilerini ve test sonuçlarını değerlendirebilirim. Ölçülmeyen değeri uydurmam; doğrulanmamış parçayı kesin arızalı ilan etmem."
+        if (q.contains("baglanti") && (q.contains("durum") || q.contains("bagli mi")))
+            return if (ecuConnected) "ECU bağlantısı aktif. Son alınan ${ecuValues.size} ölçüm değeri mevcut." else "ECU bağlantısı yok. Viecar VP002 WiFi bağlantısını ve motosiklet adaptör kablosunu kontrol edelim."
+        if (codes.isNotEmpty()) return explainCodes(codes)
+        if (listOf("canli", "sensor", "veri", "motor durumu", "analiz", "yorumla", "degerlendir").any { q.contains(it) })
+            return analyzeValues()
+        val matches = YamahaKnowledgeBase.search(appContext, question, limit = 3)
+        if (matches.isNotEmpty()) return buildString {
+            append("Usta, yerel servis bilgi bankasında şu referansları buldum: ")
+            matches.forEach { record ->
+                append("${record.title}. ${record.description} ")
+                if (record.possibleCauses.isNotEmpty()) append("Olası nedenler: ${record.possibleCauses.take(3).joinToString("; ")}. ")
+                if (record.checks.isNotEmpty()) append("İlk kontroller: ${record.checks.take(3).joinToString("; ")}. ")
+                append("Doğrulama seviyesi: ${record.verification}. ")
             }
-            return buildString {
-                appendLine("Yerel Yamaha bilgi bankasında belirti metnine göre bulunan referanslar:")
-                symptomMatches.forEach { record ->
-                    appendLine()
-                    appendLine("=== ${record.code} • ${record.title} ===")
-                    appendLine("Sistem: ${record.system}")
-                    appendLine("Açıklama: ${record.description}")
-                    appendLine("Olası nedenler: ${record.possibleCauses.joinToString("; ")}")
-                    appendLine("Güvenli kontroller: ${record.checks.joinToString("; ")}")
-                    appendLine("Kod standardı: ${record.codeStandard}")
-                    appendLine("Doğrulama seviyesi: ${record.verification}")
-                    appendLine("Kaynak: ${record.source}")
-                }
-                appendLine()
-                append("Bu kayıtlar belirtiye göre bulunan referanslardır; ECU taraması veya doğrulanmış arıza teşhisi değildir. Model/yıl/ECU uyumu ayrıca doğrulanmalı.")
-            }
+            append("Bu kayıtlar belirti eşleşmesidir; kesin teşhis değildir.")
         }
-
-        return buildString {
-            appendLine("Bilgi bankasında incelenen gerçek ECU/soru kodları:")
-            codes.forEach { code ->
-                appendLine()
-                appendLine("=== $code ===")
-                val localRecord = YamahaKnowledgeBase.find(appContext, code)
-                if (localRecord != null) {
-                    appendLine("Başlık: ${localRecord.title}")
-                    appendLine("Açıklama: ${localRecord.description}")
-                    appendLine("Sistem: ${localRecord.system}")
-                    appendLine("Olası nedenler: ${localRecord.possibleCauses.joinToString("; ")}")
-                    appendLine("Kontroller: ${localRecord.checks.joinToString("; ")}")
-                    appendLine("Kod standardı: ${localRecord.codeStandard}")
-                    appendLine("Doğrulama seviyesi: ${localRecord.verification}")
-                    appendLine("Kaynak: ${localRecord.source}")
-                } else {
-                    val legacyYamaha = YamahaFaultCodes.find(code)
-                    if (legacyYamaha != null) {
-                        appendLine("Başlık: ${legacyYamaha.title}")
-                        appendLine("Açıklama: ${legacyYamaha.description}")
-                        appendLine("Olası nedenler: ${legacyYamaha.possibleCauses.joinToString("; ")}")
-                        appendLine("Kontroller: ${legacyYamaha.checks.joinToString("; ")}")
-                        appendLine("Kaynak notu: Mevcut uygulama referansı; Yamaha model/yıl/ECU uyumu servis dokümanıyla doğrulanmalı.")
-                    } else {
-                        val title = DtcDatabase.title(code)
-                        if (title.startsWith("Üreticiye özel")) {
-                            appendLine("Sonuç: Bu kod için yerel bilgi bankasında doğrulanmış açıklama bulunamadı.")
-                        } else {
-                            appendLine("Genel OBD açıklaması: $title")
-                            appendLine("Teknik not: ${DtcDatabase.description(code)}")
-                            appendLine("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}")
-                            appendLine("Kontroller: ${DtcDatabase.checks(code).joinToString("; ")}")
-                            appendLine("Kaynak notu: Genel SAE/OBD referansı; Yamaha'ya özgü uygulama olarak kabul edilmemeli.")
-                        }
-                    }
-                }
-                appendLine("Parça eşleştirmesi: ${PartsAdvisor.statusMessage()}")
-            }
-            appendLine()
-            append("Önemli: Genel SAE kod açıklaması, Yamaha'ya özgü arıza kodu veya belirli model/yıl uyumluluğu anlamına gelmez. Model ve üretim yılı bilinmeden OEM/muadil parça numarası önerme.")
-        }
+        if (!ecuConnected)
+            return "Seni anladım usta. Doğru değerlendirme için motosikletin marka, model ve yılını; belirtinin ne zaman oluştuğunu bilmem gerekiyor. ECU bağlı değilken canlı ölçüm varmış gibi konuşmayacağım."
+        return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
-    // Qwen3 0.6B metin modelidir. Ses önce Android cihaz içi konuşma tanıma ile metne çevrilir.
-
-    fun ask(
-        question: String,
-        onResponse: (String) -> Unit
-    ) {
-        if (!ready || conversation == null) {
-            mainHandler.post {
-                onResponse("Yerel yapay zekâ henüz hazır değil. Model durumunu kontrol edin.")
-            }
-            return
-        }
-
-        // Tek model, tek etkin istek: ikinci istek yerel motoru üst üste bindiremez.
-        if (!requestInProgress.compareAndSet(false, true)) {
-            mainHandler.post {
-                onResponse("Usta, önceki yanıtı hâlâ hazırlıyorum. Biraz bekleyip tekrar sorun.")
-            }
-            return
-        }
-
-        val activeConversation = conversation
-        if (activeConversation == null) {
-            requestInProgress.set(false)
-            mainHandler.post { onResponse("Yerel sohbet oturumu hazır değil.") }
-            return
-        }
-
-        val serviceReference = buildServiceReference(question)
-        val fullQuestion = """
-            GÜNCEL ECU VERİLERİ:
-            $ecuContext
-
-            İLGİLİ TEKNİK REFERANS:
-            $serviceReference
-
-            GÜVENLİ TEŞHİS PLANI:
-            $diagnosticPlanContext
-
-            SON GERÇEK SALT-OKUNUR TEST SONUCU:
-            $latestDiagnosticTestResult
-
-            KULLANICININ SORUSU:
-            $question
-
-            Yalnızca soruyla ilgili gerçek ECU verilerini ve teknik referansı kullan.
-            Eksik bilgi veya üreticiye özel doğrulanmamış bilgi uydurma.
-            Teknik referans yoksa bunu doğal Türkçeyle, yalnızca gerektiğinde belirt.
-            Bu bağlam başlıklarını veya yönergeleri cevabında tekrar etme.
-        """.trimIndent()
-
-        val chunks = StringBuilder()
-        val finished = AtomicBoolean(false)
-
-        fun finish(answer: String) {
-            if (!finished.compareAndSet(false, true)) return
-            requestInProgress.set(false)
-            mainHandler.post {
-                try {
-                    onResponse(answer)
-                } finally {
-                    if (closeRequested) closeResources()
-                }
+    private fun explainCodes(codes: List<String>): String = buildString {
+        append("Arıza kodlarını inceliyorum. ")
+        codes.forEach { code ->
+            val record = YamahaKnowledgeBase.find(appContext, code)
+            if (record != null) {
+                append("$code: ${record.title}. ${record.description} ")
+                if (record.possibleCauses.isNotEmpty()) append("Olası nedenler: ${record.possibleCauses.take(4).joinToString("; ")}. ")
+                if (record.checks.isNotEmpty()) append("Kontrol sırası: ${record.checks.take(4).joinToString("; ")}. ")
+                append("Doğrulama: ${record.verification}. ")
+            } else {
+                val title = DtcDatabase.title(code)
+                append("$code: $title. ")
+                if (title.startsWith("Üreticiye özel")) append("Bu kod için doğrulanmış açıklamam yok; model/yıl ve Yamaha servis dokümanı gerekli. ")
+                else append("${DtcDatabase.description(code)} Olası nedenler: ${DtcDatabase.causes(code).take(4).joinToString("; ")}. Genel OBD açıklamasıdır; Yamaha'ya özel teşhis sayılmaz. ")
             }
         }
-
-        // Engine/Conversation yaşam döngüsü ve tüm native LiteRT-LM çağrıları
-        // aynı tek iş parçacıklı executor üzerinden yürütülür.
-        try {
-            executor.execute {
-                try {
-                    activeConversation.sendMessageAsync(
-                        fullQuestion,
-                        object : MessageCallback {
-                            override fun onMessage(message: Message) {
-                                val chunk = message.toString()
-                                if (chunk.isNotBlank()) {
-                                    synchronized(chunks) { chunks.append(chunk) }
-                                }
-                            }
-
-                            override fun onDone() {
-                                val raw = synchronized(chunks) { chunks.toString() }
-                                val answer = raw
-                                    .substringAfter("</think>", raw)
-                                    .replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
-                                    .replace(Regex("</?think>", RegexOption.IGNORE_CASE), "")
-                                    .trim()
-                                    .ifBlank {
-                                        "Model yanıt akışını tamamladı ancak okunabilir bir metin döndürmedi. Daha kısa ve açık bir soru deneyin."
-                                    }
-                                Log.i("SeyfiBrain", "Yerel model yanıtı tamamlandı: ${answer.take(1000)}")
-                                finish(answer)
-                            }
-
-                            override fun onError(throwable: Throwable) {
-                                Log.e("SeyfiBrain", "Yerel model akış hatası", throwable)
-                                finish("Yerel yapay zekâ yanıt üretirken hata verdi: ${throwable.message ?: "Bilinmeyen model hatası"}")
-                            }
-                        },
-                        thinkingConfig = ThinkingConfig(enableThinking = false),
-                        maxOutputToken = 160
-                    )
-                } catch (e: Exception) {
-                    Log.e("SeyfiBrain", "Yerel model isteği başlatılamadı", e)
-                    finish("Yerel yapay zekâ başlatılamadı: ${e.message ?: "Bilinmeyen hata"}")
-                }
-            }
-        } catch (e: Exception) {
-            Log.e("SeyfiBrain", "Model iş kuyruğuna eklenemedi", e)
-            finish("Yerel yapay zekâ işlem kuyruğu kapalı: ${e.message ?: "Bilinmeyen hata"}")
-        }
+        append("Kod tek başına parçanın bozuk olduğunu kanıtlamaz. Önce soket, kablo, besleme ve şaseyi; sonra sensör sinyalini servis ölçümüyle doğrulayalım.")
     }
 
-    fun close() {
-        ready = false
-        closeRequested = true
-        // Devam eden native üretim varken Engine'i kapatma. Yanıtın onDone/onError
-        // callback'i geldiğinde kaynaklar güvenli biçimde kapatılır.
-        if (!requestInProgress.get()) closeResources()
+    private fun analyzeValues(): String = buildString {
+        if (!ecuConnected) { append("ECU bağlantısı yok; canlı veri analizi yapamam."); return@buildString }
+        if (ecuValues.isEmpty()) { append("ECU bağlı görünüyor ancak geçerli canlı ölçüm alınmamış."); return@buildString }
+        append("Son ECU örneğinde ${ecuValues.size} gerçek ölçüm var. ")
+        ecuValues.toSortedMap().forEach { (key, value) -> append("$key: ${"%.2f".format(Locale("tr", "TR"), value)}. ") }
+        if (ecuFaults.isNotEmpty()) append("Kayıtlı kodlar: ${ecuFaults.joinToString()}. ") else append("Son bildirilen arıza kodu listesi boş. ")
+        val voltage = ecuValues.entries.firstOrNull { it.key.contains("volt", true) }?.value
+        if (voltage != null && voltage < 11.8) append("Voltaj düşük görünüyor; aküyü uygun cihazla ve üretici prosedürüne göre kontrol ettir. ")
+        if (voltage != null && voltage > 15.2) append("Voltaj yüksek görünüyor; şarj sistemi ölçümünü servis prosedürüne göre doğrulat. ")
+        append("Tek anlık örnek kesin teşhis değildir; motor sıcaklığı ve ölçüm koşullarıyla birlikte değerlendirelim.")
     }
 
-    private fun closeResources() {
-        if (!closeRequested || !resourcesCloseStarted.compareAndSet(false, true)) return
-        executor.execute {
-            try {
-                conversation?.close()
-                conversation = null
-                engine?.close()
-                engine = null
-            } catch (e: Exception) {
-                Log.w("SeyfiBrain", "Model kaynakları kapatılırken hata", e)
-            } finally {
-                executor.shutdown()
-            }
-        }
-    }
+    fun close() { ready = false }
 }
