@@ -190,6 +190,24 @@ class SeyfiBrain(context: Context) {
         }
     }
 
+    /**
+     * Replace the short legacy ECU context with the complete latest sample.
+     * Values come only from successful ECU responses; absent PIDs are omitted.
+     */
+    fun updateEcuDataSnapshot(values: Map<String, Double>, faults: List<String>, connected: Boolean) {
+        ecuConnected = connected
+        ecuContext = buildString {
+            appendLine("ECU bağlantısı: ${if (connected) "Bağlı" else "Bağlı değil"}")
+            appendLine("Gerçek ECU'dan son okunan sensör/PID değerleri:")
+            if (values.isEmpty()) appendLine("Henüz geçerli sensör verisi yok.")
+            values.toSortedMap().forEach { (key, value) ->
+                if (value.isFinite()) appendLine("- $key = ${"%.3f".format(Locale.US, value)}")
+            }
+            appendLine("ECU arıza kodları: ${faults.joinToString().ifBlank { "Kayıtlı kod bildirilmedi." }}")
+            appendLine("Yalnızca listelenen gerçek ölçümler kullanılmalı; bulunmayan PID'ler desteklenmiyor/okunmadı kabul edilir.")
+        }
+    }
+
     fun analyzeCurrentEngineData(onResponse: (String) -> Unit) {
         if (!ecuConnected) {
             mainHandler.post { onResponse("ECU bağlı değil. Önce gerçek ECU bağlantısı kurup canlı verileri okuyun.") }
