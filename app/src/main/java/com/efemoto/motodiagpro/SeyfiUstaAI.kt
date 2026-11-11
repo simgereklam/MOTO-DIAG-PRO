@@ -4,10 +4,6 @@ import android.app.Activity
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
-import java.io.FileNotFoundException
-import java.net.HttpURLConnection
-import java.net.URL
-import android.os.StatFs
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
@@ -28,7 +24,6 @@ class SeyfiUstaAI(
     companion object {
         private const val TAG = "SeyfiUstaAI"
         private const val MODEL_FILE_NAME = "Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
-        private const val MODEL_URL = "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/main/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm"
         private const val MIN_MODEL_BYTES = 340_000_000L
         private const val MAX_MODEL_BYTES = 360_000_000L
     }
@@ -57,6 +52,7 @@ class SeyfiUstaAI(
     private val pendingChats = ConcurrentLinkedQueue<Pair<String, (String) -> Unit>>()
     @Volatile private var initialized = false
     @Volatile private var voiceReady = false
+    @Volatile private var modelInitializationFinished = false
     @Volatile private var initializationCallback: (() -> Unit)? = null
     @Volatile private var modelStatus = "Qwen3 0.6B modeli kontrol ediliyor."
 
@@ -67,8 +63,7 @@ class SeyfiUstaAI(
         }
         initialized = true
         initializationCallback = onReady
-        // Mikrofonu, Qwen3 0.6B gerçekten açılıp deneme çıkarımı tamamlanmadan
-        // komut dinlemeye başlatma. İlk kurulumda model indirmesi beklenir.
+        // Sesli komutları başlatmadan önce ses katmanı ve modelin deneme yanıtı tamamlanmalı.
         try {
             voice.initialize {
                 voiceReady = true
@@ -82,9 +77,7 @@ class SeyfiUstaAI(
     }
 
     private fun completeStartupIfReady() {
-        // Vosk + TTS, Gemma modelinden bağımsızdır. İlk model indirmesi sürerken
-        // yerel uyandırma ve temel uygulama komutları da kullanılabilsin.
-        if (!voiceReady) return
+        if (!voiceReady || !modelInitializationFinished) return
         val callback = initializationCallback ?: return
         initializationCallback = null
         activity.runOnUiThread {
@@ -108,24 +101,25 @@ class SeyfiUstaAI(
                 publishModelStatus("Qwen3 0.6B yerel yapay zekâsı başlatılıyor.")
                 brain.initialize(modelFile) { success, message ->
                     modelStatus = if (success) {
-                        "Qwen3 0.6B yerel yapay zekâsı hazır."
+                        "Qwen3 0.6B yerel yapay zekâsı hazır; deneme sorusu yanıtlandı."
                     } else {
                         modelTaskStarted.set(false)
                         "Qwen3 0.6B başlatılamadı: $message"
                     }
+                    modelInitializationFinished = true
                     publishModelStatus(modelStatus)
-                    if (success) {
-                        completeStartupIfReady()
-                        drainPendingChats()
-                    } else {
-                        failPendingChats(modelStatus)
-                    }
+                    completeStartupIfReady()
+                    if (success) drainPendingChats() else failPendingChats(modelStatus)
                 }
             } catch (e: Exception) {
                 modelTaskStarted.set(false)
                 val failure = "Qwen3 0.6B modeli hazırlanamadı: ${e.message}"
+                modelInitializationFinished = true
                 publishModelStatus(failure)
-                activity.runOnUiThread { failPendingChats(failure) }
+                activity.runOnUiThread {
+                    completeStartupIfReady()
+                    failPendingChats(failure)
+                }
             }
         }
     }
@@ -142,18 +136,17 @@ class SeyfiUstaAI(
     }
 
     /**
-     * Qwen3 modeli derleme sırasında APK assets içine gömülür.
-     * İlk açılışta yalnızca uygulamanın özel alanına kopyalanır; internet gerekmez.
+     * Model APK assets içinden kurulur. Ağdan indirme yedeği bulunmaz.
      */
-    private fun installBundledModel(): File? {
+    private fun installBundledModel(): File {
         val modelDirectory = File(activity.filesDir, "models")
         if (!modelDirectory.exists() && !modelDirectory.mkdirs()) {
             throw IllegalStateException("Yerel model klasörü oluşturulamadı.")
         }
         val target = File(modelDirectory, MODEL_FILE_NAME)
         if (target.isFile && target.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) return target
-
         val partial = File(modelDirectory, "$MODEL_FILE_NAME.part")
+        partial.delete()
         try {
             activity.assets.open(MODEL_FILE_NAME).use { input ->
                 FileOutputStream(partial).use { output ->
@@ -161,135 +154,30 @@ class SeyfiUstaAI(
                     output.fd.sync()
                 }
             }
-        } catch (_: FileNotFoundException) {
+        } catch (e: Exception) {
             partial.delete()
-            return null
+            throw IllegalStateException("APK içinde yerel yapay zekâ modeli bulunamadı.", e)
         }
-
         if (partial.length() !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
             val actual = partial.length()
             partial.delete()
-            throw IllegalStateException("APK içindeki Qwen3 model boyutu geçersiz: $actual bayt.")
+            throw IllegalStateException("APK içindeki model boyutu geçersiz: $actual bayt.")
         }
         if (target.exists()) target.delete()
         if (!partial.renameTo(target)) {
             partial.delete()
-            throw IllegalStateException("APK içindeki Qwen3 modeli uygulama alanına kopyalanamadı.")
+            throw IllegalStateException("Model uygulamanın özel alanına kopyalanamadı.")
         }
-        publishModelStatus("Qwen3 0.6B APK içinde bulundu; çevrimdışı kuruluyor.")
+        publishModelStatus("Yerel yapay zekâ APK içinden çevrimdışı kuruluyor.")
         return target
     }
 
-    private fun ensureModelFile(): File {
-        installBundledModel()?.let { return it }
-        val directories = modelStorageDirectories()
-        directories.forEach { dir ->
-            val installed = File(dir, MODEL_FILE_NAME)
-            if (installed.isFile && installed.length() in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-                publishModelStatus("Qwen3 0.6B telefonda kurulu; çevrimdışı başlatılıyor.")
-                return installed
-            }
-        }
-
-        val available = directories.mapNotNull { dir ->
-            try {
-                if (!dir.exists() && !dir.mkdirs()) return@mapNotNull null
-                dir to StatFs(dir.absolutePath).availableBytes
-            } catch (_: Exception) {
-                null
-            }
-        }.maxByOrNull { it.second }
-
-        val minimumFreeBytes = MIN_MODEL_BYTES + 100_000_000L
-        if (available == null || available.second < minimumFreeBytes) {
-            val freeGb = (available?.second ?: 0L) / 1_000_000_000.0
-            val needGb = minimumFreeBytes / 1_000_000_000.0
-            throw IllegalStateException(
-                "Qwen3 0.6B yaklaşık 330 MB. Kurulum için en az %.1f GB boş alan gerekiyor. " +
-                "Uygulamanın erişebildiği en geniş depolama alanında %.1f GB boş yer var. " +
-                "En az 500 MB boşaltıp tekrar deneyin.".format(java.util.Locale.US, needGb, freeGb)
-            )
-        }
-
-        val modelDirectory = available.first
-        val target = File(modelDirectory, MODEL_FILE_NAME)
-        val partial = File(modelDirectory, "$MODEL_FILE_NAME.part")
-        if (target.exists()) target.delete()
-        if (partial.exists()) partial.delete()
-
-        publishModelStatus(
-            "Qwen3 0.6B indiriliyor. Uygun depolama alanı: %.1f GB".format(
-                java.util.Locale("tr", "TR"), available.second / 1_000_000_000.0
-            )
-        )
-        var connection: HttpURLConnection? = null
-        try {
-            connection = (URL(MODEL_URL).openConnection() as HttpURLConnection).apply {
-                instanceFollowRedirects = true
-                connectTimeout = 30_000
-                readTimeout = 120_000
-                requestMethod = "GET"
-                setRequestProperty("User-Agent", "MOTO-DIAG-PRO/1.0")
-            }
-            connection.connect()
-            val response = connection.responseCode
-            if (response != HttpURLConnection.HTTP_OK) {
-                throw IllegalStateException("Model sunucusu HTTP $response yanıtı verdi.")
-            }
-
-            val expectedBytes = connection.contentLengthLong
-            if (expectedBytes !in MIN_MODEL_BYTES..MAX_MODEL_BYTES) {
-                throw IllegalStateException("Model dosyasının sunucu boyutu beklenenden farklı: $expectedBytes bayt.")
-            }
-            if (StatFs(modelDirectory.absolutePath).availableBytes < expectedBytes + 80_000_000L) {
-                throw IllegalStateException("İndirme başladıktan önce depolama alanı yetersiz kaldı. En az 3 GB boş alan açın.")
-            }
-
-            var total = 0L
-            var lastPercent = -1
-            connection.inputStream.use { input ->
-                FileOutputStream(partial).use { output ->
-                    val buffer = ByteArray(1024 * 1024)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        total += count
-                        if (total > MAX_MODEL_BYTES) {
-                            throw IllegalStateException("İndirilen model izin verilen boyutu aştı.")
-                        }
-                        output.write(buffer, 0, count)
-                        val percent = (total * 100L / expectedBytes).toInt()
-                        if (percent != lastPercent && percent % 5 == 0) {
-                            lastPercent = percent
-                            publishModelStatus("Qwen3 0.6B indiriliyor: %$percent")
-                        }
-                    }
-                    output.fd.sync()
-                }
-            }
-
-            if (total != expectedBytes || partial.length() != expectedBytes) {
-                throw IllegalStateException("Model indirmesi eksik. Gelen: $total / Beklenen: $expectedBytes bayt.")
-            }
-            if (!partial.renameTo(target)) {
-                throw IllegalStateException("Qwen3 0.6B modeli uygulama alanına taşınamadı.")
-            }
-            publishModelStatus("Qwen3 0.6B indirildi; yerel motor başlatılıyor.")
-            return target
-        } catch (e: Exception) {
-            partial.delete()
-            throw e
-        } finally {
-            connection?.disconnect()
-        }
-    }
-
+    private fun ensureModelFile(): File = installBundledModel()
     /**
-     * Qwen3 metin tabanlıdır. Uyandırma ve konuşma tanıma Vosk ile çevrimdışı yapılır.
-     * Tanınan Türkçe metin daha sonra chat() üzerinden yerel modele gönderilir.
+     * Qwen3 metin tabanlıdır. Android konuşma tanıma katmanından gelen metni işler.
      */
     fun listenDirectAudio(onAnswer: (String) -> Unit = {}) {
-        val message = "Sesli sohbet için Vosk metin tanıma hattı kullanılıyor."
+        val message = "Android Türkçe konuşma tanıma hattı kullanılıyor."
         activity.runOnUiThread {
             onAnswer(message)
             speak("Dinliyorum.")
@@ -453,6 +341,7 @@ class SeyfiUstaAI(
         chatTimeoutExecutor.shutdownNow()
         initialized = false
         voiceReady = false
+        modelInitializationFinished = false
         initializationCallback = null
     }
 }
