@@ -40,6 +40,8 @@ class OfflineVoiceAssistant(
     @Volatile private var listeningEnabled = false
     @Volatile private var processing = false
     @Volatile private var speaking = false
+    // TTS sırasında yalnızca "usta/seyfi" kesme sözcüğünü yakalamak için açık kalır.
+    @Volatile private var bargeInListening = false
     @Volatile private var released = false
     @Volatile private var currentStatus = "Android konuşma sistemi hazırlanıyor."
     @Volatile private var recognitionAvailable = false
@@ -219,7 +221,9 @@ class OfflineVoiceAssistant(
 
     private fun startListeningInternal(delayMs: Long = 0) {
         main.postDelayed({
-            if (released || !listeningEnabled || processing || speaking) return@postDelayed
+            if (released || !listeningEnabled ||
+                (processing && !bargeInListening) || (speaking && !bargeInListening)
+            ) return@postDelayed
             val model = voskModel
             if (model == null) {
                 status("Türkçe çevrimdışı ses modeli henüz hazır değil.")
@@ -265,8 +269,32 @@ class OfflineVoiceAssistant(
     }
 
     private fun deliverVoskResult(json: String?) {
-        if (released || processing || speaking) return
+        if (released) return
         val heard = parseVoskText(json)
+        if (heard.isNotBlank() && speaking && bargeInListening) {
+            val wakeText = java.text.Normalizer.normalize(
+                heard.lowercase(Locale("tr", "TR")),
+                java.text.Normalizer.Form.NFD
+            ).replace(Regex("\\p{Mn}+"), "")
+                .replace("ı", "i")
+                .replace(Regex("[^a-z ]"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            // TTS cümlelerini komut olarak işleme; yalnızca tek başına söylenen
+            // uyandırma kelimesi konuşmayı kesebilir.
+            if (wakeText == "usta" || wakeText == "seyfi" || wakeText == "seyfi usta") {
+                bargeInListening = false
+                speaking = false
+                processing = false
+                try { tts?.stop() } catch (_: Exception) {}
+                try { speechService?.setPause(true) } catch (_: Exception) {}
+                try { onRecognized(heard) } catch (e: Exception) {
+                    Log.e("SeyfiVoice", "Kesme sözcüğü aktarılamadı", e)
+                }
+            }
+            return
+        }
+        if (processing || speaking) return
         if (heard.isNotBlank()) {
             // Vosk aynı cümleyi onResult ve onFinalResult üzerinden iki kez
             // bildirebilir. Kısa aralıkta aynı metni tekrar komut olarak işleme.
@@ -297,7 +325,9 @@ class OfflineVoiceAssistant(
     }
 
     private fun scheduleRestart(delayMs: Long = 700) {
-        if (!listeningEnabled || processing || speaking || released) return
+        if (!listeningEnabled || (processing && !bargeInListening) ||
+            (speaking && !bargeInListening) || released
+        ) return
         restartCount = (restartCount + 1).coerceAtMost(8)
         val backoff = delayMs + (restartCount * 250L)
         restartRunnable?.let { main.removeCallbacks(it) }
@@ -311,6 +341,7 @@ class OfflineVoiceAssistant(
 
     fun pauseForProcessing() {
         processing = true
+        bargeInListening = false
         main.post {
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
@@ -321,6 +352,7 @@ class OfflineVoiceAssistant(
     fun stopListening() {
         listeningEnabled = false
         processing = false
+        bargeInListening = false
         main.post {
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
@@ -351,12 +383,26 @@ class OfflineVoiceAssistant(
                 }
                 return@post
             }
+            bargeInListening = listeningEnabled
+            if (bargeInListening) {
+                processing = false
+                try {
+                    val service = speechService
+                    if (service != null) service.setPause(false)
+                    else startListeningInternal(0)
+                } catch (e: Exception) {
+                    bargeInListening = false
+                    status("Konuşma kesme dinlemesi başlatılamadı: ${e.message}")
+                }
+            }
             val utteranceId = "seyfi-${ids.incrementAndGet()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {}
                 override fun onDone(id: String?) {
                     main.post {
                         if (id == utteranceId) {
+                            bargeInListening = false
+                            try { speechService?.setPause(true) } catch (_: Exception) {}
                             speaking = false
                             processing = false
                             status("Seyfi Usta yanıtını tamamladı.")
@@ -374,6 +420,8 @@ class OfflineVoiceAssistant(
                 override fun onError(id: String?) {
                     main.post {
                         if (id == utteranceId) {
+                            bargeInListening = false
+                            try { speechService?.setPause(true) } catch (_: Exception) {}
                             speaking = false
                             processing = false
                             status("Metin seslendirilemedi.")
@@ -391,6 +439,8 @@ class OfflineVoiceAssistant(
                 override fun onStop(id: String?, interrupted: Boolean) {
                     main.post {
                         if (id == utteranceId) {
+                            bargeInListening = false
+                            try { speechService?.setPause(true) } catch (_: Exception) {}
                             speaking = false
                             processing = false
                             if (listeningEnabled) startListeningInternal(350)
@@ -400,6 +450,7 @@ class OfflineVoiceAssistant(
             })
             val result = engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
             if (result == TextToSpeech.ERROR) {
+                bargeInListening = false
                 speaking = false
                 processing = false
                 status("Telefonun ses motoru konuşmayı başlatamadı.")
