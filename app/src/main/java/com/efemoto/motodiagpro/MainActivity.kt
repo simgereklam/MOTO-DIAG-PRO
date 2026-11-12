@@ -506,7 +506,7 @@ class MainActivity : ComponentActivity() {
 
             SeyfiAction.SHOW_TESTS -> {
                 showTests()
-                val failures = seyfiCommandHandler.selfTest() + assistant.runCompatibilitySelfTest()
+                val failures = seyfiCommandHandler.selfTest() + YamahaVehicleCatalog.selfTest() + assistant.runCompatibilitySelfTest()
                 val report = if (failures.isEmpty()) {
                     "Seyfi Usta yazılım öz testleri başarılı."
                 } else {
