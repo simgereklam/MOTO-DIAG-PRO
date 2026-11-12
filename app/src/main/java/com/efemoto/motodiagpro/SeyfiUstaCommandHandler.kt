@@ -293,6 +293,8 @@ class SeyfiUstaCommandHandler {
                 "asistan ekranini ac",
                 "yerel yapay zeka",
                 "seyfi usta yerel yapay zeka",
+                "yamaha teshis ekrani",
+                "yamaha teshis ekranini ac",
                 "seyfi usta sesli sohbet",
                 "sesli cevabi test et",
                 "durumu yenile",
@@ -385,7 +387,8 @@ class SeyfiUstaCommandHandler {
                 "canli veri",
                 "tum sensorleri oku",
                 "motorun anlik verileri",
-                "sensor degerlerini oku"
+                "sensor degerlerini oku",
+                "canli veri ekranini ac"
             )
         ) {
             return command(
@@ -694,7 +697,7 @@ class SeyfiUstaCommandHandler {
             "servis bilgisi kaydet" to SeyfiAction.SHOW_LOGS,
             "servis kaydı" to SeyfiAction.SHOW_LOGS,
             "raporu dışa aktar paylaş" to SeyfiAction.EXPORT_REPORT,
-            "arıza kodlarını incele" to SeyfiAction.READ_FAULTS,
+            "arıza kodlarını incele" to SeyfiAction.SHOW_FAULT_SEARCH,
             "canlı veri ekranını aç" to SeyfiAction.SHOW_LIVE_DATA,
             "gerçek arıza taraması başlat" to SeyfiAction.START_SCAN,
             "servis formu" to SeyfiAction.SHOW_LOGS,
