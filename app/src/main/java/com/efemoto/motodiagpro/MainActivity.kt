@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
     private var seyfiConversationView: TextView? = null
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
+    @Volatile private var seyfiAwaitingDtcCode = false
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -394,6 +395,45 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        // Ayrı DTC soru modu: Seyfi yalnızca kullanıcının söylediği kodu yerel veri tabanında arar.
+        val normalizedDtcPrompt = commandInput.lowercase(Locale("tr", "TR"))
+        val asksToGiveDtcCode = normalizedDtcPrompt.contains("ariza kodu") &&
+            listOf("soracagim", "soracagim", "verecegim", "soyleyecegim", "soracagim").any { normalizedDtcPrompt.contains(it) }
+        if (asksToGiveDtcCode) {
+            seyfiAwaitingCommand = true
+            seyfiAwaitingDtcCode = true
+            appendSeyfiConversation("SİZ", commandInput)
+            appendSeyfiConversation("SEYFİ USTA", "Tamam usta, arıza kodunu söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım.")
+            assistant.speak("Tamam usta, arıza kodunu söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım.")
+            return
+        }
+
+        fun extractSpokenDtc(value: String): String? {
+            var input = value.lowercase(Locale("tr", "TR"))
+            val digits = mapOf("sifir" to "0", "bir" to "1", "iki" to "2", "uc" to "3", "dort" to "4", "bes" to "5", "alti" to "6", "yedi" to "7", "sekiz" to "8", "dokuz" to "9")
+            digits.forEach { (word, digit) -> input = input.replace(Regex("\\b" + word + "\\b"), digit) }
+            input = input.replace(Regex("\\b([pbcu])\\s+([0-9a-f]{4})\\b"), "$1$2")
+            return Regex("\\b(?:[pbcu][0-9a-f]{4}|[0-9]{2}(?:_abs)?)\\b").find(input)?.value?.uppercase(Locale.US)
+        }
+
+        if (seyfiAwaitingDtcCode) {
+            val suppliedCode = extractSpokenDtc(commandInput)
+            if (suppliedCode == null) {
+                val retry = "Arıza kodunu net algılayamadım usta. Örneğin P sıfır üç üç beş şeklinde tekrar söyle."
+                appendSeyfiConversation("SEYFİ USTA", retry)
+                assistant.speak(retry)
+                return
+            }
+            seyfiAwaitingDtcCode = false
+            seyfiAwaitingCommand = false
+            appendSeyfiConversation("SİZ", suppliedCode)
+            seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
+            assistant.brain.lookupDtcCode(suppliedCode) { answer ->
+                appendSeyfiConversation("SEYFİ USTA", answer)
+                if (!isFinishing && !isDestroyed) assistant.speak(answer)
+            }
+            return
+        }
         // Bilinen, güvenli ekran/yardım komutları uyandırma sözü kaçırıldığında da çalışsın.
         // Bilinmeyen sıradan konuşmalar komut olarak yürütülmez; mikrofon dinlemeye devam eder.
         // Yamaha marka/model/yıl bilgisi sohbet girdisidir; uyandırma kelimesi
@@ -404,18 +444,14 @@ class MainActivity : ComponentActivity() {
             (seyfiAwaitingCommand && YamahaVehicleCatalog.extractYear(commandInput) != null)
         if (yamahaVehicleUtterance) seyfiAwaitingCommand = true
 
-        // Açıkça bir DTC kodu söylenmişse menü/arıza özeti komutlarına düşürme.
-        // Kod sorusunu doğrudan Seyfi'nin DTC çözümleyicisine gönder.
-        val explicitDtcQuestion = Regex(
-            "\\b[PBCU]\\s*[0-9A-F]{4}\\b",
-            RegexOption.IGNORE_CASE
-        ).containsMatchIn(commandInput)
-        if (explicitDtcQuestion) {
+        // DTC kodu doğrudan tam eşleşme ile aranır; son taramadaki kodlar kullanılmaz.
+        val explicitDtcCode = extractSpokenDtc(commandInput)
+        if (explicitDtcCode != null) {
             seyfiAwaitingCommand = false
-            log("DTC SORUSU • ham ifade: $rawCommand • çözümlenen metin: $commandInput")
-            appendSeyfiConversation("SİZ", commandInput)
+            log("DTC SORUSU • ham ifade: $rawCommand • kod: $explicitDtcCode")
+            appendSeyfiConversation("SİZ", explicitDtcCode)
             seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
-            assistant.chat(commandInput) { answer ->
+            assistant.brain.lookupDtcCode(explicitDtcCode) { answer ->
                 appendSeyfiConversation("SEYFİ USTA", answer)
                 if (!isFinishing && !isDestroyed) assistant.speak(answer)
             }
