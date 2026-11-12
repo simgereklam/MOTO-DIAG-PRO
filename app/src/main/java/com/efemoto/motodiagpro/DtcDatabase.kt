@@ -113,6 +113,185 @@ object DtcDatabase {
         "U0100" to "Motor kontrol modülü ile iletişim kaybı",
         "U0121" to "ABS kontrol modülü ile iletişim kaybı",
         "U0155" to "Gösterge paneli kontrol modülü ile iletişim kaybı"
+
+        "P0013" to "Egzoz eksantrik mili zamanlama aktüatörü devresi",
+        "P0014" to "Egzoz eksantrik mili zamanlaması fazla ileride",
+        "P0015" to "Egzoz eksantrik mili zamanlaması fazla geride",
+        "P0017" to "Krank ve egzoz eksantrik mili konum korelasyon hatası",
+        "P0020" to "Emme eksantrik mili zamanlama aktüatörü B devresi",
+        "P0021" to "Emme eksantrik mili zamanlaması B aralık / performans hatası",
+        "P0022" to "Emme eksantrik mili zamanlaması B fazla geride",
+        "P0036" to "Oksijen sensörü ısıtıcı kontrol devresi (Bank 1 Sensör 2)",
+        "P0037" to "Oksijen sensörü ısıtıcı kontrol devresi düşük sinyal",
+        "P0038" to "Oksijen sensörü ısıtıcı kontrol devresi yüksek sinyal",
+        "P0068" to "Gaz kelebeği ve hava akış / MAP korelasyon hatası",
+        "P0087" to "Yakıt rayı / sistem basıncı düşük",
+        "P0088" to "Yakıt rayı / sistem basıncı yüksek",
+        "P0090" to "Yakıt basınç regülatörü kontrol devresi",
+        "P0093" to "Yakıt sisteminde büyük kaçak algılandı",
+        "P0106" to "MAP sensörü aralık / performans hatası",
+        "P0116" to "Soğutma suyu sıcaklık sensörü aralık / performans hatası",
+        "P0125" to "Kapalı çevrim yakıt kontrolü için soğutma sıcaklığı yetersiz",
+        "P0126" to "Kararlı çalışma için soğutma sıcaklığı yetersiz",
+        "P0137" to "Oksijen sensörü düşük sinyal (Bank 1 Sensör 2)",
+        "P0138" to "Oksijen sensörü yüksek sinyal (Bank 1 Sensör 2)",
+        "P0139" to "Oksijen sensörü yavaş tepki (Bank 1 Sensör 2)",
+        "P0140" to "Oksijen sensörü etkinliği / sinyali algılanmadı (Bank 1 Sensör 2)",
+        "P0142" to "Oksijen sensörü devresi (Bank 1 Sensör 3)",
+        "P0150" to "Oksijen sensörü devresi (Bank 2 Sensör 1)",
+        "P0151" to "Oksijen sensörü düşük sinyal (Bank 2 Sensör 1)",
+        "P0152" to "Oksijen sensörü yüksek sinyal (Bank 2 Sensör 1)",
+        "P0160" to "Oksijen sensörü etkinliği / sinyali algılanmadı (Bank 2 Sensör 2)",
+        "P0161" to "Oksijen sensörü ısıtıcı devresi (Bank 2 Sensör 2)",
+        "P0167" to "Oksijen sensörü ısıtıcı devresi arızası",
+        "P0170" to "Yakıt düzeltme sistemi arızası (Bank 1)",
+        "P0180" to "Yakıt sıcaklık sensörü devresi",
+        "P0181" to "Yakıt sıcaklık sensörü aralık / performans hatası",
+        "P0191" to "Yakıt rayı basınç sensörü aralık / performans hatası",
+        "P0192" to "Yakıt rayı basınç sensörü düşük sinyal",
+        "P0193" to "Yakıt rayı basınç sensörü yüksek sinyal",
+        "P0203" to "Enjektör 3 devresi arızası",
+        "P0204" to "Enjektör 4 devresi arızası",
+        "P0210" to "Enjektör 10 devresi arızası",
+        "P0215" to "Motor durdurma solenoidi devresi",
+        "P0221" to "Gaz kelebeği / pedal konum sensörü B aralık / performans hatası",
+        "P0224" to "Gaz kelebeği / pedal konum sensörü B kesintili sinyal",
+        "P0232" to "Yakıt pompası ikincil devresi yüksek sinyal",
+        "P0234" to "Aşırı turbo basıncı",
+        "P0243" to "Turbo basınç kontrol solenoidi A devresi",
+        "P0263" to "Silindir 1 katkı / dengeleme hatası",
+        "P0264" to "Enjektör 2 kontrol devresi düşük sinyal",
+        "P0265" to "Enjektör 2 kontrol devresi yüksek sinyal",
+        "P0270" to "Enjektör 4 kontrol devresi düşük sinyal",
+        "P0271" to "Enjektör 4 kontrol devresi yüksek sinyal",
+        "P0290" to "Silindir 10 katkı / dengeleme hatası",
+        "P0305" to "5. silindirde ateşleme hatası",
+        "P0306" to "6. silindirde ateşleme hatası",
+        "P0313" to "Düşük yakıt seviyesinde ateşleme hatası",
+        "P0315" to "Krank mili konum sistemi değişimi öğrenilmemiş",
+        "P0320" to "Ateşleme / motor devri giriş devresi",
+        "P0321" to "Motor devri / ateşleme referansı aralık-performans hatası",
+        "P0322" to "Motor devri / ateşleme referansı sinyali yok",
+        "P0328" to "Vuruntu sensörü yüksek giriş sinyali",
+        "P0330" to "Vuruntu sensörü 2 devresi",
+        "P0331" to "Vuruntu sensörü 2 aralık / performans hatası",
+        "P0332" to "Vuruntu sensörü 2 düşük giriş sinyali",
+        "P0333" to "Vuruntu sensörü 2 yüksek giriş sinyali",
+        "P0342" to "Eksantrik mili konum sensörü A düşük sinyal",
+        "P0343" to "Eksantrik mili konum sensörü A yüksek sinyal",
+        "P0345" to "Eksantrik mili konum sensörü B devresi",
+        "P0353" to "Ateşleme bobini C birincil / ikincil devresi",
+        "P0354" to "Ateşleme bobini D birincil / ikincil devresi",
+        "P0365" to "Eksantrik mili konum sensörü B devresi",
+        "P0380" to "Kızdırma / ısıtma devresi arızası",
+        "P0403" to "EGR kontrol devresi arızası",
+        "P0411" to "İkincil hava enjeksiyon sistemi akışı hatalı",
+        "P0412" to "İkincil hava enjeksiyon valfi A devresi",
+        "P0421" to "Katalizör ısınma verimliliği eşik altında",
+        "P0440" to "Yakıt buharı emisyon kontrol sistemi arızası",
+        "P0441" to "Yakıt buharı tahliye akışı hatalı",
+        "P0444" to "Yakıt buharı tahliye valfi açık devre",
+        "P0445" to "Yakıt buharı tahliye valfi kısa devre",
+        "P0450" to "Yakıt buharı basınç sensörü devresi",
+        "P0451" to "Yakıt buharı basınç sensörü aralık / performans hatası",
+        "P0452" to "Yakıt buharı basınç sensörü düşük sinyal",
+        "P0453" to "Yakıt buharı basınç sensörü yüksek sinyal",
+        "P0456" to "Yakıt buharı emisyon sisteminde çok küçük kaçak",
+        "P0460" to "Yakıt seviye sensörü devresi",
+        "P0461" to "Yakıt seviye sensörü aralık / performans hatası",
+        "P0462" to "Yakıt seviye sensörü düşük giriş sinyali",
+        "P0464" to "Yakıt seviye sensörü kesintili sinyal",
+        "P0470" to "Egzoz basınç sensörü devresi",
+        "P0480" to "Soğutma fanı 1 kontrol devresi",
+        "P0481" to "Soğutma fanı 2 kontrol devresi",
+        "P0496" to "Yakıt buharı tahliye akışı beklenenden yüksek",
+        "P0508" to "Rölanti hava kontrol sistemi düşük devre",
+        "P0509" to "Rölanti hava kontrol sistemi yüksek devre",
+        "P0513" to "Hatalı immobilizer anahtarı",
+        "P0521" to "Motor yağ basıncı sensörü aralık / performans hatası",
+        "P0522" to "Motor yağ basıncı sensörü düşük sinyal",
+        "P0523" to "Motor yağ basıncı sensörü yüksek sinyal",
+        "P0530" to "Klima soğutucu basınç sensörü devresi",
+        "P0561" to "Sistem gerilimi kararsız",
+        "P0571" to "Fren anahtarı A devresi",
+        "P0602" to "Kontrol modülü programlama hatası",
+        "P0603" to "ECU kalıcı bellek (KAM) hatası",
+        "P0604" to "ECU RAM bellek hatası",
+        "P0605" to "ECU ROM bellek hatası",
+        "P0610" to "Kontrol modülü araç seçenekleri hatası",
+        "P0616" to "Marş rölesi kontrol devresi düşük sinyal",
+        "P0617" to "Marş rölesi kontrol devresi yüksek sinyal",
+        "P0621" to "Jeneratör lamba / L terminali kontrol devresi",
+        "P0622" to "Jeneratör alan / F terminali kontrol devresi",
+        "P0630" to "ECU içinde VIN programlanmamış veya uyumsuz",
+        "P0641" to "Sensör referans voltajı A devresi açık",
+        "P0642" to "Sensör referans voltajı A düşük",
+        "P0643" to "Sensör referans voltajı A yüksek",
+        "P0651" to "Sensör referans voltajı B devresi açık",
+        "P0685" to "ECU güç rölesi kontrol devresi",
+        "P0706" to "Vites konum sensörü aralık / performans hatası",
+        "P0717" to "Şanzıman giriş hız sensörü sinyali yok",
+        "P0722" to "Şanzıman çıkış hız sensörü sinyali yok",
+        "P0730" to "Yanlış vites oranı",
+        "P0740" to "Tork konvertör kavrama devresi",
+        "P0850" to "Park / boş vites anahtarı giriş devresi",
+        "P0900" to "Debriyaj aktüatörü devresi açık",
+        "P1001" to "Üreticiye özgü motor / kontrol sistemi kodu",
+        "P1100" to "Üreticiye özgü hava akış / emme sistemi kodu",
+        "P1122" to "Üreticiye özgü gaz kelebeği konum kodu",
+        "P1500" to "Üreticiye özgü şarj / jeneratör kontrol kodu",
+        "P1600" to "Üreticiye özgü ECU / kontrol modülü kodu",
+        "P2102" to "Gaz kelebeği aktüatör motoru A düşük sinyal",
+        "P2103" to "Gaz kelebeği aktüatör motoru A yüksek sinyal",
+        "P2111" to "Elektronik gaz kelebeği açık konumda takılı",
+        "P2112" to "Elektronik gaz kelebeği kapalı konumda takılı",
+        "P2118" to "Gaz kelebeği aktüatör akım aralık / performans hatası",
+        "P2120" to "Gaz pedalı / gaz kelebeği konum sensörü D devresi",
+        "P2122" to "Gaz pedalı konum sensörü D düşük sinyal",
+        "P2123" to "Gaz pedalı konum sensörü D yüksek sinyal",
+        "P2138" to "Gaz pedalı konum sensörleri D-E korelasyon hatası",
+        "P2176" to "Elektronik gaz kelebeği rölanti konumu öğrenilmemiş",
+        "P2185" to "Motor soğutma sıcaklığı sensörü 2 yüksek giriş",
+        "P2195" to "Oksijen sensörü sinyali fakir durumda takılı",
+        "P2196" to "Oksijen sensörü sinyali zengin durumda takılı",
+        "P2227" to "Barometrik basınç sensörü aralık / performans hatası",
+        "P2237" to "Oksijen sensörü pozitif akım kontrol devresi açık",
+        "P2263" to "Turbo / süperşarj basınç sistemi performans hatası",
+        "P2300" to "Ateşleme bobini A birincil kontrol devresi düşük",
+        "P2301" to "Ateşleme bobini A birincil kontrol devresi yüksek",
+        "P2503" to "Şarj sistemi düşük voltaj",
+        "P2530" to "Kontak anahtarı çalışma konumu devresi",
+        "P2563" to "Turbo basınç kontrol konum sensörü aralık / performans",
+        "P2600" to "Soğutma sıvısı pompası kontrol devresi açık",
+        "P2610" to "ECU motor kapatma zamanlayıcısı performans hatası",
+        "P2614" to "Eksantrik mili konum çıkış sinyali devresi açık",
+        "P2617" to "Krank mili konum çıkış sinyali devresi açık",
+        "P2626" to "Oksijen sensörü pompa akımı trim devresi açık",
+        "P2681" to "Motor soğutma sıvısı yönlendirme valfi A devresi açık",
+        "P2A00" to "Oksijen sensörü aralık / performans hatası (Bank 1 Sensör 1)",
+        "P2A01" to "Oksijen sensörü aralık / performans hatası (Bank 1 Sensör 2)",
+        "P3400" to "Silindir devre dışı bırakma sistemi performans hatası",
+        "P3425" to "Silindir 4 egzoz valfi kontrol devresi",
+        "P3441" to "Silindir 6 emme valfi kontrol devresi",
+        "B0001" to "Gövde güvenlik sistemi genel tetikleme kontrolü",
+        "B1000" to "Gövde kontrol modülü üreticiye özel arıza",
+        "C0035" to "Sol ön tekerlek hız sensörü devresi",
+        "C0040" to "Sağ ön tekerlek hız sensörü devresi",
+        "C0045" to "Sol arka tekerlek hız sensörü devresi",
+        "C0050" to "Sağ arka tekerlek hız sensörü devresi",
+        "C0110" to "ABS pompa motoru devresi",
+        "C0121" to "ABS valf rölesi / solenoid besleme devresi",
+        "C0131" to "ABS basınç sensörü devresi",
+        "C0141" to "ABS hidrolik valf devresi",
+        "U0001" to "Yüksek hızlı CAN haberleşme veri yolu",
+        "U0101" to "Şanzıman kontrol modülü ile iletişim kaybı",
+        "U0121" to "ABS kontrol modülü ile iletişim kaybı",
+        "U0131" to "Servo direksiyon kontrol modülü ile iletişim kaybı",
+        "U0140" to "Gövde kontrol modülü ile iletişim kaybı",
+        "U0155" to "Gösterge paneli kontrol modülü ile iletişim kaybı",
+        "U0401" to "Motor kontrol modülünden geçersiz veri alındı",
+        "U0415" to "ABS kontrol modülünden geçersiz veri alındı"
+
     )
 
     // Yamaha two-digit and ABS codes are model/ECU-specific.
@@ -120,14 +299,38 @@ object DtcDatabase {
     // Never fall back to a universal two-digit meaning here.
     private val yamahaTwoDigit = emptyMap<String, String>()
 
-    fun title(code: String): String = generic[code.uppercase()] ?: yamahaTwoDigit[code]
-        ?: "Üreticiye özel Yamaha kodu (model/yıl eşleştirmesi gerekli)"
+    fun title(code: String): String {
+        val normalized = code.trim().uppercase()
+        generic[normalized]?.let { return it }
+        yamahaTwoDigit[normalized]?.let { return it }
+        return when {
+            normalized.matches(Regex("P[0-9A-F]{4}")) -> when (normalized[1]) {
+                '0', '2' -> "Standart OBD-II güç aktarma sistemi kodu; ayrıntılı tanım bu sürümde kayıtlı değil"
+                '1' -> "Üreticiye özel güç aktarma sistemi kodu; marka/model/yıl servis tablosu gerekli"
+                '3' -> "Ateşleme / güç aktarma sistemi kodu; alt kodun üretici standardıyla doğrulanması gerekli"
+                else -> "Geçerli P-kodu biçimi; alt kod tanımı doğrulanmalı"
+            }
+            normalized.matches(Regex("B[0-9A-F]{4}")) -> "Gövde / güvenlik sistemi B-kodu; marka-model servis tablosu gerekli"
+            normalized.matches(Regex("C[0-9A-F]{4}")) -> "Şasi / ABS / fren sistemi C-kodu; marka-model servis tablosu gerekli"
+            normalized.matches(Regex("U[0-9A-F]{4}")) -> "Kontrol modülleri arası haberleşme U-kodu; marka-model servis tablosu gerekli"
+            normalized.matches(Regex("\\d{2}(_ABS)?")) -> "Üreticiye özel Yamaha kodu (model/yıl eşleştirmesi gerekli)"
+            else -> "Bilinmeyen veya desteklenmeyen DTC biçimi; ham ECU yanıtı ve protokol doğrulanmalı"
+        }
+    }
 
     fun description(code: String): String = when {
-        generic.containsKey(code.uppercase()) ->
-            "Bu, standart OBD arıza kodu ailesinde tanımlı bir güç aktarma sistemi kaydıdır. Kod tek başına arızalı parçayı kesinleştirmez; canlı veriler, kablo ölçümü ve araç servis dokümanıyla birlikte değerlendirilmelidir."
+        generic.containsKey(code.trim().uppercase()) ->
+            "Bu, standart OBD-II DTC tanımına dayalı genel bir açıklamadır. Motosiklet üreticisi bu kodu farklı kapsamda kullanabilir; ECU/protokol ve servis dokümanıyla doğrulayın."
+        code.trim().uppercase().matches(Regex("P[0-9A-F]{4}")) ->
+            "P kodu güç aktarma sistemi arıza ailesindedir. İlk hane 0/2 ise genel SAE alanı, 1 ise üreticiye özel alan, 3 ise ateşleme/güç aktarma alanı olarak değerlendirilir. Alt kodun kesin tanımı marka-model-yıl ile doğrulanmalıdır."
+        code.trim().uppercase().matches(Regex("B[0-9A-F]{4}")) ->
+            "B kodu gövde ve güvenlik elektroniği alanındadır. Motosiklette bu sistemin ve kodun desteklenmesi ECU mimarisine bağlıdır; üretici servis tablosu gerekir."
+        code.trim().uppercase().matches(Regex("C[0-9A-F]{4}")) ->
+            "C kodu şasi, fren ve ABS alanındadır. ABS modülünden gerçekten okunup okunmadığı doğrulanmalı; üretici açıklaması olmadan parça teşhisi yapılmamalıdır."
+        code.trim().uppercase().matches(Regex("U[0-9A-F]{4}")) ->
+            "U kodu modüller arası haberleşme alanındadır. Besleme, şase, sigorta, CAN hattı ve ilgili modül servis prosedürüyle kontrol edilmelidir."
         code.matches(Regex("\\d{2}(_ABS)?")) ->
-            "Bu Yamaha üretici kodu, model ve ECU sürümüne göre değişebilir. Doğru açıklama için Yamaha model/yıl servis tablosu eşleştirilmelidir."
+            "Bu Yamaha üretici kodu, model, yıl ve ECU sürümüne göre değişebilir. Doğru açıklama için Yamaha model/yıl servis tablosu eşleştirilmelidir."
         else ->
             "Kod ECU'dan alınmış olabilir ancak bu veri tabanında açıklaması bulunmuyor. Ham yanıtı, ECU kimliğini ve motosikletin marka-model-yıl bilgisini kaydedin."
     }
