@@ -194,19 +194,31 @@ class OfflineVoiceAssistant(
                             language != TextToSpeech.LANG_NOT_SUPPORTED
                         // Varsa kurulu Türkçe erkek sesini tercih et. Android her ses
                         // için cinsiyet alanı sunmadığından yalnızca ses adı belirtiyorsa seçilir.
-                        val maleVoice = engine.voices
+                        val turkishVoices = engine.voices
                             ?.filter { it.locale.language.equals("tr", ignoreCase = true) }
-                            ?.filter {
+                            .orEmpty()
+                        // Android TTS API'si sesin cinsiyetini standart bir alanda sunmaz.
+                        // Yalnızca sağlayıcı adında açıkça erkek belirten sesi seç.
+                        val maleVoice = turkishVoices
+                            .filter {
                                 val n = it.name.lowercase(Locale.ROOT)
-                                n.contains("male") || n.contains("masculine") || n.contains("erkek") ||
-                                    it.features.any { feature -> feature.contains("gender=male", ignoreCase = true) }
+                                n.contains("male") || n.contains("masculine") ||
+                                    n.contains("erkek") ||
+                                    it.features.any { feature ->
+                                        feature.contains("gender=male", ignoreCase = true)
+                                    }
                             }
-                            ?.maxByOrNull { it.quality }
+                            .maxByOrNull { it.quality }
                         if (maleVoice != null) {
                             engine.voice = maleVoice
                             status("Erkek Türkçe ses seçildi: ${maleVoice.name}")
                         } else if (ttsReady) {
-                            status("Türkçe ses hazır; erkek Türkçe ses paketi bulunamadı. Telefonun TTS ayarlarından erkek Türkçe ses yüklenmeli.")
+                            // Erkek ses etiketi yoksa cihazın seçili sistem sesini değiştirme.
+                            val voiceNames = turkishVoices
+                                .joinToString(", ") { it.name }
+                                .ifBlank { "Sağlayıcı ses listesini bildirmedi" }
+                            Log.i(TAG, "Türkçe TTS sesleri: $voiceNames")
+                            status("Türkçe TTS hazır. Sağlayıcı cinsiyet bilgisini vermedi; sistemde seçili ses korunuyor. Sesler: $voiceNames")
                         }
                         engine.setSpeechRate(0.94f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -296,17 +308,22 @@ class OfflineVoiceAssistant(
         restartRunnable?.let { main.removeCallbacks(it) }
         restartRunnable = null
         recognitionSessionActive = false
+        // ERROR_RECOGNIZER_BUSY sonrasında sağlayıcının eski oturumu bırakması için
+        // önce iptal et, sonra yok et ve yeni tanıyıcıyı gecikmeli oluştur.
+        try { recognizer?.cancel() } catch (_: Exception) {}
         try { recognizer?.destroy() } catch (_: Exception) {}
         recognizer = null
         recognitionAvailable = false
         recognizerInitialized = false
         restartCount = (restartCount + 1).coerceAtMost(8)
+        val retryDelay = 1800L + restartCount * 700L
+        status("Konuşma servisi meşgul. Mikrofon oturumu sıfırlanıyor; ${retryDelay / 1000.0} saniye sonra yeniden denenecek.")
         main.postDelayed({
             if (released || !listeningEnabled || processing || speaking) return@postDelayed
             initializeRecognizer()
-            if (recognitionAvailable) startListeningInternal(1200L + restartCount * 300L)
-            else status("Konuşma servisi yeniden kurulamadı. Mikrofonu yeniden başlatmayı deneyin.")
-        }, 900L + restartCount * 300L)
+            if (recognitionAvailable) startListeningInternal(500L)
+            else status("Konuşma servisi yeniden kurulamadı. Mikrofonu kapatıp açmayı deneyin.")
+        }, retryDelay)
     }
 
     private fun scheduleRestart(delayMs: Long = 700) {
