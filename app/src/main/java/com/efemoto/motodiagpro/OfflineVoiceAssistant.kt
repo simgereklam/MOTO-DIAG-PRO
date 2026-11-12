@@ -427,6 +427,9 @@ class OfflineVoiceAssistant(
         listeningEnabled = false
         processing = true
         main.post {
+            restartRunnable?.let { main.removeCallbacks(it) }
+            restartRunnable = null
+            recognitionSessionActive = false
             try { recognizer?.cancel() } catch (_: Exception) {}
             try { recognizer?.destroy() } catch (_: Exception) {}
             recognizer = null
