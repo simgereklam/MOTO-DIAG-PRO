@@ -23,6 +23,16 @@ class SeyfiUstaCommandHandlerTest {
     }
 
     @Test
+    fun shortConversationRepliesStayNaturalAndDoNotRepeatPrompts() {
+        assertTrue(SeyfiConversationRules.reply("Usta") == "Dinliyorum.")
+        assertTrue(SeyfiConversationRules.reply("Seyfi Usta") == "Dinliyorum.")
+        assertTrue(SeyfiConversationRules.reply("Nasılsın?") == "İyiyim usta, teşekkür ederim.")
+        assertTrue(SeyfiConversationRules.reply("İyiyim çok şükür") == "Sevindim usta.")
+        assertTrue(SeyfiConversationRules.reply("İyi") == "Sevindim usta.")
+        assertTrue(SeyfiConversationRules.reply("Motosiklet tamiri") == "Kolay gelsin usta. Hangi motosiklet?")
+    }
+
+    @Test
     fun testAndScanAliasesAreNotSentToFreeChat() {
         val handler = SeyfiUstaCommandHandler()
         assertTrue(handler.handle("usta seyfi usta test test yap").action == SeyfiAction.SHOW_TESTS)

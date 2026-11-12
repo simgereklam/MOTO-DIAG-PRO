@@ -367,7 +367,10 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\s+"), " ")
             .trim()
 
-        val wakeDetected = Regex("\\b(seyfi|usta)\\b")
+        // Uyandırma sözü yalnızca cümlenin başındaysa kabul edilir.
+        // "Kolay gelsin usta" gibi normal cümlelerin sonunda geçen "usta"
+        // asistanı yeniden uyandırıp cevabı kesmesin.
+        val wakeDetected = Regex("^(seyfi\\s+usta|seyfi|usta)(?:\\s+|$)")
             .containsMatchIn(normalizedSpeech)
         val commandInput: String
 

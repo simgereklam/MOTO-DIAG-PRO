@@ -41,7 +41,8 @@ class SeyfiBrain(context: Context) {
         val models = listOf("mt 07" to "Yamaha MT-07", "mt07" to "Yamaha MT-07", "mt 09" to "Yamaha MT-09", "mt09" to "Yamaha MT-09", "mt 25" to "Yamaha MT-25", "mt25" to "Yamaha MT-25", "mt 03" to "Yamaha MT-03", "mt03" to "Yamaha MT-03", "nmax" to "Yamaha NMAX", "xmax" to "Yamaha XMAX", "tmax" to "Yamaha TMAX", "r25" to "Yamaha R25", "tracer 7" to "Yamaha Tracer 7", "tracer 9" to "Yamaha Tracer 9", "nc750" to "Honda NC750", "nc 750" to "Honda NC750", "pcx" to "Honda PCX", "z650" to "Kawasaki Z650", "sv650" to "Suzuki SV650")
         val found = models.firstOrNull { (key, _) -> Regex("(^| )" + Regex.escape(key) + "($| )").containsMatchIn(q) }?.second ?: return null
         val year = Regex("\\b(19[89]\\d|20[0-3]\\d)\\b").find(q)?.value
-        return if (year != null) "$found $year" else found
+        val displacement = Regex("\\b(125|150|155|200|250|300|350|400|450|500|600|650|700|750|800|850|900|1000|1100|1200|1300)\\s?(?:cc)?\\b").find(q)?.groupValues?.get(1)
+        return listOfNotNull(found, displacement, year).joinToString(" ")
     }
 
     private fun normalize(value: String): String =
@@ -112,7 +113,8 @@ class SeyfiBrain(context: Context) {
             return lookupDtcRecordOnly(code)
         }
         val q = normalize(question)
-        // Arıza açıklaması yalnızca kullanıcının açıkça verdiği kod üzerinden yapılır.
+        SeyfiConversationRules.reply(question)?.let { return it }
+        // Arıza açıklaması yalnızca kullanıcının açıkça verdiği kod üzerinden yapıl.
         val compactCodeInput = normalize(question).replace(
             Regex("\\b([pbcu])\\s+([0-9a-f]{4})\\b"),
             "$1$2"
@@ -131,7 +133,7 @@ class SeyfiBrain(context: Context) {
             q.contains("iyi sayilirim") || q.contains("sukur iyiyim") ||
             q.contains("gayet iyiyim") || q.contains("keyfim yerinde") ||
             q.contains("iyilik") || q.contains("sagligim yerinde")
-        ) return "Oh, iyi olmana sevindim usta. Ben de buradayım, seninle sohbet ediyorum. Bugün neler yapıyorsun?"
+        ) return "Sevindim usta."
 
         if (q.contains("kotu") && (q.contains("hissediyorum") || q.contains("gunum") || q.contains("keyfim")))
             return "Üzüldüm usta. İstersen anlat, seni dinliyorum. Belki birlikte biraz olsun çözüm bulabiliriz."
@@ -144,20 +146,20 @@ class SeyfiBrain(context: Context) {
 
         if (q.contains("nasilsin") || q.contains("ne haber") || q.contains("keyfin nasil") ||
             q.contains("iyi misin") || q.contains("nasil gidiyor")
-        ) return "İyiyim usta, teşekkür ederim. Bugün buradayım, sana eşlik ediyorum. Senin günün nasıl geçiyor?"
+        ) return "İyiyim usta, teşekkür ederim."
 
         if (q.contains("merhaba") || q == "selam" || q.contains("gunaydin") ||
             q.contains("iyi aksamlar") || q.contains("iyi geceler")
-        ) return "Merhaba usta, hoş geldin. Ben buradayım, seni dinliyorum. Sen nasılsın?"
+        ) return "Merhaba usta."
 
         if (q.contains("tesekkur") || q == "sag ol" || q == "eyvallah")
-            return "Rica ederim usta. Seninle konuşmak güzel. Başka ne konuşalım?"
+            return "Rica ederim usta."
 
         if (q.contains("sen kimsin") || q.contains("kimsin") || q.contains("kendini tanit"))
             return "Ben Seyfi Usta. Motosiklet teşhisinde yardımcı olurum ama yalnızca bununla sınırlı değilim; seninle günlük konularda da sohbet edebilirim."
 
         if (q.contains("ne yapiyorsun") || q.contains("napıyorsun") || q.contains("ne yapiyorsun"))
-            return "Seninle konuşuyorum usta, söylediklerini anlamaya çalışıyorum. Sen neler yapıyorsun?"
+            return "Seninle konuşuyorum usta."
 
         if (q.contains("beni anliyor musun") || q.contains("sesim geliyor mu"))
             return "Sesin bana metin olarak ulaştı usta. Bir cümle daha söyle; doğru algılayıp algılamadığımı birlikte kontrol edelim."
@@ -234,7 +236,7 @@ class SeyfiBrain(context: Context) {
                 rememberPendingSymptom("")
                 return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Şikâyetin şu: $symptom. Şimdi adım adım bakalım. Belirti motor soğukken mi, ısınınca mı, gaz verince mi ortaya çıkıyor?"
             }
-            return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. İstersen model yılını da söyle; sonraki değerlendirmede doğru servis bilgilerini seçeyim."
+            return "Tamam usta, $activeVehicleProfile. Ne konuda yardımcı olayım?"
         }
         if (pendingVehicleBrand.isNotBlank() &&
             q.split(" ").size in 1..5 &&
@@ -284,7 +286,7 @@ class SeyfiBrain(context: Context) {
             append("Bu kayıtlar belirti eşleşmesidir; kesin teşhis değildir.")
         }
         if (!ecuConnected)
-            return "Buradayım usta, seni dinliyorum. Bunu biraz daha açar mısın? Motosikletle ilgiliyse marka ve modelini söyle; değilse konuyu anlat, birlikte konuşalım."
+            return "Anladım usta."
         return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
