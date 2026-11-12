@@ -26,6 +26,9 @@ enum class SeyfiAction {
     SHOW_MAP,
     SHOW_CONNECTION_STATUS,
     SHOW_LOGS,
+    SHOW_FAULT_SEARCH,
+    SHOW_SEYFI_CHAT,
+    SHOW_COMMUNICATION_REPORT,
     SHOW_HELP,
     GO_HOME,
     SHOW_TESTS,
@@ -237,8 +240,18 @@ class SeyfiUstaCommandHandler {
         if (containsAny(
                 commandText,
                 "hata dokumu",
+                "hata dokum",
                 "hata dokumunu ac",
+                "hata dokumunu goster",
+                "hata dokumunu getir",
+                "hata dokumlerini ac",
+                "hata dokumlerini goster",
+                "hata dokumu ekrani",
                 "hata kayitlari",
+                "hata kaydini ac",
+                "islem dokumu",
+                "islem gecmisi",
+                "gecmis kayitlari",
                 "islem kayitlari",
                 "loglari goster",
                 "loglari ac",
@@ -252,6 +265,58 @@ class SeyfiUstaCommandHandler {
                 original,
                 "Hata dökümü ve işlem kayıtlarını açıyorum."
             )
+        }
+
+        // Uygulamadaki ana bölümler ve butonlar: sesli isimleri doğrudan ekrana bağla.
+        if (containsAny(
+                commandText,
+                "seyfi ekrani",
+                "seyfi usta ekrani",
+                "seyfi ustayi ac",
+                "sohbet ekrani",
+                "sohbet bolumunu ac",
+                "yapay zeka ekrani",
+                "sesli asistan ekrani",
+                "asistan ekranini ac",
+                "yerel yapay zeka"
+            )
+        ) {
+            return command(SeyfiAction.SHOW_SEYFI_CHAT, original, "Seyfi Usta ekranını açıyorum.")
+        }
+
+        if (containsAny(
+                commandText,
+                "ariza kodu ara",
+                "hata kodu ara",
+                "dtc ara",
+                "ariza kodu sorgula",
+                "kod aciklamasi ara",
+                "ariza kutuphanesi",
+                "ariza kodu kutuphanesi",
+                "ariza kodlarini incele",
+                "ariza ekranini ac",
+                "arizalar ekranini ac"
+            )
+        ) {
+            return command(SeyfiAction.SHOW_FAULT_SEARCH, original, "Arıza kodu arama bölümünü açıyorum.")
+        }
+
+        if (containsAny(
+                commandText,
+                "viecar iletisim raporu",
+                "ecu iletisim raporu",
+                "iletisim raporu",
+                "tam iletisim raporu",
+                "adaptör iletisim raporu",
+                "adaptoru test et",
+                "ecu iletisimini test et",
+                "viecar raporu",
+                "adaptör raporu",
+                "adaptoru kontrol et",
+                "baglanti raporu"
+            )
+        ) {
+            return command(SeyfiAction.SHOW_COMMUNICATION_REPORT, original, "Viecar ve ECU iletişim raporunu hazırlıyorum.")
         }
 
         if (containsAny(
@@ -432,6 +497,8 @@ class SeyfiUstaCommandHandler {
                 "ana sayfa",
                 "ana ekran",
                 "ana menu",
+                "ana ekrana don",
+                "baslangic ekrani",
                 "eve don"
             )
         ) {
@@ -486,7 +553,14 @@ class SeyfiUstaCommandHandler {
                 "rapor al",
                 "rapor kaydet",
                 "raporu paylas",
-                "servis raporu"
+                "servis raporu",
+                "raporu disa aktar",
+                "raporu disari aktar",
+                "rapor paylas",
+                "teshis raporu olustur",
+                "servis formu",
+                "servis kaydi",
+                "servis bilgisi kaydet"
             )
         ) {
             return command(
@@ -554,6 +628,15 @@ class SeyfiUstaCommandHandler {
             "arızaları sil" to SeyfiAction.CLEAR_FAULTS,
             "canlı verileri göster" to SeyfiAction.SHOW_LIVE_DATA,
             "hata dökümü" to SeyfiAction.SHOW_LOGS,
+            "hata dökümünü aç" to SeyfiAction.SHOW_LOGS,
+            "hata dökümünü göster" to SeyfiAction.SHOW_LOGS,
+            "işlem kayıtlarını aç" to SeyfiAction.SHOW_LOGS,
+            "son işlemleri göster" to SeyfiAction.SHOW_LOGS,
+            "arıza kodu ara" to SeyfiAction.SHOW_FAULT_SEARCH,
+            "hata kodu ara" to SeyfiAction.SHOW_FAULT_SEARCH,
+            "Seyfi ekranını aç" to SeyfiAction.SHOW_SEYFI_CHAT,
+            "sohbet ekranı" to SeyfiAction.SHOW_SEYFI_CHAT,
+            "iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
             "başka ne yapabiliyorsun" to SeyfiAction.SHOW_HELP,
             "ana sayfa" to SeyfiAction.GO_HOME,
             "motor verilerini yorumla" to SeyfiAction.ANALYZE_ENGINE_DATA
