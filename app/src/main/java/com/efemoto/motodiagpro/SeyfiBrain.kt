@@ -106,7 +106,18 @@ class SeyfiBrain(context: Context) {
     private fun reason(question: String): String {
         val q = normalize(question)
         // Konuşma tanıma "P 0335" şeklinde boşluk bırakabilir; kodu önce birleştir.
-        val codeInput = question.replace(
+        var codeInput = normalize(question)
+        // Vosk bazen kodu rakam yerine Türkçe sayı sözcükleriyle döndürür.
+        val spokenDigits = mapOf(
+            "sifir" to "0", "zero" to "0",
+            "bir" to "1", "iki" to "2", "uc" to "3",
+            "dort" to "4", "bes" to "5", "alti" to "6",
+            "yedi" to "7", "sekiz" to "8", "dokuz" to "9"
+        )
+        spokenDigits.forEach { (word, digit) ->
+            codeInput = codeInput.replace(Regex("\\b$word\\b"), digit)
+        }
+        codeInput = codeInput.replace(
             Regex("\\b([PBCU])\\s+([0-9A-F]{4})\\b", RegexOption.IGNORE_CASE),
             "$1$2"
         )
