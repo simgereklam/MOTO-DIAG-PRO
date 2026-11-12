@@ -278,22 +278,11 @@ class OfflineVoiceAssistant(
         restartRunnable?.let { main.removeCallbacks(it) }
         restartRunnable = null
         recognitionSessionActive = false
-        // ERROR_RECOGNIZER_BUSY sonrasında sağlayıcının eski oturumu bırakması için
-        // önce iptal et, sonra yok et ve yeni tanıyıcıyı gecikmeli oluştur.
-        try { recognizer?.cancel() } catch (_: Exception) {}
-        try { recognizer?.destroy() } catch (_: Exception) {}
-        recognizer = null
-        recognitionAvailable = false
-        recognizerInitialized = false
+        try { speechService?.setPause(true) } catch (_: Exception) {}
         restartCount = (restartCount + 1).coerceAtMost(8)
-        val retryDelay = 1800L + restartCount * 700L
-        status("Konuşma servisi meşgul. Mikrofon oturumu sıfırlanıyor; ${retryDelay / 1000.0} saniye sonra yeniden denenecek.")
-        main.postDelayed({
-            if (released || !listeningEnabled || processing || speaking) return@postDelayed
-            initializeRecognizer()
-            if (recognitionAvailable) startListeningInternal(500L)
-            else status("Konuşma servisi yeniden kurulamadı. Mikrofonu kapatıp açmayı deneyin.")
-        }, retryDelay)
+        val retryDelay = 1200L + restartCount * 500L
+        status("Mikrofon oturumu yenileniyor; ${retryDelay / 1000.0} saniye sonra tekrar dinleyeceğim.")
+        scheduleRestart(retryDelay)
     }
 
     private fun scheduleRestart(delayMs: Long = 700) {
