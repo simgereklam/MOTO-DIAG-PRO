@@ -2331,20 +2331,6 @@ class MainActivity : ComponentActivity() {
         c.addView(analysisCard)
     }
 
-    private fun sendSeyfiChatMessage(message: String) {
-        val assistant = seyfiUstaAI
-        if (assistant == null) {
-            appendSeyfiConversation("SİSTEM", "Seyfi Usta henüz başlatılmadı.")
-            return
-        }
-        appendSeyfiConversation("SİZ", message)
-        seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
-        assistant.chat(message) { answer ->
-            appendSeyfiConversation("SEYFİ USTA", answer)
-            // TTS durum callback'i animasyonu SPEAKING moduna geçirir.
-        }
-    }
-
     private fun appendSeyfiConversation(who: String, message: String) {
         val view = seyfiConversationView ?: return
         runOnUiThread {
