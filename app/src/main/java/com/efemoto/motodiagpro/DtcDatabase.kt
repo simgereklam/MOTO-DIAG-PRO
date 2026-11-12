@@ -106,7 +106,7 @@ object DtcDatabase {
         "P1101" to "Hava akış sistemi aralık / performans hatası",
         "P1120" to "Gaz kelebeği konum sensörü devresi",
         "P1121" to "Gaz kelebeği konum sensörü aralık / performans hatası",
-        "P1604" to "İmmobilizer / anahtar doğrulama sistemi hatası",
+        "P1604" to "Üreticiye özel motor çalıştırma / kontrol sistemi kodu; kesin anlamı marka-model-yıla göre doğrulanmalıdır",
         "P2100" to "Gaz kelebeği aktüatör motoru A devresi / açık devre",
         "P2101" to "Gaz kelebeği aktüatör kontrol aralık / performans hatası",
         "P2135" to "Gaz kelebeği / pedal konum sensörleri A-B korelasyon hatası",
