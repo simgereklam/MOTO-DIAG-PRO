@@ -1143,6 +1143,10 @@ class MainActivity : ComponentActivity() {
                     seyfiUstaAI?.updateDiagnosticPlan(
                         diagnosticPlan.toPromptContext(supportedPidSet)
                     )
+                    // Keep the selected model/year attached to the real ECU snapshot.
+                    seyfiUstaAI?.updateVehicleProfile(
+                        persistentPrefs().getString("yamaha_model_year", "").orEmpty()
+                    )
                     seyfiUstaAI?.updateEcuData(
                         rpm = diagnosticSnapshot["rpm"]?.toInt() ?: -1,
                         tps = (diagnosticSnapshot["tps"] ?: -1.0).toFloat(),
