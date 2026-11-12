@@ -307,6 +307,12 @@ class SeyfiBrain(context: Context) {
     private fun explainCodes(codes: List<String>, model: String? = null): String = buildString {
         append("Arıza kodlarını inceliyorum. ")
         codes.forEach { code ->
+            // P0335 için değişmez, doğrudan SAE/J1979 karşılığı.
+            // Yamaha bilgi bankasındaki başka kayıtlar veya sohbet bağlamı bunu ezemez.
+            if (code.equals("P0335", ignoreCase = true)) {
+                append("P0335: Krank mili konum sensörü A devresi arızası. ECU, krank sensöründen beklenen sinyali algılayamıyor. Olası nedenler: krank sensörü veya tetikleyici çark sorunu; sensör soketinde oksitlenme/gevşeklik; kabloda kopukluk veya kısa devre; sensör hava aralığının hatalı olması. Kontrol: soket ve tesisat, sensör sinyali marş sırasında, sensör aralığı ve tetik çarkı. Bu kod immobilizer veya ABS kodu değildir. Kod tek başına sensörün kesin bozuk olduğunu kanıtlamaz. ")
+                return@forEach
+            }
             val record = YamahaKnowledgeBase.find(appContext, code, model)
             if (record != null) {
                 append("$code: ${record.title}. ${record.description} ")
