@@ -102,19 +102,31 @@ class SeyfiBrain(context: Context) {
             codePattern.findAll(question).map { it.value.uppercase(Locale.US) } +
                 ecuFaults.flatMap { raw -> codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList() }
         ).distinct().take(12).toList()
-        if (q.contains("merhaba") || q == "selam" || q.contains("nasilsin") ||
-            q.contains("ne haber") || q.contains("gunaydin") || q.contains("iyi aksamlar") ||
-            q.contains("iyi geceler")
-        ) return "İyiyim usta, buradayım. İstersen biraz sohbet edelim, istersen motosikletinle ilgili bir konuyu birlikte inceleyelim."
+        // Günlük sohbet, ECU bağlantısından bağımsız ele alınır.
+        if (q.contains("nasilsin") || q.contains("ne haber") || q.contains("keyfin nasil") ||
+            q.contains("iyi misin") || q.contains("nasil gidiyor")
+        ) return "İyiyim usta, teşekkür ederim. Sen nasılsın? Bugün nasıl gidiyor?"
+
+        if (q.contains("sohbet edebiliyor musun") || q.contains("sohbet edebilir misin") ||
+            q.contains("konusabiliyor musun") || q.contains("seninle sohbet") ||
+            q.contains("sohbet edelim") || q.contains("biraz konusalim")
+        ) return "Elbette usta, seninle sohbet edebilirim. ECU'ya bağlı olmamız gerekmiyor. İstersen birlikte adım adım ilerleyelim. Sen nasılsın, bugün nasıl gidiyor?"
+
+        if (q.contains("ben iyiyim") || q.contains("iyiyim") || q.contains("fena degilim"))
+            return "Buna sevindim usta. Bugün neler yapıyorsun, keyfin yerinde mi?"
+
+        if (q.contains("merhaba") || q == "selam" || q.contains("gunaydin") ||
+            q.contains("iyi aksamlar") || q.contains("iyi geceler")
+        ) return "Merhaba usta, hoş geldin. Ben buradayım, seni dinliyorum. Sen nasılsın?"
 
         if (q.contains("tesekkur") || q == "sag ol" || q == "eyvallah")
-            return "Rica ederim usta. Başka merak ettiğin bir şey varsa sor, dinliyorum."
+            return "Rica ederim usta. Seninle konuşmak güzel. Başka ne konuşalım?"
 
         if (q.contains("sen kimsin") || q.contains("kimsin") || q.contains("kendini tanit"))
-            return "Ben Seyfi Usta. Motosiklet arıza kodlarını, gerçek ECU verilerini ve güvenli kontrol adımlarını açıklamak için buradayım. Ayrıca günlük konuşabiliriz."
+            return "Ben Seyfi Usta. Motosiklet teşhisinde yardımcı olurum ama yalnızca bununla sınırlı değilim; seninle günlük konularda da sohbet edebilirim."
 
-        if (q.contains("sohbet edelim") || q.contains("biraz konusalim"))
-            return "Olur usta, buradayım. Motosiklet konuşabiliriz ya da aklına takılan başka bir konuyu sorabilirsin."
+        if (q.contains("ne yapiyorsun") || q.contains("napıyorsun") || q.contains("ne yapiyorsun"))
+            return "Seninle konuşuyorum usta, söylediklerini anlamaya çalışıyorum. Sen neler yapıyorsun?"
 
         if (q.contains("beni anliyor musun") || q.contains("sesim geliyor mu"))
             return "Sesin bana metin olarak ulaştı usta. Bir cümle daha söyle; doğru algılayıp algılamadığımı birlikte kontrol edelim."
@@ -159,7 +171,7 @@ class SeyfiBrain(context: Context) {
             append("Bu kayıtlar belirti eşleşmesidir; kesin teşhis değildir.")
         }
         if (!ecuConnected)
-            return "Anladım usta. Şu an ECU bağlantısı olmadığı için ölçüm yapamam ama konuşabiliriz. Motosiklette ne yaşıyorsun: çalışmama, tekleme, stop etme, çekiş düşüklüğü, hararet ya da başka bir belirti mi? Birlikte adım adım ilerleyelim."
+            return "Anladım usta. Şu an ECU'ya bağlı değilim; bu yüzden gerçek ölçüm yapamam. Ama sohbet edebilir, genel bilgi verebilir ve bir arıza anlatırsan önce motosikletinin marka-modelini öğrenip adım adım ilerleyebilirim. Seni dinliyorum."
         return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
