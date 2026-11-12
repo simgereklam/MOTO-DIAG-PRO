@@ -1332,13 +1332,30 @@ class MainActivity : ComponentActivity() {
 
     private fun baseDtcCode(value: String): String = value.substringBefore(" •").trim()
 
-    private fun faultTitle(code: String): String = DtcDatabase.title(baseDtcCode(code))
+    private fun faultRecord(code: String): YamahaKnowledgeRecord? =
+        YamahaKnowledgeBase.find(this, baseDtcCode(code))
 
-    private fun faultDescription(code: String): String = DtcDatabase.description(baseDtcCode(code))
+    private fun faultTitle(code: String): String {
+        val record = faultRecord(code) ?: return DtcDatabase.title(baseDtcCode(code))
+        val scope = if (record.models.isNotEmpty()) {
+            " (${record.models.joinToString()} ${record.years.joinToString()})"
+        } else ""
+        return record.title + scope
+    }
 
-    private fun faultCauses(code: String): List<String> = DtcDatabase.causes(baseDtcCode(code))
+    private fun faultDescription(code: String): String {
+        val record = faultRecord(code) ?: return DtcDatabase.description(baseDtcCode(code))
+        val scope = if (record.models.isNotEmpty()) {
+            " Doğrulandığı kapsam: ${record.models.joinToString()} ${record.years.joinToString()}. Başka model/yıllara otomatik genellenemez."
+        } else ""
+        return record.description + scope
+    }
 
-    private fun faultChecks(code: String): List<String> = DtcDatabase.checks(baseDtcCode(code))
+    private fun faultCauses(code: String): List<String> =
+        faultRecord(code)?.possibleCauses ?: DtcDatabase.causes(baseDtcCode(code))
+
+    private fun faultChecks(code: String): List<String> =
+        faultRecord(code)?.checks ?: DtcDatabase.checks(baseDtcCode(code))
 
     private fun confirmClearFaults() {
         if (!hasCompletedScan || faults.isEmpty()) {
