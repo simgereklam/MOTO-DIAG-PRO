@@ -19,6 +19,7 @@ class SeyfiBrain(context: Context) {
     @Volatile private var ecuConnected = false
     @Volatile private var ecuValues: Map<String, Double> = emptyMap()
     @Volatile private var ecuFaults: List<String> = emptyList()
+    @Volatile private var activeVehicleProfile: String = ""
     @Volatile private var diagnosticPlanContext = "Henüz teşhis planı oluşturulmadı."
     @Volatile private var latestDiagnosticTestResult = "Henüz salt-okunur test sonucu alınmadı."
 
@@ -33,6 +34,10 @@ class SeyfiBrain(context: Context) {
         main.post { onResult(true, "Seyfi Usta bağımsız yerel teşhis çekirdeği hazır. Harici model yüklenmedi.") }
     }
     fun isReady(): Boolean = ready
+
+    fun updateVehicleProfile(modelYear: String) {
+        activeVehicleProfile = modelYear.trim().take(100)
+    }
 
     fun updateDiagnosticTestResult(result: String) {
         latestDiagnosticTestResult = result.trim().take(12000).ifBlank { "Son salt-okunur test sonucu boş." }
@@ -92,7 +97,7 @@ class SeyfiBrain(context: Context) {
             q.contains("xmax") -> "XMAX 300"
             q.contains("mt 07") || q.contains("mt07") -> "MT-07"
             q.contains("mt 09") || q.contains("mt09") -> "MT-09"
-            else -> null
+            else -> activeVehicleProfile.takeIf { it.isNotBlank() }
         }
         if (codes.isNotEmpty()) return explainCodes(codes, modelHint)
         if (listOf("canli", "sensor", "veri", "motor durumu", "analiz", "yorumla", "degerlendir").any { q.contains(it) })
