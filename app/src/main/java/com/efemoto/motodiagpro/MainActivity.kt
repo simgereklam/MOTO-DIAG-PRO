@@ -358,7 +358,10 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\p{Mn}+"), "")
             .replace("ı", "i")
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
-            .replace(Regex("\\b(on kinal|on kanal|sey fusta|seyf usta|seyfiusta|sefi usta|seifi usta)\\b"), "seyfi usta")
+            // Vosk'un "Seyfi Usta" için sık ürettiği fonetik yanlışları düzelt.
+            // "e posta" eşleşmesi yalnızca sesli komut metninde, başta/tek başına kabul edilir.
+            .replace(Regex("^e posta(?:\\\\s+|$)"), "seyfi usta ")
+            .replace(Regex("\\b(on kinal|on kanal|sey fusta|seyf usta|seyfiusta|sefi usta|seifi usta|seyfi usta)\\b"), "seyfi usta")
             .replace(Regex("\\b(seyfi|seyf|sefi|seifi)\\b"), "seyfi")
             .replace(Regex("\\s+"), " ")
             .trim()
@@ -391,15 +394,15 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        if (!wakeDetected && !seyfiAwaitingCommand) {
-            log("Seyfi Usta: uyandırma sözü bulunmadığı için ifade yok sayıldı: $rawCommand")
-            // Uyandırma sözü olmayan konuşma işlendi ve atlandı; mikrofon döngüsünü sürdür.
+        // Bilinen, güvenli ekran/yardım komutları uyandırma sözü kaçırıldığında da çalışsın.
+        // Bilinmeyen sıradan konuşmalar komut olarak yürütülmez; mikrofon dinlemeye devam eder.
+        val command = seyfiCommandHandler.handle(commandInput)
+        if (command.action == SeyfiAction.UNKNOWN && !wakeDetected && !seyfiAwaitingCommand) {
+            log("Seyfi Usta: bilinen bir komut algılanmadı, ifade yok sayıldı: $rawCommand")
             assistant.startListening()
             return
         }
-
         seyfiAwaitingCommand = false
-        val command = seyfiCommandHandler.handle(commandInput)
 
         if (command.action != SeyfiAction.UNKNOWN) {
             log("Seyfi Usta komutu: $rawCommand → ${command.action}")
@@ -439,8 +442,12 @@ class MainActivity : ComponentActivity() {
 
             SeyfiAction.SHOW_LIVE_DATA -> {
                 showLiveData()
-                if (!liveLoop) startLiveRead()
-                assistant.speak("Canlı veri ekranını açtım. Yalnızca ECU'dan gerçekten okunan değerleri kullanacağım.")
+                if (connected && viecarConnection.isConnected()) {
+                    if (!liveLoop) startLiveRead()
+                    assistant.speak("Canlı veri ekranını açtım. ECU bağlantısı açık; yalnızca gerçekten okunan sensör değerlerini göstereceğim.")
+                } else {
+                    assistant.speak("Canlı veri ekranını açtım. Şu anda ECU bağlantısı yok. Bu yüzden değerleri boş bırakıyorum; arıza veya sensör ölçümü uydurmuyorum. Bağlanmak için ekrandaki ECU'ya bağlan düğmesine dokunun.")
+                }
             }
 
             SeyfiAction.SHOW_RPM ->
@@ -457,6 +464,11 @@ class MainActivity : ComponentActivity() {
 
             SeyfiAction.SHOW_MAP ->
                 speakLiveValue("map", "Emme manifoldu basıncı", "kilopaskal")
+
+            SeyfiAction.SHOW_LOGS -> {
+                showLogs()
+                assistant.speak("Hata dökümü ve işlem kayıtlarını açtım.")
+            }
 
             SeyfiAction.SHOW_CONNECTION_STATUS -> {
                 if (connected && viecarConnection.isConnected()) {
@@ -479,9 +491,11 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.SHOW_HELP -> assistant.speak(
-                "Taramaya başla, arızaları oku veya açıkla, arızaları sil, canlı verileri oku, motor devri, " +
-                    "hararet, akü voltajı, gaz konumu, manifold basıncı, bağlantı durumu, test yap, " +
-                    "rapor hazırla veya ana sayfa diyebilirsiniz."
+                "Ben Seyfi Usta. Gerçek ECU arıza taraması başlatabilir, kayıtlı arızaları okuyup açıklayabilir, " +
+                    "onayınızla arıza kodlarını silebilir, canlı sensör verilerini gösterebilir, motor devri, " +
+                    "hararet, akü voltajı, gaz konumu ve manifold basıncını söyleyebilir, bağlantıyı kontrol edebilir, " +
+                    "hata dökümünü açabilir, sistem testlerini çalıştırabilir ve servis raporu hazırlayabilirim. " +
+                    "ECU bağlı değilse gerçek ölçüm varmış gibi konuşmam. Örnek komutlar: hata dökümü, canlı veri, test yap, ana sayfa."
             )
 
             SeyfiAction.GO_HOME -> {
