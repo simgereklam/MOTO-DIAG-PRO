@@ -318,16 +318,16 @@ object DtcDatabase {
     }
 
     fun description(code: String): String = when {
-        generic.containsKey(code.trim().uppercase()) ->
-            "Bu, standart OBD-II DTC tanımına dayalı genel bir açıklamadır. Motosiklet üreticisi bu kodu farklı kapsamda kullanabilir; ECU/protokol ve servis dokümanıyla doğrulayın."
-        code.trim().uppercase().matches(Regex("P[0-9A-F]{4}")) ->
-            "P kodu güç aktarma sistemi arıza ailesindedir. İlk hane 0/2 ise genel SAE alanı, 1 ise üreticiye özel alan, 3 ise ateşleme/güç aktarma alanı olarak değerlendirilir. Alt kodun kesin tanımı marka-model-yıl ile doğrulanmalıdır."
         code.trim().uppercase().matches(Regex("B[0-9A-F]{4}")) ->
             "B kodu gövde ve güvenlik elektroniği alanındadır. Motosiklette bu sistemin ve kodun desteklenmesi ECU mimarisine bağlıdır; üretici servis tablosu gerekir."
         code.trim().uppercase().matches(Regex("C[0-9A-F]{4}")) ->
             "C kodu şasi, fren ve ABS alanındadır. ABS modülünden gerçekten okunup okunmadığı doğrulanmalı; üretici açıklaması olmadan parça teşhisi yapılmamalıdır."
         code.trim().uppercase().matches(Regex("U[0-9A-F]{4}")) ->
             "U kodu modüller arası haberleşme alanındadır. Besleme, şase, sigorta, CAN hattı ve ilgili modül servis prosedürüyle kontrol edilmelidir."
+        generic.containsKey(code.trim().uppercase()) ->
+            "Bu, standart OBD-II DTC tanımına dayalı genel bir açıklamadır. Motosiklet üreticisi bu kodu farklı kapsamda kullanabilir; ECU/protokol ve servis dokümanıyla doğrulayın."
+        code.trim().uppercase().matches(Regex("P[0-9A-F]{4}")) ->
+            "P kodu güç aktarma sistemi arıza ailesindedir. İlk hane 0/2 ise genel SAE alanı, 1 ise üreticiye özel alan, 3 ise ateşleme/güç aktarma alanı olarak değerlendirilir. Alt kodun kesin tanımı marka-model-yıl ile doğrulanmalıdır."
         code.matches(Regex("\\d{2}(_ABS)?")) ->
             "Bu Yamaha üretici kodu, model, yıl ve ECU sürümüne göre değişebilir. Doğru açıklama için Yamaha model/yıl servis tablosu eşleştirilmelidir."
         else ->
