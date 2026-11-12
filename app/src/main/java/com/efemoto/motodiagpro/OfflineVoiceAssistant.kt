@@ -5,9 +5,11 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Build
 import android.os.Looper
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import org.vosk.Model
+import org.vosk.Recognizer
+import org.vosk.android.SpeechService
+import org.vosk.android.StorageService
+import org.json.JSONObject
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
@@ -30,7 +32,8 @@ class OfflineVoiceAssistant(
 
     private val main = Handler(Looper.getMainLooper())
     private val ids = AtomicInteger(0)
-    @Volatile private var recognizer: SpeechRecognizer? = null
+    @Volatile private var voskModel: Model? = null
+    @Volatile private var speechService: SpeechService? = null
     @Volatile private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
     @Volatile private var listeningEnabled = false
@@ -80,114 +83,38 @@ class OfflineVoiceAssistant(
     fun refreshRecognition(onReady: (() -> Unit)? = null) {
         if (released) return
         main.post {
-            restartRunnable?.let { main.removeCallbacks(it) }
-            restartRunnable = null
-            recognitionSessionActive = false
-            try { recognizer?.cancel() } catch (_: Exception) {}
-            try { recognizer?.destroy() } catch (_: Exception) {}
-            recognizer = null
-            recognitionAvailable = false
-            recognizerInitialized = false
             initCallback = onReady
-            initializeRecognizer()
+            recognitionAvailable = voskModel != null
+            recognizerInitialized = recognitionAvailable
+            finishInitializationIfReady()
         }
     }
 
     private fun initializeRecognizer() {
+        status("Seyfi Usta'nın Türkçe çevrimdışı modeli yükleniyor...")
         try {
-            // Önce gerçek cihaz içi tanıyıcıyı kullan. MIUI/Google sağlayıcısı
-            // bu API'yi sunmuyorsa standart Android tanıyıcıya düş; istekte
-            // EXTRA_PREFER_OFFLINE=true gönderilir ve çevrimdışı model tercih edilir.
-            // Eski kod yalnızca özel API'yi kabul ettiği için MIUI cihazlarda
-            // servis görünmediğinde mikrofonu tamamen kapatıyordu.
-            val hasOnDeviceRecognizer =
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
-                    SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
-            val hasSystemRecognizer = SpeechRecognizer.isRecognitionAvailable(activity)
-            if (!hasOnDeviceRecognizer && !hasSystemRecognizer) {
-                recognitionAvailable = false
-                status("Telefonda kullanılabilir konuşma tanıma servisi bulunamadı.")
-                recognizerInitialized = true
-                finishInitializationIfReady()
-                return
-            }
-            recognizer?.destroy()
-            val speechEngine = if (hasOnDeviceRecognizer) {
-                recognitionAvailable = true
-                status("Cihaz içi Türkçe konuşma tanıma servisi seçildi.")
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
-            } else {
-                recognitionAvailable = true
-                status("Android konuşma servisi seçildi. Çevrimdışı tanıma tercihi etkin; Türkçe çevrimdışı model gerekir.")
-                SpeechRecognizer.createSpeechRecognizer(activity)
-            }
-            recognizer = speechEngine.also { speech ->
-                speech.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: android.os.Bundle?) {
-                        recognitionSessionActive = true
-                        restartCount = 0
-                        status("Seyfi Usta mikrofonu dinliyor (Türkçe).")
-                    }
-                    override fun onBeginningOfSpeech() { status("Seyfi Usta konuşmanızı dinliyor.") }
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() { status("Konuşma alındı, metne çevriliyor.") }
-                    override fun onError(error: Int) {
-                        recognitionSessionActive = false
-                        if (released || processing || speaking) return
-                        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                            status("Konuşma tanıyıcı meşgul kaldı. Oturum yenileniyor...")
-                            resetRecognizerAfterBusy()
-                            return
-                        }
-                        val message = when (error) {
-                            SpeechRecognizer.ERROR_NETWORK,
-                            SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
-                                "Konuşma servisi çevrimdışı tanımayı tamamlayamadı. Telefonda Türkçe çevrimdışı dil paketi gerekli olabilir."
-                            SpeechRecognizer.ERROR_NO_MATCH -> "Söylenen ifade anlaşılamadı; tekrar dinliyorum."
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Ses algılanmadı; tekrar dinliyorum."
-                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Mikrofon izni verilmedi."
-                            SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
-                            SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
-                                "Telefonda Türkçe cihaz içi konuşma modeli yüklü değil veya bu servis Türkçeyi desteklemiyor."
-                            else -> "Konuşma tanıma hatası: $error. Yeniden deniyorum."
-                        }
-                        status(message)
-                        scheduleRestart()
-                    }
-                    override fun onResults(results: android.os.Bundle?) {
-                        recognitionSessionActive = false
-                        if (released || processing || speaking) return
-                        val text = results
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()
-                            ?.trim()
-                            .orEmpty()
-                        if (text.isNotBlank()) {
-                            status("Seyfi Usta duydu: $text")
-                            try { onRecognized(text) } catch (e: Exception) {
-                                Log.e("SeyfiVoice", "Tanınan metin aktarılamadı", e)
-                            }
-                        } else status("Konuşma metne çevrilemedi.")
-                        scheduleRestart(250)
-                    }
-                    override fun onPartialResults(partialResults: android.os.Bundle?) {
-                        val partial = partialResults
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull().orEmpty()
-                        if (partial.isNotBlank()) status("Seyfi Usta duyuyor: $partial")
-                    }
-                    override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+            StorageService.unpack(activity, "model-tr", "model-tr",
+                { loaded ->
+                    if (released) { loaded.close(); return@unpack }
+                    voskModel?.close()
+                    voskModel = loaded
+                    recognitionAvailable = true
+                    recognizerInitialized = true
+                    status("Türkçe çevrimdışı ses modeli hazır. İnternet veya telefon konuşma servisi kullanılmıyor.")
+                    finishInitializationIfReady()
+                },
+                { error ->
+                    recognitionAvailable = false
+                    recognizerInitialized = true
+                    status("Türkçe çevrimdışı model yüklenemedi: ${error.message}")
+                    finishInitializationIfReady()
                 })
-            }
-            recognizerInitialized = true
-            status("Seyfi Usta konuşma servisi hazır. Çevrimdışı tanıma tercihi etkin.")
         } catch (e: Exception) {
             recognitionAvailable = false
             recognizerInitialized = true
-            status("Konuşma tanıma başlatılamadı: ${e.message}")
+            status("Türkçe çevrimdışı model başlatılamadı: ${e.message}")
+            finishInitializationIfReady()
         }
-        finishInitializationIfReady()
     }
 
     private fun initializeTts() {
@@ -290,30 +217,59 @@ class OfflineVoiceAssistant(
     private fun startListeningInternal(delayMs: Long = 0) {
         main.postDelayed({
             if (released || !listeningEnabled || processing || speaking) return@postDelayed
-            val speech = recognizer
-            if (speech == null || !recognitionAvailable) {
-                status("Mikrofon dinlemesi kullanılamıyor; Android konuşma servisini kontrol edin.")
+            val model = voskModel
+            if (model == null) {
+                status("Türkçe çevrimdışı ses modeli henüz hazır değil.")
                 return@postDelayed
             }
-            if (recognitionSessionActive) return@postDelayed
             try {
-                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "tr-TR")
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.packageName)
+                speechService?.let {
+                    it.setPause(false)
+                    recognitionSessionActive = true
+                    status("Seyfi Usta çevrimdışı Türkçe dinliyor.")
+                    return@postDelayed
                 }
+                val rec = Recognizer(model, 16000.0f)
+                val service = SpeechService(rec, 16000.0f)
+                speechService = service
                 recognitionSessionActive = true
-                speech.startListening(intent)
+                service.startListening(object : org.vosk.android.RecognitionListener {
+                    override fun onResult(hypothesis: String?) { deliverVoskResult(hypothesis) }
+                    override fun onPartialResult(hypothesis: String?) {
+                        val partial = parseVoskText(hypothesis)
+                        if (partial.isNotBlank()) status("Seyfi Usta duyuyor: $partial")
+                    }
+                    override fun onFinalResult(hypothesis: String?) { deliverVoskResult(hypothesis) }
+                    override fun onError(exception: Exception?) {
+                        recognitionSessionActive = false
+                        status("Çevrimdışı mikrofon hatası: ${exception?.message ?: "bilinmeyen hata"}")
+                        scheduleRestart(900)
+                    }
+                    override fun onTimeout() { recognitionSessionActive = false; scheduleRestart(300) }
+                })
+                status("Seyfi Usta çevrimdışı Türkçe dinliyor.")
             } catch (e: Exception) {
                 recognitionSessionActive = false
-                status("Mikrofon dinlemesi başlatılamadı: ${e.message}")
-                scheduleRestart()
+                status("Çevrimdışı mikrofon başlatılamadı: ${e.message}")
+                scheduleRestart(1200)
             }
         }, delayMs)
+    }
+
+    private fun parseVoskText(json: String?): String {
+        if (json.isNullOrBlank()) return ""
+        return try { JSONObject(json).optString("text", "").trim() } catch (_: Exception) { "" }
+    }
+
+    private fun deliverVoskResult(json: String?) {
+        if (released || processing || speaking) return
+        val heard = parseVoskText(json)
+        if (heard.isNotBlank()) {
+            status("Seyfi Usta duydu: $heard")
+            try { onRecognized(heard) } catch (e: Exception) {
+                Log.e("SeyfiVoice", "Tanınan metin aktarılamadı", e)
+            }
+        }
     }
 
     /** ERROR_RECOGNIZER_BUSY sonrası aynı SpeechRecognizer örneğini zorlamayız. */
@@ -358,8 +314,7 @@ class OfflineVoiceAssistant(
         main.post {
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
-            recognitionSessionActive = false
-            try { recognizer?.cancel() } catch (_: Exception) {}
+            try { speechService?.setPause(true) } catch (_: Exception) {}
         }
     }
 
@@ -369,8 +324,8 @@ class OfflineVoiceAssistant(
         main.post {
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
+            try { speechService?.setPause(true) } catch (_: Exception) {}
             recognitionSessionActive = false
-            try { recognizer?.cancel() } catch (_: Exception) {}
         }
     }
 
@@ -460,10 +415,11 @@ class OfflineVoiceAssistant(
         main.post {
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
-            recognitionSessionActive = false
-            try { recognizer?.cancel() } catch (_: Exception) {}
-            try { recognizer?.destroy() } catch (_: Exception) {}
-            recognizer = null
+            try { speechService?.stop() } catch (_: Exception) {}
+            try { speechService?.shutdown() } catch (_: Exception) {}
+            speechService = null
+            try { voskModel?.close() } catch (_: Exception) {}
+            voskModel = null
             try { tts?.stop(); tts?.shutdown() } catch (_: Exception) {}
             tts = null
         }
