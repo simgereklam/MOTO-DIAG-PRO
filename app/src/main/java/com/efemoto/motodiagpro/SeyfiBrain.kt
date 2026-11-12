@@ -107,9 +107,10 @@ class SeyfiBrain(context: Context) {
             q.contains("iyi misin") || q.contains("nasil gidiyor")
         ) return "İyiyim usta, teşekkür ederim. Sen nasılsın? Bugün nasıl gidiyor?"
 
-        if (q.contains("sohbet edebiliyor musun") || q.contains("sohbet edebilir misin") ||
+        if ((q.contains("sohbet") && (q.contains("edebiliyor") || q.contains("edebilir") ||
+                q.contains("edebiliyormusun") || q.contains("edebilirmiyiz") || q.contains("edelim"))) ||
             q.contains("konusabiliyor musun") || q.contains("seninle sohbet") ||
-            q.contains("sohbet edelim") || q.contains("biraz konusalim")
+            q.contains("biraz konusalim")
         ) return "Elbette usta, seninle sohbet edebilirim. ECU'ya bağlı olmamız gerekmiyor. İstersen birlikte adım adım ilerleyelim. Sen nasılsın, bugün nasıl gidiyor?"
 
         if (q.contains("ben iyiyim") || q.contains("iyiyim") || q.contains("fena degilim"))
