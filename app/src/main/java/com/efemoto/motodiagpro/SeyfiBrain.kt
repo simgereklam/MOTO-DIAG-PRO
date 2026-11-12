@@ -91,8 +91,26 @@ class SeyfiBrain(context: Context) {
             codePattern.findAll(question).map { it.value.uppercase(Locale.US) } +
                 ecuFaults.flatMap { raw -> codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList() }
         ).distinct().take(12).toList()
-        if (q.contains("merhaba") || q == "selam" || q.contains("nasilsin"))
-            return "İyiyim usta, hazırım. ECU bağlantısı varsa canlı verileri birlikte değerlendirebiliriz."
+        if (q.contains("merhaba") || q == "selam" || q.contains("nasilsin") ||
+            q.contains("ne haber") || q.contains("gunaydin") || q.contains("iyi aksamlar") ||
+            q.contains("iyi geceler")
+        ) return "İyiyim usta, buradayım. İstersen biraz sohbet edelim, istersen motosikletinle ilgili bir konuyu birlikte inceleyelim."
+
+        if (q.contains("tesekkur") || q == "sag ol" || q == "eyvallah")
+            return "Rica ederim usta. Başka merak ettiğin bir şey varsa sor, dinliyorum."
+
+        if (q.contains("sen kimsin") || q.contains("kimsin") || q.contains("kendini tanit"))
+            return "Ben Seyfi Usta. Motosiklet arıza kodlarını, gerçek ECU verilerini ve güvenli kontrol adımlarını açıklamak için buradayım. Ayrıca günlük konuşabiliriz."
+
+        if (q.contains("sohbet edelim") || q.contains("biraz konusalim"))
+            return "Olur usta, buradayım. Motosiklet konuşabiliriz ya da aklına takılan başka bir konuyu sorabilirsin."
+
+        if (q.contains("beni anliyor musun") || q.contains("sesim geliyor mu"))
+            return "Sesin bana metin olarak ulaştı usta. Bir cümle daha söyle; doğru algılayıp algılamadığımı birlikte kontrol edelim."
+
+        if (q.contains("biraz daha anlat") || q.contains("detaylandir") ||
+            q.contains("bunu acikla") || q == "devam et"
+        ) return "Tabii usta. Önceki konuyu biraz daha açmam için hangi bölümünü merak ettiğini söyle; adım adım anlatayım."
         if (q.contains("ne yapabilirsin") || q == "yardim" || q.contains("neler yapabilirsin"))
             return "Gerçek ECU arıza kodlarını, desteklenen canlı sensör verilerini ve test sonuçlarını değerlendirebilirim. Ölçülmeyen değeri uydurmam; doğrulanmamış parçayı kesin arızalı ilan etmem."
         if (q.contains("baglanti") && (q.contains("durum") || q.contains("bagli mi")))
@@ -119,7 +137,7 @@ class SeyfiBrain(context: Context) {
             append("Bu kayıtlar belirti eşleşmesidir; kesin teşhis değildir.")
         }
         if (!ecuConnected)
-            return "Seni anladım usta. Doğru değerlendirme için motosikletin marka, model ve yılını; belirtinin ne zaman oluştuğunu bilmem gerekiyor. ECU bağlı değilken canlı ölçüm varmış gibi konuşmayacağım."
+            return "Anladım usta. Şu an ECU bağlantısı olmadığı için ölçüm yapamam ama konuşabiliriz. Motosiklette ne yaşıyorsun: çalışmama, tekleme, stop etme, çekiş düşüklüğü, hararet ya da başka bir belirti mi? Birlikte adım adım ilerleyelim."
         return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
