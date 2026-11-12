@@ -124,12 +124,18 @@ class SeyfiBrain(context: Context) {
         val codePattern = Regex("\\b(?:[PBCU][0-9A-F]{4}|[0-9]{2}(?:_ABS)?)\\b", RegexOption.IGNORE_CASE)
         // ECU strings may contain display suffixes such as "P0335 • KAYITLI".
         // Extract only the actual DTC before looking it up.
-        val codes = (
-            codePattern.findAll(codeInput).map { it.value.uppercase(Locale.US) } +
-                ecuFaults.flatMap { raw -> codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList() }
-        ).distinct().take(12).toList()
-        // Arıza kodu sorusu bütün sohbet/model sezgisinden önce çözülür.
-        // Böylece "P0335 nedir?" asla rastgele bir parça/immobilizer cevabına düşmez.
+        val questionCodes = codePattern.findAll(codeInput)
+            .map { it.value.uppercase(Locale.US) }.toList()
+        val asksAboutCurrentFaults = listOf("ariza", "hata kod", "dtc", "ecu kod")
+            .any { q.contains(it) }
+        val storedEcuCodes = if (asksAboutCurrentFaults) {
+            ecuFaults.flatMap { raw ->
+                codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList()
+            }
+        } else emptyList()
+        val codes = (questionCodes + storedEcuCodes).distinct().take(12)
+        // Önce kullanıcının açıkça sorduğu kodu, sonra yalnızca arıza istediğinde
+        // son ECU taramasındaki kodları açıkla. Normal sohbeti kayıtlı DTC kesmesin.
         if (codes.isNotEmpty()) {
             return explainCodes(codes, activeVehicleProfile.takeIf { it.isNotBlank() })
         }
