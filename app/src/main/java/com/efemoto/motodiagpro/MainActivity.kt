@@ -395,23 +395,34 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        // Ayrı DTC soru modu: Seyfi yalnızca kullanıcının söylediği kodu yerel veri tabanında arar.
-        val normalizedDtcPrompt = commandInput.lowercase(Locale("tr", "TR"))
+        // Konuşma tanıma metni yukarıda ASCII/Türkçe sadeleştirmeden geçtiği için
+        // "sorcam", "soracağım", "sorucam" gibi günlük söyleyişleri de yakala.
+        val normalizedDtcPrompt = commandInput.lowercase(Locale.US)
         val asksToGiveDtcCode = normalizedDtcPrompt.contains("ariza kodu") &&
-            listOf("soracagim", "soracagim", "verecegim", "soyleyecegim", "soracagim").any { normalizedDtcPrompt.contains(it) }
+            Regex("\\b(sor|ver|soyle|oku)[a-z]*\\b").containsMatchIn(normalizedDtcPrompt)
         if (asksToGiveDtcCode) {
             seyfiAwaitingCommand = true
             seyfiAwaitingDtcCode = true
+            log("DTC SORU MODU AÇILDI • ifade: $commandInput")
             appendSeyfiConversation("SİZ", commandInput)
-            appendSeyfiConversation("SEYFİ USTA", "Tamam usta, arıza kodunu söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım.")
-            assistant.speak("Tamam usta, arıza kodunu söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım.")
+            val prompt = "Tamam usta, dinliyorum. Arıza kodunu harfi ve rakamlarıyla söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım."
+            appendSeyfiConversation("SEYFİ USTA", prompt)
+            assistant.speak(prompt)
             return
         }
 
         fun extractSpokenDtc(value: String): String? {
-            var input = value.lowercase(Locale("tr", "TR"))
+            var input = value.lowercase(Locale.US)
+                .replace("ı", "i").replace("ş", "s").replace("ğ", "g")
+                .replace("ü", "u").replace("ö", "o").replace("ç", "c")
+            // Konuşma motoru P harfini bazen "pe" olarak yazıya döker.
+            input = input.replace(Regex("\\bpe\\b"), "p")
+                .replace(Regex("\\bbe\\b"), "b")
+                .replace(Regex("\\bce\\b"), "c")
+                .replace(Regex("\\byu\\b"), "u")
             val digits = mapOf("sifir" to "0", "bir" to "1", "iki" to "2", "uc" to "3", "dort" to "4", "bes" to "5", "alti" to "6", "yedi" to "7", "sekiz" to "8", "dokuz" to "9")
             digits.forEach { (word, digit) -> input = input.replace(Regex("\\b" + word + "\\b"), digit) }
+            // "P 0 3 3 5", "P sıfır üç üç beş" ve "P0335" biçimlerini tek koda dönüştür.
             input = input.replace(Regex("\\b([pbcu])\\s+([0-9a-f](?:\\s+[0-9a-f]){3})\\b")) { match ->
                 match.groupValues[1] + match.groupValues[2].replace(Regex("\\s+"), "")
             }
