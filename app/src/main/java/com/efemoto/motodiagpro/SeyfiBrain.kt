@@ -22,6 +22,17 @@ class SeyfiBrain(context: Context) {
     @Volatile private var activeVehicleProfile: String = ""
     @Volatile private var diagnosticPlanContext = "Henüz teşhis planı oluşturulmadı."
     @Volatile private var latestDiagnosticTestResult = "Henüz salt-okunur test sonucu alınmadı."
+    private val conversationPrefs = appContext.getSharedPreferences("seyfi_conversation", Context.MODE_PRIVATE)
+    @Volatile private var pendingSymptom = conversationPrefs.getString("pending_symptom", "").orEmpty()
+    init { activeVehicleProfile = conversationPrefs.getString("vehicle_profile", "").orEmpty() }
+    private fun saveVehicleProfile(value: String) { activeVehicleProfile = value.trim().take(100); conversationPrefs.edit().putString("vehicle_profile", activeVehicleProfile).apply() }
+    private fun rememberPendingSymptom(value: String) { pendingSymptom = value.take(250); conversationPrefs.edit().putString("pending_symptom", pendingSymptom).apply() }
+    private fun detectVehicleMention(q: String): String? {
+        val models = listOf("mt 07" to "Yamaha MT-07", "mt07" to "Yamaha MT-07", "mt 09" to "Yamaha MT-09", "mt09" to "Yamaha MT-09", "mt 25" to "Yamaha MT-25", "mt25" to "Yamaha MT-25", "mt 03" to "Yamaha MT-03", "mt03" to "Yamaha MT-03", "nmax" to "Yamaha NMAX", "xmax" to "Yamaha XMAX", "tmax" to "Yamaha TMAX", "r25" to "Yamaha R25", "tracer 7" to "Yamaha Tracer 7", "tracer 9" to "Yamaha Tracer 9", "nc750" to "Honda NC750", "nc 750" to "Honda NC750", "pcx" to "Honda PCX", "z650" to "Kawasaki Z650", "sv650" to "Suzuki SV650")
+        val found = models.firstOrNull { (key, _) -> Regex("(^| )" + Regex.escape(key) + "($| )").containsMatchIn(q) }?.second ?: return null
+        val year = Regex("\\b(19[89]\\d|20[0-3]\\d)\\b").find(q)?.value
+        return if (year != null) "$found $year" else found
+    }
 
     private fun normalize(value: String): String =
         java.text.Normalizer.normalize(value.lowercase(Locale("tr", "TR")), java.text.Normalizer.Form.NFD)
@@ -36,7 +47,7 @@ class SeyfiBrain(context: Context) {
     fun isReady(): Boolean = ready
 
     fun updateVehicleProfile(modelYear: String) {
-        activeVehicleProfile = modelYear.trim().take(100)
+        if (modelYear.isNotBlank()) saveVehicleProfile(modelYear)
     }
 
     fun updateDiagnosticTestResult(result: String) {
@@ -115,16 +126,27 @@ class SeyfiBrain(context: Context) {
             return "Gerçek ECU arıza kodlarını, desteklenen canlı sensör verilerini ve test sonuçlarını değerlendirebilirim. Ölçülmeyen değeri uydurmam; doğrulanmamış parçayı kesin arızalı ilan etmem."
         if (q.contains("baglanti") && (q.contains("durum") || q.contains("bagli mi")))
             return if (ecuConnected) "ECU bağlantısı aktif. Son alınan ${ecuValues.size} ölçüm değeri mevcut." else "ECU bağlantısı yok. Viecar VP002 WiFi bağlantısını ve motosiklet adaptör kablosunu kontrol edelim."
-        val modelHint = when {
-            q.contains("nmax") -> "NMAX 155"
-            q.contains("xmax") -> "XMAX 300"
-            q.contains("mt 07") || q.contains("mt07") -> "MT-07"
-            q.contains("mt 09") || q.contains("mt09") -> "MT-09"
-            else -> activeVehicleProfile.takeIf { it.isNotBlank() }
+        val mentionedVehicle = detectVehicleMention(q)
+        if (mentionedVehicle != null) {
+            saveVehicleProfile(mentionedVehicle)
+            if (pendingSymptom.isNotBlank()) {
+                rememberPendingSymptom("")
+                return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Önceki şikâyetini bu modele göre değerlendireceğim. Tekleme soğuk motorda mı, ısınınca mı, yoksa gaz verince mi oluyor?"
+            }
+            return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Bundan sonraki arıza sorularını bu model üzerinden değerlendireceğim."
         }
+        val modelHint = activeVehicleProfile.takeIf { it.isNotBlank() }
         if (codes.isNotEmpty()) return explainCodes(codes, modelHint)
-        if (listOf("canli", "sensor", "veri", "motor durumu", "analiz", "yorumla", "degerlendir").any { q.contains(it) })
-            return analyzeValues()
+        if (listOf("canli", "sensor", "veri", "motor durumu", "analiz", "yorumla", "degerlendir").any { q.contains(it) }) return analyzeValues()
+        val symptomTerms = listOf("tekleme", "tekliyor", "calismiyor", "stop ediyor", "stop etme", "cekis dusuk", "gaz yemiyor", "gec calisiyor", "zor calisiyor", "hararet", "isinma", "titresim", "duman atiyor", "yakit tuketimi", "rolanti")
+        if (symptomTerms.any { q.contains(it) } && modelHint == null) {
+            rememberPendingSymptom(question)
+            return "Önce motosikletini netleştirelim usta. Marka ve model nedir? Mümkünse model yılını da söyle. Modeli öğrenince bu şikâyeti ona göre değerlendireceğim."
+        }
+        if (symptomTerms.any { q.contains(it) } && modelHint != null) {
+            val scoped = YamahaKnowledgeBase.search(appContext, question, limit = 3, model = modelHint)
+            if (scoped.isEmpty()) return "$modelHint için bu belirtiye ait doğrulanmış model özelinde kaydım yok. Başka modelin arızasını buna uyarlamayacağım. Tekleme hangi koşulda oluyor?"
+        }
         val matches = YamahaKnowledgeBase.search(appContext, question, limit = 3, model = modelHint)
         if (matches.isNotEmpty()) return buildString {
             append("Usta, yerel servis bilgi bankasında şu referansları buldum: ")
