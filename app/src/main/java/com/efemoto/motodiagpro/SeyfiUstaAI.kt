@@ -13,8 +13,21 @@ class SeyfiUstaAI(
     private val voice = OfflineVoiceAssistant(
         activity = activity,
         onRecognized = { text ->
-            try { onCommandRecognized(text) } catch (e: Exception) {
-                Log.e(TAG, "Sesli komut aktarılamadı", e)
+            // Vosk sonuçları kendi ses iş parçacığında bildirir. Ekran değiştirme,
+            // Toast ve teşhis komutları Android ana UI iş parçacığında yürümelidir.
+            // Aksi halde mikrofon metni gösterir ama komut ekranı açılmaz.
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                try {
+                    onCommandRecognized(text)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Sesli komut ana arayüzde çalıştırılamadı: $text", e)
+                    android.widget.Toast.makeText(
+                        activity,
+                        "Seyfi komutu çalıştıramadı: ${e.message ?: "beklenmeyen hata"}",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         },
         onStatus = { status ->
