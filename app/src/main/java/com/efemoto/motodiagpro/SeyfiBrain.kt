@@ -24,9 +24,17 @@ class SeyfiBrain(context: Context) {
     @Volatile private var latestDiagnosticTestResult = "Henüz salt-okunur test sonucu alınmadı."
     private val conversationPrefs = appContext.getSharedPreferences("seyfi_conversation", Context.MODE_PRIVATE)
     @Volatile private var pendingSymptom = conversationPrefs.getString("pending_symptom", "").orEmpty()
+    @Volatile private var pendingVehicleBrand = conversationPrefs.getString("pending_vehicle_brand", "").orEmpty()
     init { activeVehicleProfile = conversationPrefs.getString("vehicle_profile", "").orEmpty() }
     private fun saveVehicleProfile(value: String) { activeVehicleProfile = value.trim().take(100); conversationPrefs.edit().putString("vehicle_profile", activeVehicleProfile).apply() }
     private fun rememberPendingSymptom(value: String) { pendingSymptom = value.take(250); conversationPrefs.edit().putString("pending_symptom", pendingSymptom).apply() }
+    private fun rememberVehicleBrand(value: String) { pendingVehicleBrand = value.trim().take(40); conversationPrefs.edit().putString("pending_vehicle_brand", pendingVehicleBrand).apply() }
+    private fun detectBrandMention(q: String): String? {
+        val brands = listOf("yamaha", "honda", "kawasaki", "suzuki", "ktm", "bmw", "ducati", "triumph", "bajaj", "tvs", "cf moto", "cfmoto", "aprilia", "piaggio", "sym", "kymco", "royal enfield", "benelli", "mondial", "rks", "kanuni")
+        return brands.firstOrNull { brand ->
+            Regex("(^| )" + Regex.escape(brand) + "($| )").containsMatchIn(q)
+        }?.uppercase(Locale("tr", "TR"))
+    }
     private fun detectVehicleMention(q: String): String? {
         val models = listOf("mt 07" to "Yamaha MT-07", "mt07" to "Yamaha MT-07", "mt 09" to "Yamaha MT-09", "mt09" to "Yamaha MT-09", "mt 25" to "Yamaha MT-25", "mt25" to "Yamaha MT-25", "mt 03" to "Yamaha MT-03", "mt03" to "Yamaha MT-03", "nmax" to "Yamaha NMAX", "xmax" to "Yamaha XMAX", "tmax" to "Yamaha TMAX", "r25" to "Yamaha R25", "tracer 7" to "Yamaha Tracer 7", "tracer 9" to "Yamaha Tracer 9", "nc750" to "Honda NC750", "nc 750" to "Honda NC750", "pcx" to "Honda PCX", "z650" to "Kawasaki Z650", "sv650" to "Suzuki SV650")
         val found = models.firstOrNull { (key, _) -> Regex("(^| )" + Regex.escape(key) + "($| )").containsMatchIn(q) }?.second ?: return null
@@ -105,10 +113,12 @@ class SeyfiBrain(context: Context) {
         // Günlük sohbet, ECU bağlantısından bağımsız ele alınır.
         // Önce kullanıcının kendi hâlini bildirdiğini yakala: "iyiyim, sen nasılsın"
         // cümlesindeki nasılsın kelimesi Seyfi'nin aynı soruyu tekrar ettirmemeli.
-        if (q.contains("iyiyim") || q.contains("fena degilim") ||
+        if (q.contains("iyiyim") || q.contains("iyi yim") || q == "iyi" ||
+            q.contains("ben iyiyim") || q.contains("fena degilim") ||
             q.contains("iyi sayilirim") || q.contains("sukur iyiyim") ||
-            q.contains("gayet iyiyim") || q.contains("keyfim yerinde")
-        ) return "Oh, iyi olmana sevindim usta. Bugün ne konuşalım? Aklında bir konu varsa anlat, seni dinliyorum."
+            q.contains("gayet iyiyim") || q.contains("keyfim yerinde") ||
+            q.contains("iyilik") || q.contains("sagligim yerinde")
+        ) return "Oh, iyi olmana sevindim usta. Ben de buradayım, seninle sohbet ediyorum. Bugün neler yapıyorsun?"
 
         if (q.contains("kotu") && (q.contains("hissediyorum") || q.contains("gunum") || q.contains("keyfim")))
             return "Üzüldüm usta. İstersen anlat, seni dinliyorum. Belki birlikte biraz olsun çözüm bulabiliriz."
@@ -148,12 +158,21 @@ class SeyfiBrain(context: Context) {
             return if (ecuConnected) "ECU bağlantısı aktif. Son alınan ${ecuValues.size} ölçüm değeri mevcut." else "ECU bağlantısı yok. Viecar VP002 WiFi bağlantısını ve motosiklet adaptör kablosunu kontrol edelim."
         val mentionedVehicle = detectVehicleMention(q)
         if (mentionedVehicle != null) {
-            saveVehicleProfile(mentionedVehicle)
+            val spokenYear = Regex("\\b(19[89]\\d|20[0-3]\\d)\\b").find(q)?.value
+            val normalizedVehicle = if (spokenYear != null && !mentionedVehicle.contains(spokenYear)) "$mentionedVehicle $spokenYear" else mentionedVehicle
+            saveVehicleProfile(normalizedVehicle)
+            rememberVehicleBrand("")
             if (pendingSymptom.isNotBlank()) {
+                val symptom = pendingSymptom
                 rememberPendingSymptom("")
-                return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Önceki şikâyetini bu modele göre değerlendireceğim. Tekleme soğuk motorda mı, ısınınca mı, yoksa gaz verince mi oluyor?"
+                return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Şikâyetin şu: $symptom. Şimdi adım adım bakalım. Belirti motor soğukken mi, ısınınca mı, gaz verince mi ortaya çıkıyor?"
             }
-            return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Bundan sonraki arıza sorularını bu model üzerinden değerlendireceğim."
+            return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. İstersen model yılını da söyle; sonraki değerlendirmede doğru servis bilgilerini seçeyim."
+        }
+        val mentionedBrand = detectBrandMention(q)
+        if (mentionedBrand != null) {
+            rememberVehicleBrand(mentionedBrand)
+            return "$mentionedBrand olduğunu anladım usta. Motosikletinin tam modeli nedir? Model adını ve varsa model yılını söyle."
         }
         val modelHint = activeVehicleProfile.takeIf { it.isNotBlank() }
         if (codes.isNotEmpty()) return explainCodes(codes, modelHint)
@@ -161,7 +180,7 @@ class SeyfiBrain(context: Context) {
         val symptomTerms = listOf("tekleme", "tekliyor", "calismiyor", "stop ediyor", "stop etme", "cekis dusuk", "gaz yemiyor", "gec calisiyor", "zor calisiyor", "hararet", "isinma", "titresim", "duman atiyor", "yakit tuketimi", "rolanti")
         if (symptomTerms.any { q.contains(it) } && modelHint == null) {
             rememberPendingSymptom(question)
-            return "Önce motosikletini netleştirelim usta. Marka ve model nedir? Mümkünse model yılını da söyle. Modeli öğrenince bu şikâyeti ona göre değerlendireceğim."
+            return "Tamam usta, şikâyetini not ettim: $question. Önce motosikletini tanıyalım. Markası nedir? Ardından tam modelini ve model yılını soracağım; sonra kontrolleri tek tek yapacağız."
         }
         if (symptomTerms.any { q.contains(it) } && modelHint != null) {
             val scoped = YamahaKnowledgeBase.search(appContext, question, limit = 3, model = modelHint)
@@ -179,7 +198,7 @@ class SeyfiBrain(context: Context) {
             append("Bu kayıtlar belirti eşleşmesidir; kesin teşhis değildir.")
         }
         if (!ecuConnected)
-            return "Anladım usta. Şu an ECU'ya bağlı değilim; bu yüzden gerçek ölçüm yapamam. Ama sohbet edebilir, genel bilgi verebilir ve bir arıza anlatırsan önce motosikletinin marka-modelini öğrenip adım adım ilerleyebilirim. Seni dinliyorum."
+            return "Buradayım usta, seni dinliyorum. Bunu biraz daha açar mısın? Motosikletle ilgiliyse marka ve modelini söyle; değilse konuyu anlat, birlikte konuşalım."
         return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
