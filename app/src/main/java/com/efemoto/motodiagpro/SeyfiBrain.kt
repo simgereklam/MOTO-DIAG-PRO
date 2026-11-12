@@ -85,7 +85,12 @@ class SeyfiBrain(context: Context) {
     private fun reason(question: String): String {
         val q = normalize(question)
         val codePattern = Regex("\\b(?:P[0-9A-F]{4}|[0-9]{2}(?:_ABS)?)\\b", RegexOption.IGNORE_CASE)
-        val codes = (codePattern.findAll(question).map { it.value.uppercase(Locale.US) } + ecuFaults).distinct().take(12).toList()
+        // ECU strings may contain display suffixes such as "P0335 • KAYITLI".
+        // Extract only the actual DTC before looking it up.
+        val codes = (
+            codePattern.findAll(question).map { it.value.uppercase(Locale.US) } +
+                ecuFaults.flatMap { raw -> codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList() }
+        ).distinct().take(12).toList()
         if (q.contains("merhaba") || q == "selam" || q.contains("nasilsin"))
             return "İyiyim usta, hazırım. ECU bağlantısı varsa canlı verileri birlikte değerlendirebiliriz."
         if (q.contains("ne yapabilirsin") || q == "yardim" || q.contains("neler yapabilirsin"))
