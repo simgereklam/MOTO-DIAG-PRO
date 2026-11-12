@@ -87,10 +87,17 @@ class SeyfiBrain(context: Context) {
             return "Gerçek ECU arıza kodlarını, desteklenen canlı sensör verilerini ve test sonuçlarını değerlendirebilirim. Ölçülmeyen değeri uydurmam; doğrulanmamış parçayı kesin arızalı ilan etmem."
         if (q.contains("baglanti") && (q.contains("durum") || q.contains("bagli mi")))
             return if (ecuConnected) "ECU bağlantısı aktif. Son alınan ${ecuValues.size} ölçüm değeri mevcut." else "ECU bağlantısı yok. Viecar VP002 WiFi bağlantısını ve motosiklet adaptör kablosunu kontrol edelim."
-        if (codes.isNotEmpty()) return explainCodes(codes)
+        val modelHint = when {
+            q.contains("nmax") -> "NMAX 155"
+            q.contains("xmax") -> "XMAX 300"
+            q.contains("mt 07") || q.contains("mt07") -> "MT-07"
+            q.contains("mt 09") || q.contains("mt09") -> "MT-09"
+            else -> null
+        }
+        if (codes.isNotEmpty()) return explainCodes(codes, modelHint)
         if (listOf("canli", "sensor", "veri", "motor durumu", "analiz", "yorumla", "degerlendir").any { q.contains(it) })
             return analyzeValues()
-        val matches = YamahaKnowledgeBase.search(appContext, question, limit = 3)
+        val matches = YamahaKnowledgeBase.search(appContext, question, limit = 3, model = modelHint)
         if (matches.isNotEmpty()) return buildString {
             append("Usta, yerel servis bilgi bankasında şu referansları buldum: ")
             matches.forEach { record ->
@@ -106,14 +113,17 @@ class SeyfiBrain(context: Context) {
         return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
-    private fun explainCodes(codes: List<String>): String = buildString {
+    private fun explainCodes(codes: List<String>, model: String? = null): String = buildString {
         append("Arıza kodlarını inceliyorum. ")
         codes.forEach { code ->
-            val record = YamahaKnowledgeBase.find(appContext, code)
+            val record = YamahaKnowledgeBase.find(appContext, code, model)
             if (record != null) {
                 append("$code: ${record.title}. ${record.description} ")
                 if (record.possibleCauses.isNotEmpty()) append("Olası nedenler: ${record.possibleCauses.take(4).joinToString("; ")}. ")
                 if (record.checks.isNotEmpty()) append("Kontrol sırası: ${record.checks.take(4).joinToString("; ")}. ")
+                if (record.models.isNotEmpty()) {
+                    append("Bu açıklama ${record.models.joinToString()} ${record.years.joinToString()} için servis kılavuzuyla doğrulanmıştır; diğer modellere genellenemez. ")
+                }
                 append("Doğrulama: ${record.verification}. ")
             } else {
                 val title = DtcDatabase.title(code)
