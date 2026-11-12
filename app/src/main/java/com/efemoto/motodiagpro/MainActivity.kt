@@ -516,11 +516,16 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.SHOW_HELP -> assistant.speak(
-                "Ben Seyfi Usta. Gerçek ECU arıza taraması başlatabilir, kayıtlı arızaları okuyup açıklayabilir, " +
-                    "onayınızla arıza kodlarını silebilir, canlı sensör verilerini gösterebilir, motor devri, " +
-                    "hararet, akü voltajı, gaz konumu ve manifold basıncını söyleyebilir, bağlantıyı kontrol edebilir, " +
-                    "hata dökümünü açabilir, sistem testlerini çalıştırabilir ve servis raporu hazırlayabilirim. " +
-                    "ECU bağlı değilse gerçek ölçüm varmış gibi konuşmam. Örnek komutlar: hata dökümü, canlı veri, test yap, ana sayfa."
+                "Usta, uygulamadaki bölümleri sesinle açabilirsin. Ana sayfa için ana sayfa de. " +
+                    "Gerçek ECU taraması için arıza taramasını başlat de. Arıza kodları için arıza kodlarını incele, " +
+                    "kod aramak için arıza kodu ara, silmek için arızaları sil de; silme öncesi onay isterim. " +
+                    "Canlı sensör ekranı için canlı veri, motor devri için RPM, sıcaklık için hararet, " +
+                    "akü için voltaj, gaz kelebeği için TPS, emme basıncı için MAP diyebilirsin. " +
+                    "Hata dökümü veya işlem kayıtları dediğinde kayıt ekranını açarım. Servis kaydı için servis kaydı de. " +
+                    "Sistem testleri, mikrofon testi veya sensör kontrolü dediğinde testler bölümünü açarım. " +
+                    "Viecar ECU iletişim raporu dediğinde iletişim kontrolünü başlatırım. " +
+                    "Seyfi ekranı veya Yamaha teşhis ekranı dediğinde sohbet ve Yamaha teşhis bölümünü açarım. " +
+                    "Raporu dışa aktar dediğinde raporu hazırlarım. ECU bağlı değilse ölçüm uydurmam."
             )
 
             SeyfiAction.GO_HOME -> {
