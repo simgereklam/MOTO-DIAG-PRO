@@ -404,6 +404,24 @@ class MainActivity : ComponentActivity() {
             (seyfiAwaitingCommand && YamahaVehicleCatalog.extractYear(commandInput) != null)
         if (yamahaVehicleUtterance) seyfiAwaitingCommand = true
 
+        // Açıkça bir DTC kodu söylenmişse menü/arıza özeti komutlarına düşürme.
+        // Kod sorusunu doğrudan Seyfi'nin DTC çözümleyicisine gönder.
+        val explicitDtcQuestion = Regex(
+            "\\b[PBCU]\\s*[0-9A-F]{4}\\b",
+            RegexOption.IGNORE_CASE
+        ).containsMatchIn(commandInput)
+        if (explicitDtcQuestion) {
+            seyfiAwaitingCommand = false
+            log("DTC SORUSU • ham ifade: $rawCommand • çözümlenen metin: $commandInput")
+            appendSeyfiConversation("SİZ", commandInput)
+            seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
+            assistant.chat(commandInput) { answer ->
+                appendSeyfiConversation("SEYFİ USTA", answer)
+                if (!isFinishing && !isDestroyed) assistant.speak(answer)
+            }
+            return
+        }
+
         val command = seyfiCommandHandler.handle(commandInput)
         if (command.action == SeyfiAction.UNKNOWN && !wakeDetected && !seyfiAwaitingCommand) {
             log("Seyfi Usta: bilinen bir komut algılanmadı, ifade yok sayıldı: $rawCommand")
