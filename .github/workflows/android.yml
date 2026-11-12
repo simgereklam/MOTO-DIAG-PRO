@@ -50,6 +50,16 @@ jobs:
       - name: Türkçe çevrimdışı Vosk modelini hazırla
         run: echo "Model Gradle preBuild aşamasında indirilip APK assets içine paketlenecek."
 
+      - name: Türkçe çevrimdışı Vosk modelini APK assets içine indir
+        run: |
+          set -euo pipefail
+          mkdir -p app/src/main/assets/model-tr /tmp/vosk-tr
+          curl -fL --retry 3 "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip" -o /tmp/vosk-tr/model.zip
+          unzip -q /tmp/vosk-tr/model.zip -d /tmp/vosk-tr
+          cp -a /tmp/vosk-tr/vosk-model-small-tr-0.3/. app/src/main/assets/model-tr/
+          test -f app/src/main/assets/model-tr/uuid
+          test -d app/src/main/assets/model-tr/am
+          echo "Türkçe çevrimdışı model APK assets içine hazırlandı."
       - name: Hazır model bağımlılığı olmadığını doğrula
         run: |
           ! grep -R -n -E 'com[.]google[.]ai[.]edge[.]litertlm|litertlm-android|litert-community' app/src/main app/build.gradle.kts
