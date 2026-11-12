@@ -296,6 +296,7 @@ class SeyfiUstaCommandHandler {
                 "yamaha teshis ekrani",
                 "yamaha teshis ekranini ac",
                 "seyfi usta sesli sohbet",
+                "ekranini ac",
                 "sesli cevabi test et",
                 "durumu yenile",
                 "seyfi durumunu yenile"
@@ -388,6 +389,7 @@ class SeyfiUstaCommandHandler {
                 "tum sensorleri oku",
                 "motorun anlik verileri",
                 "sensor degerlerini oku",
+                "sensor verilerini goster",
                 "canli veri ekranini ac"
             )
         ) {
