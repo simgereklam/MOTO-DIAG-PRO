@@ -47,10 +47,8 @@ jobs:
       - name: Gradle sürümünü doğrula
         run: gradle --version
 
-      - name: Vosk kullanılmadığını doğrula
-        run: |
-          ! grep -R -n -E 'com[.]alphacephei:vosk|org[.]vosk|vosk-android|jna:5[.]18' app/src/main app/build.gradle.kts
-          echo "Vosk bağımlılığı ve kod referansı bulunamadı."
+      - name: Türkçe çevrimdışı Vosk modelini hazırla
+        run: echo "Model Gradle preBuild aşamasında indirilip APK assets içine paketlenecek."
 
       - name: Hazır model bağımlılığı olmadığını doğrula
         run: |
