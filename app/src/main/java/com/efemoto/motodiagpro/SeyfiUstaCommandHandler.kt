@@ -95,6 +95,12 @@ class SeyfiUstaCommandHandler {
             text.contains(normalize(it))
         }
 
+        // "Seyfi ekranını aç" ifadesindeki Seyfi sözcüğü uyandırma kelimesi
+        // olarak temizlenmeden önce ekran komutu olarak değerlendirilir.
+        if (text.contains("seyfi ekranini ac") || text.contains("seyfi usta ekranini ac")) {
+            return command(SeyfiAction.SHOW_SEYFI_CHAT, original, "Seyfi Usta ekranını açıyorum.")
+        }
+
         val commandText = text
             .replace("seyfi usta", "")
             .replace("seyfi", "")
@@ -296,7 +302,6 @@ class SeyfiUstaCommandHandler {
                 "yamaha teshis ekrani",
                 "yamaha teshis ekranini ac",
                 "seyfi usta sesli sohbet",
-                "ekranini ac",
                 "sesli cevabi test et",
                 "durumu yenile",
                 "seyfi durumunu yenile"
