@@ -7,8 +7,7 @@ class SeyfiUstaCommandHandlerTest {
     @Test
     fun allBuiltInVoiceCommandExamplesResolveCorrectly() {
         val failures = SeyfiUstaCommandHandler().selfTest()
-        if (failures.isNotEmpty()) println("SEYFI_COMMAND_SELF_TEST_FAILURES=" + failures.joinToString(" || "))
-        assertTrue("Komut sözlüğü öz testi başarısız:\n" + failures.joinToString("\n"), failures.isEmpty())
+        if (failures.isNotEmpty()) throw AssertionError("SEYFI_COMMAND_SELF_TEST_FAILURES=" + failures.joinToString(" || "))
     }
 
     @Test
