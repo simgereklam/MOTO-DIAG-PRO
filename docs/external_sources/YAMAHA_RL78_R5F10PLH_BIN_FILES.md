@@ -9,7 +9,7 @@
 
 ## Contents observed
 
-The repository contains 13 BIN paths, each 27,648 bytes:
+The repository contains 14 BIN paths, each 27,648 bytes:
 
 - GRANDE_B8A0.bin
 - GRANDE_B8A1-40.bin
@@ -26,7 +26,7 @@ The repository contains 13 BIN paths, each 27,648 bytes:
 - WR155_B3M0.bin
 - YZF-R125_B5G0.bin
 
-Note: the tree contains 14 BIN filenames (some are byte-identical duplicates); all listed files are 27,648 bytes. The README is only a checksum warning. No model-year mapping, ECU part numbers, readout provenance, protocol documentation, memory map, DTC table, OBD PID definitions, CAN identifiers, or diagnostic procedures are supplied. The binaries were not downloaded, modified, checksum-corrected, or tested.
+Some paths are byte-identical duplicates according to the Git tree blob IDs. The README is only a checksum warning. No model-year mapping, ECU part numbers, readout provenance, protocol documentation, memory map, DTC table, OBD PID definitions, CAN identifiers, or diagnostic procedures are supplied. The binaries were not downloaded, modified, checksum-corrected, or tested.
 
 ## Technical and safety assessment
 
@@ -40,4 +40,3 @@ These are firmware/calibration image files, not diagnostic data. A filename alon
 - No diagnostic protocol/profile or validated service data can be added from this repository.
 - This review does not change the current Viecar VP002 Wi-Fi OBD path or the passive Yamaha R9 CAN decoder.
 - Reconsider only if the author supplies licensed, inspectable diagnostic protocol documentation or verified non-firmware diagnostic data. Any such data must be validated independently.
-
