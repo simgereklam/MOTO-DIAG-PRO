@@ -263,6 +263,8 @@ class SeyfiUstaCommandHandler {
                 "servis bilgisi kaydet",
                 "servis kaydini ac",
                 "servis bilgi ekranini ac",
+                "kayitlari yenile",
+                "son islemleri yenile",
                 "islem kayitlari",
                 "loglari goster",
                 "loglari ac",
@@ -291,7 +293,10 @@ class SeyfiUstaCommandHandler {
                 "asistan ekranini ac",
                 "yerel yapay zeka",
                 "seyfi usta yerel yapay zeka",
-                "seyfi usta sesli sohbet"
+                "seyfi usta sesli sohbet",
+                "sesli cevabi test et",
+                "durumu yenile",
+                "seyfi durumunu yenile"
             )
         ) {
             return command(SeyfiAction.SHOW_SEYFI_CHAT, original, "Seyfi Usta ekranını açıyorum.")
@@ -495,6 +500,15 @@ class SeyfiUstaCommandHandler {
                 "mikrofon nasil calisiyor",
                 "ses nasil calisiyor",
                 "neler yapabilirsin",
+                "butonlari say",
+                "butonlar neler",
+                "bolumleri say",
+                "bolumler neler",
+                "ekranlari say",
+                "hangi ekranlar var",
+                "uygulama menuleri",
+                "menuyu anlat",
+                "bana programi anlat",
                 "baska ne yapabilirsin",
                 "baska neler yapabilirsin",
                 "baska ne yapabiliyorsun",
@@ -554,7 +568,17 @@ class SeyfiUstaCommandHandler {
                 "sistem testi",
                 "sistem testlerini ac",
                 "testler",
-                "iletisim testi"
+                "iletisim testi",
+                "durumlari yenile",
+                "yapay zekayi gercekten test et",
+                "sensorleri kontrol et",
+                "yakit verilerini oku",
+                "atesleme verisini oku",
+                "ariza hafizasini oku",
+                "ecu bilgisini oku",
+                "sistemi kontrol et",
+                "butun testleri goster",
+                "test bolumunu ac"
             )
         ) {
             return command(
