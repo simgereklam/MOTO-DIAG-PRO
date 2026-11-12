@@ -88,6 +88,9 @@ class SeyfiBrain(context: Context) {
         } else chat("Güncel ECU verilerini analiz et; ölçümleri, olası riskleri ve güvenli kontrol sırasını açıkla.", onResponse)
     }
     fun chat(question: String, onResponse: (String) -> Unit) = ask(question, onResponse)
+    fun lookupDtcCode(code: String, onResponse: (String) -> Unit) {
+        ask("__DTC_LOOKUP__:" + code.trim().uppercase(Locale.US), onResponse)
+    }
 
     fun ask(question: String, onResponse: (String) -> Unit) {
         if (!busy.compareAndSet(false, true)) {
@@ -104,45 +107,21 @@ class SeyfiBrain(context: Context) {
     }
 
     private fun reason(question: String): String {
-        val q = normalize(question)
-        // Konuşma tanıma "P 0335" şeklinde boşluk bırakabilir; kodu önce birleştir.
-        var codeInput = normalize(question)
-        // Vosk bazen kodu rakam yerine Türkçe sayı sözcükleriyle döndürür.
-        val spokenDigits = mapOf(
-            "sifir" to "0", "zero" to "0",
-            "bir" to "1", "iki" to "2", "uc" to "3",
-            "dort" to "4", "bes" to "5", "alti" to "6",
-            "yedi" to "7", "sekiz" to "8", "dokuz" to "9"
-        )
-        spokenDigits.forEach { (word, digit) ->
-            codeInput = codeInput.replace(Regex("\\b$word\\b"), digit)
+        if (question.startsWith("__DTC_LOOKUP__:")) {
+            val code = question.substringAfter("__DTC_LOOKUP__:").trim().uppercase(Locale.US)
+            return lookupDtcRecordOnly(code)
         }
-        codeInput = codeInput.replace(
-            Regex("\\b([PBCU])\\s+([0-9A-F]{4})\\b", RegexOption.IGNORE_CASE),
+        val q = normalize(question)
+        // Arıza açıklaması yalnızca kullanıcının açıkça verdiği kod üzerinden yapılır.
+        val compactCodeInput = normalize(question).replace(
+            Regex("\\b([pbcu])\\s+([0-9a-f]{4})\\b"),
             "$1$2"
         )
-        val codePattern = Regex("\\b(?:[PBCU][0-9A-F]{4}|[0-9]{2}(?:_ABS)?)\\b", RegexOption.IGNORE_CASE)
-        // ECU strings may contain display suffixes such as "P0335 • KAYITLI".
-        // Extract only the actual DTC before looking it up.
-        val questionCodes = codePattern.findAll(codeInput)
-            .map { it.value.uppercase(Locale.US) }.toList()
-        val asksAboutCurrentFaults = listOf("ariza", "hata kod", "dtc", "ecu kod")
-            .any { q.contains(it) }
-        val storedEcuCodes = if (asksAboutCurrentFaults) {
-            ecuFaults.flatMap { raw ->
-                codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList()
-            }
-        } else emptyList()
-        // Kullanıcı belirli bir kod sorduysa yalnızca o kodu açıkla.
-        // Son ECU taramasındaki diğer kodlar (ABS/immobilizer vb.) bu soruya eklenemez.
-        // Kodsuz genel "kayıtlı arızalarım ne?" sorusunda ECU kayıtlarını kullan.
-        val codes = if (questionCodes.isNotEmpty()) {
-            questionCodes.distinct().take(12)
-        } else {
-            storedEcuCodes.distinct().take(12)
-        }
-        if (codes.isNotEmpty()) {
-            return explainCodes(codes, activeVehicleProfile.takeIf { it.isNotBlank() })
+        val questionCode = Regex("\\b(?:[pbcu][0-9a-f]{4}|[0-9]{2}(?:_abs)?)\\b")
+            .find(compactCodeInput)?.value?.uppercase(Locale.US)
+        if (questionCode != null) return lookupDtcRecordOnly(questionCode)
+        if (listOf("ariza", "hata kod", "dtc", "ecu kod", "abs", "immobilizer").any { q.contains(it) }) {
+            return "Arıza açıklaması yapmam için arıza kodunu söylemelisin usta. Verdiğin kodu yalnızca kayıtlı arıza veri tabanında ararım; kayıt yoksa tahmin yürütmem."
         }
         // Günlük sohbet, ECU bağlantısından bağımsız ele alınır.
         // Önce kullanıcının kendi hâlini bildirdiğini yakala: "iyiyim, sen nasılsın"
@@ -309,6 +288,28 @@ class SeyfiBrain(context: Context) {
         return "Sorunu biraz daha tarif et usta. Elimde ${ecuValues.size} gerçek ECU ölçümü var. ${diagnosticPlanContext.take(250)}"
     }
 
+    private fun lookupDtcRecordOnly(code: String): String {
+        if (!code.matches(Regex("(?:[PBCU][0-9A-F]{4}|[0-9]{2}(?:_ABS)?)"))) {
+            return "Arıza kodunu net algılayamadım usta. Kodu harfi ve rakamlarıyla tekrar söyle."
+        }
+        val record = YamahaKnowledgeBase.find(appContext, code, activeVehicleProfile.takeIf { it.isNotBlank() })
+        if (record != null) {
+            return buildString {
+                append("$code: ")
+                if (record.title.isNotBlank()) append(record.title).append(". ")
+                if (record.description.isNotBlank()) append(record.description).append(" ")
+                if (record.system.isNotBlank()) append("Sistem: ").append(record.system).append(". ")
+                if (record.possibleCauses.isNotEmpty()) append("Veri tabanındaki olası nedenler: ").append(record.possibleCauses.joinToString("; ")).append(". ")
+                if (record.checks.isNotEmpty()) append("Kayıtlı kontroller: ").append(record.checks.joinToString("; ")).append(". ")
+                if (record.source.isNotBlank()) append("Kaynak: ").append(record.source).append(". ")
+                if (record.verification.isNotBlank()) append("Doğrulama: ").append(record.verification).append(".")
+            }.trim()
+        }
+        if (DtcDatabase.hasExactCode(code)) {
+            return "$code: ${DtcDatabase.title(code)}. Yerel DTC tablosunda yalnızca bu başlık kayıtlı; ek neden veya kontrol bilgisi bulunmadığından tahmin yürütmüyorum."
+        }
+        return "$code kodu yerel arıza veri tabanımda bulunmuyor. Bu nedenle açıklama yapmayacağım."
+    }
     private fun explainCodes(codes: List<String>, model: String? = null): String = buildString {
         append("Arıza kodlarını inceliyorum. ")
         codes.forEach { code ->
