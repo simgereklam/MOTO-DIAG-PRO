@@ -24,6 +24,10 @@ class OfflineVoiceAssistant(
     private val onRecognized: (String) -> Unit,
     private val onStatus: (String) -> Unit
 ) {
+    companion object {
+        private const val TAG = "OfflineVoiceAssistant"
+    }
+
     private val main = Handler(Looper.getMainLooper())
     private val ids = AtomicInteger(0)
     @Volatile private var recognizer: SpeechRecognizer? = null
