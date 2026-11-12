@@ -14,7 +14,10 @@ data class YamahaKnowledgeRecord(
     val checks: List<String>,
     val codeStandard: String,
     val source: String,
-    val verification: String
+    val verification: String,
+    val models: List<String> = emptyList(),
+    val years: List<Int> = emptyList(),
+    val namespace: String = "POWERTRAIN"
 )
 
 /**
@@ -30,10 +33,23 @@ object YamahaKnowledgeBase {
         "arizasi", "sorun", "problem", "var", "yok", "mi", "mu", "mı", "mü"
     )
 
-    fun find(context: Context, code: String): YamahaKnowledgeRecord? {
+    fun find(context: Context, code: String, model: String? = null): YamahaKnowledgeRecord? {
         val normalized = code.trim().uppercase(Locale.US)
         if (normalized.isBlank()) return null
-        return readRecords(context).firstOrNull { it.code.equals(normalized, ignoreCase = true) }
+        val matches = readRecords(context).filter {
+            it.code.equals(normalized, ignoreCase = true)
+        }
+        if (model.isNullOrBlank()) {
+            // Preserve the generic lookup behavior when no vehicle profile is selected.
+            return matches.firstOrNull { it.models.isEmpty() } ?: matches.firstOrNull()
+        }
+        val wanted = normalizeModel(model)
+        return matches.firstOrNull { record ->
+            record.models.any { candidate ->
+                val available = normalizeModel(candidate)
+                available == wanted || available.contains(wanted) || wanted.contains(available)
+            }
+        } ?: matches.firstOrNull { it.models.isEmpty() }
     }
 
     /**
@@ -43,12 +59,21 @@ object YamahaKnowledgeBase {
     fun search(
         context: Context,
         query: String,
-        limit: Int = 4
+        limit: Int = 4,
+        model: String? = null
     ): List<YamahaKnowledgeRecord> {
         val queryTokens = tokens(query)
         if (queryTokens.isEmpty() || limit <= 0) return emptyList()
 
         return readRecords(context)
+            .filter { record ->
+                model.isNullOrBlank() || record.models.isEmpty() ||
+                    record.models.any { candidate ->
+                        val wanted = normalizeModel(model)
+                        val available = normalizeModel(candidate)
+                        available == wanted || available.contains(wanted) || wanted.contains(available)
+                    }
+            }
             .mapNotNull { record ->
                 val titleScore = overlap(queryTokens, tokens(record.title)) * 4
                 val systemScore = overlap(queryTokens, tokens(record.system)) * 3
@@ -109,13 +134,29 @@ object YamahaKnowledgeBase {
                             checks = item.stringList("checks"),
                             codeStandard = item.optString("codeStandard"),
                             source = item.optString("source"),
-                            verification = item.optString("verification")
+                            verification = item.optString("verification"),
+                            models = item.stringList("models"),
+                            years = item.intList("years"),
+                            namespace = item.optString("namespace", "POWERTRAIN")
                         )
                     )
                 }
             }
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    private fun normalizeModel(value: String): String =
+        value.uppercase(Locale.US).replace(Regex("[^A-Z0-9]"), "")
+
+    private fun JSONObject.intList(key: String): List<Int> {
+        val array = optJSONArray(key) ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val value = array.optInt(index, Int.MIN_VALUE)
+                if (value != Int.MIN_VALUE) add(value)
+            }
         }
     }
 
