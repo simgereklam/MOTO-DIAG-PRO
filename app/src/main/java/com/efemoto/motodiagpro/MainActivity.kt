@@ -102,6 +102,9 @@ class MainActivity : ComponentActivity() {
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
     @Volatile private var seyfiAwaitingDtcCode = false
+    @Volatile private var seyfiAwaitingDtcConfirmation = false
+    @Volatile private var seyfiPendingShortDtcCode = ""
+    private var seyfiDtcSpeechBuffer = ""
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -366,6 +369,10 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("\\b(seyfi|seyf|sefi|seifi)\\b"), "seyfi")
             .replace(Regex("\\s+"), " ")
             .trim()
+            // Vosk bazı cihazlarda tek başına söylenen "Seyfi Usta" ifadesini
+            // "silme" olarak çözebiliyor. Yalnızca tek kelimelik tam eşleşmeyi
+            // uyandırma sözü say; "arızaları silme" gibi cümlelere dokunma.
+            .let { if (it == "silme") "seyfi usta" else it }
 
         // Uyandırma sözü yalnızca cümlenin başındaysa kabul edilir.
         // "Kolay gelsin usta" gibi normal cümlelerin sonunda geçen "usta"
@@ -405,6 +412,9 @@ class MainActivity : ComponentActivity() {
         if (asksToGiveDtcCode) {
             seyfiAwaitingCommand = true
             seyfiAwaitingDtcCode = true
+            seyfiAwaitingDtcConfirmation = false
+            seyfiPendingShortDtcCode = ""
+            seyfiDtcSpeechBuffer = ""
             log("DTC SORU MODU AÇILDI • ifade: $commandInput")
             appendSeyfiConversation("SİZ", commandInput)
             val prompt = "Tamam usta, dinliyorum. Arıza kodunu harfi ve rakamlarıyla söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım."
@@ -413,14 +423,61 @@ class MainActivity : ComponentActivity() {
             return
         }
 
+        if (seyfiAwaitingDtcConfirmation) {
+            val confirmation = commandInput.lowercase(Locale.US).trim()
+            when (confirmation) {
+                "evet", "dogru", "aynen", "evet dogru", "evet usta" -> {
+                    val confirmedCode = seyfiPendingShortDtcCode
+                    seyfiPendingShortDtcCode = ""
+                    seyfiAwaitingDtcConfirmation = false
+                    seyfiAwaitingCommand = false
+                    appendSeyfiConversation("SİZ", "Evet, $confirmedCode")
+                    assistant.brain.lookupDtcCode(confirmedCode) { answer ->
+                        appendSeyfiConversation("SEYFİ USTA", answer)
+                        if (!isFinishing && !isDestroyed) assistant.speak(answer)
+                    }
+                }
+                "hayir", "hayir usta", "yanlis", "degil", "tekrar" -> {
+                    seyfiPendingShortDtcCode = ""
+                    seyfiAwaitingDtcConfirmation = false
+                    seyfiAwaitingDtcCode = true
+                    seyfiDtcSpeechBuffer = ""
+                    assistant.speak("Tamam usta. Arıza kodunu baştan, harfi ve dört rakamıyla söyle.")
+                }
+                else -> assistant.speak("Yanlış kod söylememek için soruyorum usta. $seyfiPendingShortDtcCode kodu doğru mu? Evet ya da hayır de.")
+            }
+            return
+        }
+
         if (seyfiAwaitingDtcCode) {
-            val suppliedCode = SeyfiDtcCodeParser.extract(commandInput)
+            // Vosk konuşmayı sessizlik noktalarında parçalara ayırabilir.
+            // Eksik parçayı hata sayıp kullanıcıyı konuşturmayı kesme; sonraki
+            // ses parçasını birleştirerek tam kod oluşana kadar dinlemeyi sürdür.
+            if (commandInput.isNotBlank()) {
+                seyfiDtcSpeechBuffer = (seyfiDtcSpeechBuffer + " " + commandInput)
+                    .trim().takeLast(120)
+            }
+            val suppliedCode = SeyfiDtcCodeParser.extract(seyfiDtcSpeechBuffer)
             if (suppliedCode == null) {
-                val retry = "Arıza kodunu net algılayamadım usta. Örneğin P sıfır üç üç beş şeklinde tekrar söyle."
-                appendSeyfiConversation("SEYFİ USTA", retry)
-                assistant.speak(retry)
+                // İki haneli Yamaha kodları, P0335 gibi dört haneli bir kodun
+                // yanlış tanınmış parçası olabilir. Asla doğrudan teşhis etme;
+                // önce kullanıcıdan açık onay al.
+                val shortCode = SeyfiDtcCodeParser.extract(
+                    seyfiDtcSpeechBuffer,
+                    allowShortCode = true
+                )
+                if (shortCode != null) {
+                    seyfiDtcSpeechBuffer = ""
+                    seyfiPendingShortDtcCode = shortCode
+                    seyfiAwaitingDtcCode = false
+                    seyfiAwaitingDtcConfirmation = true
+                    assistant.speak("$shortCode kodunu duydum usta. Doğru mu? Evet veya hayır de.")
+                } else {
+                    assistant.startListening()
+                }
                 return
             }
+            seyfiDtcSpeechBuffer = ""
             seyfiAwaitingDtcCode = false
             seyfiAwaitingCommand = false
             appendSeyfiConversation("SİZ", suppliedCode)

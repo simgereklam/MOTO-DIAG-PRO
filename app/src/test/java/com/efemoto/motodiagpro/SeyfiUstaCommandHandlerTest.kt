@@ -25,6 +25,12 @@ class SeyfiUstaCommandHandlerTest {
         assertTrue(SeyfiDtcCodeParser.extract("P 0335") == "P0335")
         assertTrue(SeyfiDtcCodeParser.extract("arıza kodu P sıfır üç üç beş") == "P0335")
         assertTrue(SeyfiDtcCodeParser.extract("B sıfır bir iki üç") == "B0123")
+        // İki haneli bir ASR parçası P-kodunun yerine geçip immobilizer/ABS
+        // teşhisi üretmemeli; yalnızca açık DTC sorgusunda ve tam ifade ise adaydır.
+        assertTrue(SeyfiDtcCodeParser.extract("51") == null)
+        assertTrue(SeyfiDtcCodeParser.extract("51", allowShortCode = true) == "51")
+        assertTrue(SeyfiDtcCodeParser.extract("ariza kodu 51", allowShortCode = true) == null)
+        assertTrue(SeyfiDtcCodeParser.extract("11_ABS", allowShortCode = true) == "11_ABS")
     }
 
     @Test

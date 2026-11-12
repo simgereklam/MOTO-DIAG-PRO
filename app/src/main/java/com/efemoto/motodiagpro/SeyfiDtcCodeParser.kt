@@ -35,7 +35,7 @@ object SeyfiDtcCodeParser {
             Regex("\\b(sor|ver|soyle|oku)[a-z]*\\b").containsMatchIn(text)
     }
 
-    fun extract(value: String): String? {
+    fun extract(value: String, allowShortCode: Boolean = false): String? {
         var text = normalize(value)
             .replace(Regex("\\b(pe|pi|pı)\\b"), "p")
             .replace(Regex("\\b(be|bi|bı)\\b"), "b")
@@ -67,12 +67,17 @@ object SeyfiDtcCodeParser {
             if (digits.length == 4) return (prefix + digits).uppercase(Locale.US)
         }
 
-        Regex("(?<![a-z0-9])([0-9]{2}_abs)(?![a-z0-9])")
-            .find(text)?.let { return it.groupValues[1].uppercase(Locale.US) }
+        // Normalizer alt çizgiyi boşluğa çevirir; ABS eki bu nedenle ayrı okunur.
+        Regex("^([0-9]{2})\\s+abs$")
+            .find(text)?.let { return it.groupValues[1] + "_ABS" }
         Regex("(?<![a-z0-9])([0-9]{4})(?![a-z0-9])")
             .find(text)?.let { return it.groupValues[1] }
-        Regex("(?<![a-z0-9])([0-9]{2})(?![a-z0-9])")
-            .find(text)?.let { return it.groupValues[1] }
+        if (allowShortCode) {
+            // İki haneli Yamaha kodunu yalnızca tüm ifade bu kodsa kabul et.
+            // Serbest konuşmadaki yıl/sayı parçaları arıza koduna dönüşmesin.
+            Regex("^(?:kod\\s+)?([0-9]{2})(?:\\s+kod(?:u)?)?$")
+                .find(text)?.let { return it.groupValues[1] }
+        }
         return null
     }
 }

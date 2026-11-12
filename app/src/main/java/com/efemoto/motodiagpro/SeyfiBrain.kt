@@ -294,6 +294,17 @@ class SeyfiBrain(context: Context) {
         if (!code.matches(Regex("(?:[PBCU][0-9A-F]{4}|[0-9]{2}(?:_ABS)?)"))) {
             return "Arıza kodunu net algılayamadım usta. Kodu harfi ve rakamlarıyla tekrar söyle."
         }
+        // P0335 standart SAE/J1979 kodudur. Önceliği daima doğru krank sensörü
+        // açıklamasına ver; hiçbir OEM/ABS/immobilizer kaydı bu eşleşmeyi ezemez.
+        if (code == "P0335") {
+            return buildString {
+                append("$code: ${DtcDatabase.title(code)}. ")
+                append("${DtcDatabase.description(code)} ")
+                append("Olası nedenler: ${DtcDatabase.causes(code).joinToString("; ")}. ")
+                append("Kontrol sırası: ${DtcDatabase.checks(code).joinToString("; ")}. ")
+                append("Bu kod ABS veya immobilizer arızası değildir. Kod tek başına sensörün bozuk olduğunu kanıtlamaz.")
+            }
+        }
         val record = YamahaKnowledgeBase.find(appContext, code, activeVehicleProfile.takeIf { it.isNotBlank() })
         if (record != null) {
             return buildString {
