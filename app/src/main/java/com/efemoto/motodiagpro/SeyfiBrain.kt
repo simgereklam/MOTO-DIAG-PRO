@@ -103,18 +103,25 @@ class SeyfiBrain(context: Context) {
                 ecuFaults.flatMap { raw -> codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList() }
         ).distinct().take(12).toList()
         // Günlük sohbet, ECU bağlantısından bağımsız ele alınır.
+        // Önce kullanıcının kendi hâlini bildirdiğini yakala: "iyiyim, sen nasılsın"
+        // cümlesindeki nasılsın kelimesi Seyfi'nin aynı soruyu tekrar ettirmemeli.
+        if (q.contains("iyiyim") || q.contains("fena degilim") ||
+            q.contains("iyi sayilirim") || q.contains("sukur iyiyim") ||
+            q.contains("gayet iyiyim") || q.contains("keyfim yerinde")
+        ) return "Oh, iyi olmana sevindim usta. Bugün ne konuşalım? Aklında bir konu varsa anlat, seni dinliyorum."
+
+        if (q.contains("kotu") && (q.contains("hissediyorum") || q.contains("gunum") || q.contains("keyfim")))
+            return "Üzüldüm usta. İstersen anlat, seni dinliyorum. Belki birlikte biraz olsun çözüm bulabiliriz."
+
+        if (q.contains("sohbet edebiliyor musun") || q.contains("sohbet edebilir misin") ||
+            q.contains("sohbet edebiliyor") || q.contains("sohbet edebilir") ||
+            q.contains("konusabiliyor musun") || q.contains("seninle sohbet") ||
+            q.contains("sohbet edelim") || q.contains("biraz konusalim")
+        ) return "Elbette usta, seninle sohbet edebilirim. ECU'ya bağlı olmamız gerekmiyor. İstersen birlikte adım adım ilerleyelim. Neler konuşmak istersin?"
+
         if (q.contains("nasilsin") || q.contains("ne haber") || q.contains("keyfin nasil") ||
             q.contains("iyi misin") || q.contains("nasil gidiyor")
-        ) return "İyiyim usta, teşekkür ederim. Sen nasılsın? Bugün nasıl gidiyor?"
-
-        if ((q.contains("sohbet") && (q.contains("edebiliyor") || q.contains("edebilir") ||
-                q.contains("edebiliyormusun") || q.contains("edebilirmiyiz") || q.contains("edelim"))) ||
-            q.contains("konusabiliyor musun") || q.contains("seninle sohbet") ||
-            q.contains("biraz konusalim")
-        ) return "Elbette usta, seninle sohbet edebilirim. ECU'ya bağlı olmamız gerekmiyor. İstersen birlikte adım adım ilerleyelim. Sen nasılsın, bugün nasıl gidiyor?"
-
-        if (q.contains("ben iyiyim") || q.contains("iyiyim") || q.contains("fena degilim"))
-            return "Buna sevindim usta. Bugün neler yapıyorsun, keyfin yerinde mi?"
+        ) return "İyiyim usta, teşekkür ederim. Bugün buradayım, sana eşlik ediyorum. Senin günün nasıl geçiyor?"
 
         if (q.contains("merhaba") || q == "selam" || q.contains("gunaydin") ||
             q.contains("iyi aksamlar") || q.contains("iyi geceler")
