@@ -1,6 +1,60 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "brand": "Yamaha",
-  "note": "Model/ECU kapsamı servis manueli veya üretici parça kataloğu ile doğrulanmış kayıtlar eklenecek. Boş kayıtlar destek yok anlamına gelmez.",
-  "records": []
+  "note": "Yalnızca belirtilen servis kılavuzu kapsamındaki model/yıl DTC kayıtları doğrulanmıştır. Bu liste diğer model yıllarında aynı kodların geçerli olduğunu göstermez.",
+  "records": [
+    {
+      "model": "MT-07",
+      "years": [
+        2014
+      ],
+      "platform": "MT07",
+      "subsystems": [
+        "ENGINE"
+      ],
+      "verifiedDtcCount": 25,
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED"
+    },
+    {
+      "model": "NMAX 155",
+      "years": [
+        2022
+      ],
+      "platform": "GPD155-A",
+      "subsystems": [
+        "ENGINE",
+        "ABS"
+      ],
+      "verifiedDtcCount": 39,
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED"
+    },
+    {
+      "model": "XMAX 300",
+      "years": [
+        2017
+      ],
+      "platform": "CZD300-A",
+      "subsystems": [
+        "ENGINE"
+      ],
+      "verifiedDtcCount": 10,
+      "source": "Yamaha XMAX 300 CZD300-A 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED"
+    },
+    {
+      "model": "MT-09",
+      "years": [
+        2024
+      ],
+      "platform": "MT09",
+      "subsystems": [
+        "ABS"
+      ],
+      "verifiedDtcCount": 22,
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED"
+    }
+  ]
 }
