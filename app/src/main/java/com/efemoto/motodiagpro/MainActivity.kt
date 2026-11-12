@@ -479,6 +479,22 @@ class MainActivity : ComponentActivity() {
                 assistant.speak("Hata dökümü ve işlem kayıtlarını açtım.")
             }
 
+            SeyfiAction.SHOW_FAULT_SEARCH -> {
+                showFaults()
+                promptFaultLookup()
+                assistant.speak("Arıza kodu arama bölümünü açtım. Aramak istediğin kodu yazabilirsin.")
+            }
+
+            SeyfiAction.SHOW_SEYFI_CHAT -> {
+                showSeyfiChat()
+                assistant.speak("Seyfi Usta sohbet ve Yamaha teşhis ekranını açtım.")
+            }
+
+            SeyfiAction.SHOW_COMMUNICATION_REPORT -> {
+                assistant.speak("Viecar ve ECU iletişim raporunu hazırlıyorum.")
+                runCommunicationCheck()
+            }
+
             SeyfiAction.SHOW_CONNECTION_STATUS -> {
                 if (connected && viecarConnection.isConnected()) {
                     assistant.speak("Viecar Wi-Fi adaptörü ve ECU bağlantısı açık görünüyor.")
