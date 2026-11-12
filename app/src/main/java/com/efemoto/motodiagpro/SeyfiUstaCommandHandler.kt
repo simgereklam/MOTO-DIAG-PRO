@@ -258,6 +258,11 @@ class SeyfiUstaCommandHandler {
                 "islem dokumu",
                 "islem gecmisi",
                 "gecmis kayitlari",
+                "servis kaydi",
+                "servis formu",
+                "servis bilgisi kaydet",
+                "servis kaydini ac",
+                "servis bilgi ekranini ac",
                 "islem kayitlari",
                 "loglari goster",
                 "loglari ac",
@@ -570,12 +575,7 @@ class SeyfiUstaCommandHandler {
                 "raporu disari aktar",
                 "rapor paylas",
                 "teshis raporu olustur",
-                "servis formu",
-                "servis kaydi",
-                "servis bilgisi kaydet",
-                "raporu disa aktar paylas",
-                "servis kaydini ac",
-                "servis bilgi ekranini ac"
+                "raporu disa aktar paylas"
             )
         ) {
             return command(
@@ -656,11 +656,19 @@ class SeyfiUstaCommandHandler {
             "iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
             "tam Viecar ECU iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
             "adaptörü test et" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
-            "servis bilgisi kaydet" to SeyfiAction.EXPORT_REPORT,
+            "servis bilgisi kaydet" to SeyfiAction.SHOW_LOGS,
+            "servis kaydı" to SeyfiAction.SHOW_LOGS,
             "raporu dışa aktar paylaş" to SeyfiAction.EXPORT_REPORT,
             "arıza kodlarını incele" to SeyfiAction.READ_FAULTS,
             "canlı veri ekranını aç" to SeyfiAction.SHOW_LIVE_DATA,
             "gerçek arıza taraması başlat" to SeyfiAction.START_SCAN,
+            "servis formu" to SeyfiAction.SHOW_LOGS,
+            "servis kaydını aç" to SeyfiAction.SHOW_LOGS,
+            "hata dökümünü getir" to SeyfiAction.SHOW_LOGS,
+            "hata raporlarını aç" to SeyfiAction.SHOW_LOGS,
+            "sistem testleri ekranını aç" to SeyfiAction.SHOW_TESTS,
+            "sensör verilerini göster" to SeyfiAction.SHOW_LIVE_DATA,
+            "Yamaha teşhis ekranını aç" to SeyfiAction.SHOW_SEYFI_CHAT,
             "başka ne yapabiliyorsun" to SeyfiAction.SHOW_HELP,
             "ana sayfa" to SeyfiAction.GO_HOME,
             "motor verilerini yorumla" to SeyfiAction.ANALYZE_ENGINE_DATA
