@@ -25,10 +25,12 @@ class SeyfiBrain(context: Context) {
     private val conversationPrefs = appContext.getSharedPreferences("seyfi_conversation", Context.MODE_PRIVATE)
     @Volatile private var pendingSymptom = conversationPrefs.getString("pending_symptom", "").orEmpty()
     @Volatile private var pendingVehicleBrand = conversationPrefs.getString("pending_vehicle_brand", "").orEmpty()
+    @Volatile private var pendingVehicleModel = conversationPrefs.getString("pending_vehicle_model", "").orEmpty()
     init { activeVehicleProfile = conversationPrefs.getString("vehicle_profile", "").orEmpty() }
     private fun saveVehicleProfile(value: String) { activeVehicleProfile = value.trim().take(100); conversationPrefs.edit().putString("vehicle_profile", activeVehicleProfile).apply() }
     private fun rememberPendingSymptom(value: String) { pendingSymptom = value.take(250); conversationPrefs.edit().putString("pending_symptom", pendingSymptom).apply() }
     private fun rememberVehicleBrand(value: String) { pendingVehicleBrand = value.trim().take(40); conversationPrefs.edit().putString("pending_vehicle_brand", pendingVehicleBrand).apply() }
+    private fun rememberVehicleModel(value: String) { pendingVehicleModel = value.trim().take(60); conversationPrefs.edit().putString("pending_vehicle_model", pendingVehicleModel).apply() }
     private fun detectBrandMention(q: String): String? {
         val brands = listOf("yamaha", "honda", "kawasaki", "suzuki", "ktm", "bmw", "ducati", "triumph", "bajaj", "tvs", "cf moto", "cfmoto", "aprilia", "piaggio", "sym", "kymco", "royal enfield", "benelli", "mondial", "rks", "kanuni")
         return brands.firstOrNull { brand ->
@@ -156,6 +158,55 @@ class SeyfiBrain(context: Context) {
             return "Gerçek ECU arıza kodlarını, desteklenen canlı sensör verilerini ve test sonuçlarını değerlendirebilirim. Ölçülmeyen değeri uydurmam; doğrulanmamış parçayı kesin arızalı ilan etmem."
         if (q.contains("baglanti") && (q.contains("durum") || q.contains("bagli mi")))
             return if (ecuConnected) "ECU bağlantısı aktif. Son alınan ${ecuValues.size} ölçüm değeri mevcut." else "ECU bağlantısı yok. Viecar VP002 WiFi bağlantısını ve motosiklet adaptör kablosunu kontrol edelim."
+        // Yamaha için ayrı, daha kapsamlı Türkçe model/yıl çözümleyicisi.
+        // Kullanıcı model ve yılı tek cümlede de, ayrı cevaplarda da söyleyebilir.
+        val yamahaMatch = YamahaVehicleCatalog.parse(question)
+        if (yamahaMatch != null) {
+            val year = yamahaMatch.year ?: YamahaVehicleCatalog.extractYear(question)
+            if (year.isNullOrBlank()) {
+                rememberVehicleBrand("YAMAHA")
+                rememberVehicleModel(yamahaMatch.model)
+                return "Yamaha ${yamahaMatch.model} olduğunu anladım usta. Model yılını söyler misin? Örneğin 2022."
+            }
+            saveVehicleProfile("Yamaha ${yamahaMatch.model} $year")
+            rememberVehicleBrand("")
+            rememberVehicleModel("")
+            if (pendingSymptom.isNotBlank()) {
+                val symptom = pendingSymptom
+                rememberPendingSymptom("")
+                return "Tamam usta, Yamaha ${yamahaMatch.model} $year olarak kaydettim. Şikâyetin: $symptom. Belirti motor soğukken mi, ısınınca mı, yoksa gaz verince mi ortaya çıkıyor?"
+            }
+            return "Tamam usta, motosikletini Yamaha ${yamahaMatch.model} $year olarak kaydettim. Şimdi şikâyetini veya yapmak istediğin kontrolü anlatabilirsin."
+        }
+
+        // Modeli söyledikten sonra yalnızca yılı ayrı cevap olarak verebilir.
+        if (pendingVehicleBrand.equals("YAMAHA", ignoreCase = true) &&
+            pendingVehicleModel.isNotBlank()
+        ) {
+            val year = YamahaVehicleCatalog.extractYear(question)
+            if (year != null) {
+                val model = pendingVehicleModel
+                saveVehicleProfile("Yamaha $model $year")
+                rememberVehicleBrand("")
+                rememberVehicleModel("")
+                if (pendingSymptom.isNotBlank()) {
+                    val symptom = pendingSymptom
+                    rememberPendingSymptom("")
+                    return "Tamam usta, Yamaha $model $year olarak kaydettim. Şikâyetin: $symptom. Belirti hangi durumda ortaya çıkıyor: soğukken, ısınınca veya gaz verince mi?"
+                }
+                return "Tamam usta, motosikletini Yamaha $model $year olarak kaydettim. Artık bu model ve yıla göre ilerleyeceğim."
+            }
+        }
+
+        // Marka Yamaha olarak seçildiyse rastgele kelimeyi model diye kaydetme.
+        if (pendingVehicleBrand.equals("YAMAHA", ignoreCase = true) &&
+            pendingVehicleModel.isBlank() &&
+            q.split(" ").size <= 6 &&
+            q !in listOf("evet", "hayir", "tesekkur", "sag ol", "tamam", "anladim")
+        ) {
+            return "Yamaha modelini henüz listemde eşleştiremedim usta. Model adını tekrar söyler misin? Örnek: MT-25, MT-07, R25, NMAX, XMAX, TMAX veya Tracer 9."
+        }
+
         val mentionedVehicle = detectVehicleMention(q)
         if (mentionedVehicle != null) {
             val spokenYear = Regex("\\b(19[89]\\d|20[0-3]\\d)\\b").find(q)?.value
