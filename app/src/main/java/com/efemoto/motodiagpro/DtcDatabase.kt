@@ -298,6 +298,11 @@ object DtcDatabase {
     // Never fall back to a universal two-digit meaning here.
     private val yamahaTwoDigit = emptyMap<String, String>()
 
+    fun hasExactCode(code: String): Boolean {
+        val normalized = code.trim().uppercase()
+        return generic.containsKey(normalized) || yamahaTwoDigit.containsKey(normalized)
+    }
+
     fun title(code: String): String {
         val normalized = code.trim().uppercase()
         generic[normalized]?.let { return it }
