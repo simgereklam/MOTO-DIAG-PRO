@@ -385,20 +385,14 @@ class OfflineVoiceAssistant(
                 }
                 return@post
             }
-            bargeInListening = listeningEnabled
-            if (listeningEnabled) {
-                try {
-                    if (speechService != null) {
-                        speechService?.setPause(false)
-                    } else {
-                        startListeningInternal()
-                    }
-                    status("Seyfi Usta konuşuyor; 'Usta' dersen konuşmamı keseceğim.")
-                } catch (e: Exception) {
-                    status("Konuşma sırasında mikrofon açılamadı: ${e.message}")
-                }
-            } else {
-                try { speechService?.setPause(true) } catch (_: Exception) {}
+            // TTS sırasında mikrofonu kapalı tut: hoparlörden çıkan Seyfi sesi
+            // Vosk tarafından tekrar kullanıcı komutu olarak algılanmasın.
+            // Böylece kendi kendine konuşma/komut döngüsü engellenir.
+            bargeInListening = false
+            try {
+                speechService?.setPause(true)
+            } catch (e: Exception) {
+                status("Konuşma sırasında mikrofon duraklatılamadı: ${e.message}")
             }
             val utteranceId = "seyfi-${ids.incrementAndGet()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
