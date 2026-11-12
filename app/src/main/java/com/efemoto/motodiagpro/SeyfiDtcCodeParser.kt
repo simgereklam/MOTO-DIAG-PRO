@@ -8,12 +8,18 @@ import java.util.Locale
  * Eksik kodu tamamlamaz veya tahmin etmez.
  */
 object SeyfiDtcCodeParser {
+    // Vosk'un Türkçe konuşmada üretebildiği yaygın yazım/söyleyiş biçimleri.
     private val spokenDigits = mapOf(
-        "sifir" to "0", "zero" to "0", "bir" to "1", "one" to "1",
-        "iki" to "2", "two" to "2", "uc" to "3", "three" to "3",
-        "dort" to "4", "four" to "4", "bes" to "5", "five" to "5",
-        "alti" to "6", "six" to "6", "yedi" to "7", "seven" to "7",
-        "sekiz" to "8", "eight" to "8", "dokuz" to "9", "nine" to "9"
+        "sifir" to "0", "sıfır" to "0", "zero" to "0", "zira" to "0",
+        "bir" to "1", "biri" to "1", "one" to "1",
+        "iki" to "2", "ikiye" to "2", "two" to "2",
+        "uc" to "3", "üç" to "3", "üce" to "3", "three" to "3",
+        "dort" to "4", "dört" to "4", "four" to "4",
+        "bes" to "5", "beş" to "5", "five" to "5",
+        "alti" to "6", "altı" to "6", "six" to "6",
+        "yedi" to "7", "seven" to "7",
+        "sekiz" to "8", "eight" to "8",
+        "dokuz" to "9", "nine" to "9"
     )
     private val tens = mapOf(
         "on" to "1", "yirmi" to "2", "otuz" to "3", "kirk" to "4",
@@ -37,10 +43,11 @@ object SeyfiDtcCodeParser {
 
     fun extract(value: String, allowShortCode: Boolean = false): String? {
         var text = normalize(value)
-            .replace(Regex("\\b(pe|pi|pı)\\b"), "p")
-            .replace(Regex("\\b(be|bi|bı)\\b"), "b")
-            .replace(Regex("\\b(ce|ci)\\b"), "c")
-            .replace(Regex("\\b(yu)\\b"), "u")
+            .replace(Regex("\\b(pe|pi|pı|p harfi|pe harfi)\\b"), "p")
+            .replace(Regex("\\b(be|bi|bı|b harfi|be harfi)\\b"), "b")
+            .replace(Regex("\\b(ce|ci|c harfi|ce harfi)\\b"), "c")
+            .replace(Regex("\\b(yu|u harfi|u harfı)\\b"), "u")
+            .replace(Regex("\\b(harfini|harfi|harf)\\b"), " ")
 
         tens.forEach { (word, digit) ->
             text = text.replace(Regex("\\b$word\\s+(bir|iki|uc|dort|bes|alti|yedi|sekiz|dokuz)\\b")) { m ->
@@ -60,6 +67,8 @@ object SeyfiDtcCodeParser {
             if (prefix !in setOf("p", "b", "c", "u")) continue
             val digits = StringBuilder()
             var j = i + 1
+            // "Pe harfi sıfır üç..." gibi konuşmalarda harf kelimesini atla.
+            while (j < tokens.size && tokens[j] in setOf("harf", "harfi", "harfini")) j++
             while (j < tokens.size && tokens[j].matches(Regex("[0-9a-f]+")) && digits.length < 5) {
                 digits.append(tokens[j])
                 j++

@@ -60,6 +60,15 @@ class SeyfiUstaCommandHandler {
             .replace(Regex("[^a-z0-9 ]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
+            // Türkçe günlük konuşma ve Vosk'un sık yazım varyantları.
+            .replace(Regex("\\b(taramayi|taramaya) basliycam\\b"), "taramaya basla")
+            .replace(Regex("\\b(taramayi|taramaya) baslicam\\b"), "taramaya basla")
+            .replace(Regex("\\b(canli verilerimi|canli veriyi|canli veriler)\\b"), "canli veri")
+            .replace(Regex("\\b(canli veri ekrani|canli veriye)\\b"), "canli veri")
+            .replace(Regex("\\b(testleri|testlerimi) ac\\b"), "testleri ac")
+            .replace(Regex("\\b(test yapicam|test yapcam|test yapacagim)\\b"), "test yap")
+            .replace(Regex("\\b(ariza kodunu|ariza kodu) verecem\\b"), "ariza kodu verecegim")
+            .replace(Regex("\\b(ariza kodunu|ariza kodu) soyleyecem\\b"), "ariza kodu soyleyecegim")
     }
 
     private fun containsAny(
@@ -127,6 +136,10 @@ class SeyfiUstaCommandHandler {
                 commandText,
                 "taramaya basla",
                 "taramayi baslat",
+                "ariza taramasini baslat",
+                "ariza kontrolune basla",
+                "motor ariza kontrolu",
+                "motoru kontrol et",
                 "tarama baslat",
                 "tara",
                 "basla taramayi",
@@ -388,6 +401,12 @@ class SeyfiUstaCommandHandler {
                 commandText,
                 "canli verileri goster",
                 "canli verileri oku",
+                "canli veriyi ac",
+                "canli verileri ac",
+                "canli sensor verileri",
+                "sensor ekranini ac",
+                "anlik verileri goster",
+                "motorun canli verileri",
                 "sensorleri goster",
                 "motor verileri",
                 "canli veri",
@@ -555,6 +574,14 @@ class SeyfiUstaCommandHandler {
         if (commandText == "test" || containsAny(
                 commandText,
                 "test yap",
+                "testi yap",
+                "teste basla",
+                "testi baslat",
+                "test ekranini ac",
+                "testler ekranini ac",
+                "test bolumunu goster",
+                "sistem kontrolu yap",
+                "kendini kontrol et",
                 "test et",
                 "test yapalim",
                 "kendini test et",
