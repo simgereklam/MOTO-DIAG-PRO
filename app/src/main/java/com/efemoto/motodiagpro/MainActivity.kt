@@ -402,9 +402,10 @@ class MainActivity : ComponentActivity() {
             assistant.startListening()
             return
         }
-        seyfiAwaitingCommand = false
-
+        // Serbest sohbet/ara ifade geldiğinde uyandırılmış oturumu kapatma.
+        // Böylece Vosk'un cümleyi parçalara bölmesi sonraki gerçek komutu düşürmez.
         if (command.action != SeyfiAction.UNKNOWN) {
+            seyfiAwaitingCommand = false
             log("Seyfi Usta komutu: $rawCommand → ${command.action}")
             Toast.makeText(this, "SEYFİ USTA: ${command.response}", Toast.LENGTH_SHORT).show()
         }
