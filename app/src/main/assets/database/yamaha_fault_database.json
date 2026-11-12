@@ -1,8 +1,8 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "brand": "Yamaha",
   "language": "tr-TR",
-  "note": "Başlangıç veri kümesi. Bu kayıtlar genel SAE/J1979 OBD-II P-kodu açıklamalarıdır; Yamaha'ya özgü servis kodu veya tüm Yamaha modellerinin eksiksiz listesi değildir. Model/yıl/ECU uyumu servis dokümanından doğrulanmalıdır.",
+  "note": "Genel SAE/J1979 P-kodları ile Yamaha model/yıl doğrulamalı üretici DTC'leri ayrı namespace ve doğrulama alanlarında tutulur. Model uyumu doğrulanmayan kayıtlar genel açıklama olarak kalır.",
   "records": [
     {
       "code": "P0030",
@@ -341,6 +341,2536 @@
       "codeStandard": "SAE_J1979_GENERIC",
       "source": "Genel SAE/J1979 OBD-II tanımı; Yamaha servis manueliyle model/yıl eşleştirmesi henüz doğrulanmadı.",
       "verification": "GENERIC_ONLY"
+    },
+    {
+      "code": "12",
+      "title": "Krank mili konum sensörü sinyali alınamıyor",
+      "description": "ECU krank mili konum sensöründen normal sinyal alamıyor.",
+      "system": "Krank/senkron",
+      "possibleCauses": [
+        "Krank mili konum sensörü",
+        "Sensör kablosu veya soketi",
+        "Jeneratör rotoru veya ECU"
+      ],
+      "checks": [
+        "Krank sensörü soketini ve tesisatını kontrol edin.",
+        "Marş sırasında sensör sinyalini servis prosedürüne göre kontrol edin.",
+        "Sensör ve jeneratör rotoru kontrollerini MT-07 servis prosedürüne göre yapın."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "13",
+      "title": "Emme havası basınç sensörü devresi",
+      "description": "Emme havası basınç sensöründe açık veya kısa devre algılanıyor.",
+      "system": "Emme/MAP",
+      "possibleCauses": [
+        "MAP sensörü",
+        "Sensör beslemesi, şase veya sinyal kablosu",
+        "ECU bağlantısı"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "14",
+      "title": "Emme havası basınç hortum sistemi",
+      "description": "MAP sensörü hortum hattında tıkanma veya hortumun çıkması algılanıyor.",
+      "system": "Emme/MAP",
+      "possibleCauses": [
+        "MAP hortumunun çıkması, tıkanması veya çatlaması",
+        "Hortum bağlantısı"
+      ],
+      "checks": [
+        "MAP hortumunun çıkık, tıkalı, kıvrılmış veya çatlamış olup olmadığını kontrol edin.",
+        "Sensör ve hortum bağlantısını MT-07 servis prosedürüne göre doğrulayın."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "15",
+      "title": "Gaz kelebeği konum sensörü devresi",
+      "description": "TPS devresinde açık veya kısa devre algılanıyor.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü",
+        "TPS soketi veya tesisatı",
+        "ECU"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "19",
+      "title": "Yan ayak anahtarı / ECU giriş hattı",
+      "description": "ECU'nun yan ayak anahtarı giriş hattında kopukluk veya bağlantı kesilmesi algılanıyor.",
+      "system": "Güvenlik/yan ayak",
+      "possibleCauses": [
+        "Yan ayak anahtarı",
+        "Anahtar kablosu veya ECU soketi"
+      ],
+      "checks": [
+        "Yan ayak anahtarı ve soketini kontrol edin.",
+        "MT-07 şemasındaki siyah/kırmızı ECU hattında sürekliliği kontrol edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "21",
+      "title": "Soğutma suyu sıcaklık sensörü devresi",
+      "description": "Soğutma suyu sıcaklık sensöründe açık veya kısa devre algılanıyor.",
+      "system": "Motor sıcaklığı",
+      "possibleCauses": [
+        "ECT sensörü",
+        "Sensör soketi veya kablosu",
+        "ECU"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "22",
+      "title": "Emme havası sıcaklık sensörü devresi",
+      "description": "Emme havası sıcaklık sensöründe açık veya kısa devre algılanıyor.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "IAT sensörü",
+        "Sensör soketi veya kablosu",
+        "ECU"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "24",
+      "title": "Oksijen sensörü sinyali",
+      "description": "Oksijen sensöründen normal sinyal alınamıyor.",
+      "system": "Emisyon/yakıt kontrolü",
+      "possibleCauses": [
+        "Oksijen sensörü",
+        "Sensör kablosu veya soketi",
+        "Egzoz kaçağı veya ECU"
+      ],
+      "checks": [
+        "Oksijen sensörü soketini ve kablosunu kontrol edin.",
+        "Egzoz kaçağı ve sensör sinyalini servis prosedürüne göre inceleyin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "30",
+      "title": "Devrilme / latch-up algılaması",
+      "description": "ECU latch-up durumunu algılıyor; ilgili modelin servis tablosunda bu kod devrilme/latch-up olayıyla ilişkilendirilmiş.",
+      "system": "Güvenlik/ECU",
+      "possibleCauses": [
+        "Motosikletin devrilmiş olması",
+        "Eğim sensörü ve bağlantıları",
+        "ECU beslemesi veya ECU"
+      ],
+      "checks": [
+        "Motosikletin dik konumda ve güvenli olduğundan emin olun.",
+        "Eğim sensörü ve bağlantılarını servis prosedürüne göre kontrol edin.",
+        "Kontak çevriminden sonra kodun geri gelip gelmediğini kontrol edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "33",
+      "title": "Silindir 1 ateşleme bobini primer devresi",
+      "description": "1 numaralı silindirin ateşleme bobini primer hattında açık veya kısa devre algılanıyor.",
+      "system": "Ateşleme",
+      "possibleCauses": [
+        "1 numaralı ateşleme bobini",
+        "Bobin soketi veya tesisatı",
+        "ECU sürücü hattı"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "34",
+      "title": "Silindir 2 ateşleme bobini primer devresi",
+      "description": "2 numaralı silindirin ateşleme bobini primer hattında açık veya kısa devre algılanıyor.",
+      "system": "Ateşleme",
+      "possibleCauses": [
+        "2 numaralı ateşleme bobini",
+        "Bobin soketi veya tesisatı",
+        "ECU sürücü hattı"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "37",
+      "title": "Rölanti kontrol (ISC) sistemi",
+      "description": "ISC kontrolünde arıza algılanıyor. MT-07 tablosu, ISC çalışma sesi duyulmasına göre bileşen/ISC ünitesi ayrımı yapıyor.",
+      "system": "Rölanti/ISC",
+      "possibleCauses": [
+        "ISC ünitesi",
+        "ISC dışındaki ilgili bileşen veya tesisat",
+        "Gaz kelebeği gövdesi"
+      ],
+      "checks": [
+        "ISC çalışma sesini servis kılavuzundaki prosedüre göre dinleyin.",
+        "Ses varsa ISC dışındaki ilgili bileşenleri, ses yoksa ISC ünitesini inceleyin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "39",
+      "title": "Yakıt enjektörü devresi",
+      "description": "Enjektör devresinde açık veya kısa devre algılanıyor.",
+      "system": "Yakıt enjeksiyonu",
+      "possibleCauses": [
+        "Enjektör",
+        "Enjektör soketi veya tesisatı",
+        "ECU"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "41",
+      "title": "Eğim (lean angle) sensörü devresi",
+      "description": "Eğim sensöründe açık veya kısa devre algılanıyor.",
+      "system": "Güvenlik/eğim sensörü",
+      "possibleCauses": [
+        "Eğim sensörü",
+        "Sensör soketi veya kablosu",
+        "ECU"
+      ],
+      "checks": [
+        "Sensörün montaj yönünü ve bağlantısını kontrol edin.",
+        "Soket ve kabloyu servis şemasına göre ölçün."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "42",
+      "title": "Arka teker hız sensörü / vites veya debriyaj anahtarı",
+      "description": "MT-07 servis tablosunda bu kod; arka teker hız sensöründen normal sinyal alınamaması, vites konum anahtarı veya debriyaj anahtarında açık/kısa devre durumlarıyla ilişkilendirilmiştir.",
+      "system": "Hız/vites/debriyaj",
+      "possibleCauses": [
+        "Arka teker hız sensörü",
+        "Vites konum anahtarı",
+        "Debriyaj anahtarı ve tesisatı"
+      ],
+      "checks": [
+        "Canlı hız sinyalini ve arka teker sensör bağlantısını kontrol edin.",
+        "Vites konum anahtarı ve debriyaj anahtarı sürekliliğini ayrı ayrı kontrol edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "43",
+      "title": "Yakıt sistemi besleme voltajı",
+      "description": "Enjektör ve yakıt pompasına sağlanan voltaj hatalı.",
+      "system": "Yakıt/elektrik",
+      "possibleCauses": [
+        "Akü ve ana besleme",
+        "Yakıt pompası/enjektör beslemesi",
+        "Sigorta, röle, şase veya tesisat"
+      ],
+      "checks": [
+        "Akü ve ana besleme bağlantılarını kontrol edin.",
+        "Yakıt pompası ve enjektör beslemesini MT-07 elektrik şemasına göre ölçün."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "44",
+      "title": "EEPROM okuma/yazma hatası",
+      "description": "ECU EEPROM verisini okurken veya yazarken hata algılıyor.",
+      "system": "ECU hafıza",
+      "possibleCauses": [
+        "ECU beslemesi veya şasesi",
+        "ECU/EEPROM iç arızası"
+      ],
+      "checks": [
+        "Önce akü, besleme ve şase bağlantılarını kontrol edin.",
+        "Kod tekrar ederse ECU için üretici servis prosedürünü izleyin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "46",
+      "title": "Şarj voltajı anormal",
+      "description": "Şarj sistemi voltajı normal aralıkta değil.",
+      "system": "Şarj sistemi",
+      "possibleCauses": [
+        "Akü",
+        "Stator/jeneratör",
+        "Regülatör/doğrultucu",
+        "Şarj bağlantıları ve şase"
+      ],
+      "checks": [
+        "Akü dinlenme ve motor çalışırken voltajını ölçün.",
+        "Stator çıkışı ve regülatör/doğrultucuyu MT-07 servis değerlerine göre test edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "50",
+      "title": "ECU bellek arızası",
+      "description": "ECU dahili bellek kontrolünde arıza algılanıyor; bazı durumlarda kod göstergede görünmeyebilir.",
+      "system": "ECU",
+      "possibleCauses": [
+        "ECU iç arızası",
+        "ECU besleme/şase problemi"
+      ],
+      "checks": [
+        "Önce ECU besleme ve şase bağlantılarını doğrulayın.",
+        "Kodun geçmiş/mevcut durumunu YDT veya uyumlu teşhis yöntemiyle teyit edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "51",
+      "title": "İmmobilizer anahtar-immobilizer iletişim hatası",
+      "description": "Anahtar ile immobilizer ünitesi arasında kod iletilemiyor.",
+      "system": "İmmobilizer",
+      "possibleCauses": [
+        "Anahtar transponderi",
+        "İmmobilizer anteni/ünitesi",
+        "Kablo ve besleme"
+      ],
+      "checks": [
+        "Yedek anahtarla kontrol edin.",
+        "Anahtar anteni, immobilizer soketi ve beslemesini kontrol edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "52",
+      "title": "İmmobilizer anahtar kodu eşleşmiyor",
+      "description": "Anahtar ile immobilizer ünitesi arasındaki kodlar eşleşmiyor.",
+      "system": "İmmobilizer",
+      "possibleCauses": [
+        "Kayıtlı anahtar kodu",
+        "Anahtar/immobilizer ünitesi"
+      ],
+      "checks": [
+        "Anahtarın doğru kayıtlı anahtar olduğunu doğrulayın.",
+        "Anahtar kaydı ve eşleştirmeyi yalnızca Yamaha prosedürüyle yapın."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "53",
+      "title": "ECU-immobilizer iletişim hatası",
+      "description": "ECU ile immobilizer ünitesi arasında kod iletilemiyor.",
+      "system": "İmmobilizer/ECU",
+      "possibleCauses": [
+        "ECU-immobilizer iletişim hattı",
+        "Soketler ve besleme"
+      ],
+      "checks": [
+        "ECU ve immobilizer bağlantılarını kontrol edin.",
+        "İletişim hattını elektrik şemasına göre test edin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "54",
+      "title": "ECU-immobilizer kod eşleşmiyor",
+      "description": "ECU ile immobilizer arasında iletilen kodlar eşleşmiyor.",
+      "system": "İmmobilizer/ECU",
+      "possibleCauses": [
+        "ECU veya immobilizer eşleşmesi",
+        "Kayıtlı anahtar verileri"
+      ],
+      "checks": [
+        "ECU ve immobilizer eşleşme durumunu servis cihazıyla doğrulayın.",
+        "Kodlama/anahtar kaydını yalnızca üretici prosedürüyle uygulayın."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "55",
+      "title": "İmmobilizer anahtar kayıt hatası",
+      "description": "Anahtar kodu kaydı sırasında hata algılanıyor.",
+      "system": "İmmobilizer",
+      "possibleCauses": [
+        "Anahtar kayıt işlemi",
+        "İmmobilizer ünitesi",
+        "Besleme/iletişim"
+      ],
+      "checks": [
+        "Akü beslemesini ve anahtar kayıt koşullarını kontrol edin.",
+        "Yamaha anahtar kayıt prosedürünü izleyin."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "56",
+      "title": "ECU tanınmayan kod aldı",
+      "description": "ECU, immobilizer iletişiminde tanımlanamayan bir kod alıyor.",
+      "system": "İmmobilizer/ECU",
+      "possibleCauses": [
+        "Anahtar/immobilizer kod verisi",
+        "İletişim hattı",
+        "ECU veya immobilizer"
+      ],
+      "checks": [
+        "Anahtar ve immobilizer iletişim bağlantılarını kontrol edin.",
+        "Üretici teşhis prosedürüyle eşleşme durumunu doğrulayın."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "70",
+      "title": "Motor rölanti durdurma sistemi",
+      "description": "Motor rölanti durdurma (idle stop) sistemiyle ilgili arıza/olay kaydı.",
+      "system": "Rölanti durdurma",
+      "possibleCauses": [
+        "Rölanti durdurma sistemi",
+        "İlgili sensör ve kontrol devreleri"
+      ],
+      "checks": [
+        "Aracın rölanti durdurma donanımının bu modelde bulunduğunu doğrulayın.",
+        "İlgili sistemin model servis prosedürünü uygulayın."
+      ],
+      "models": [
+        "MT-07"
+      ],
+      "years": [
+        2014
+      ],
+      "codeStandard": "YAMAHA_FACTORY_FI",
+      "source": "Yamaha MT-07 2014 Service Manual, Self-Diagnostic Function Table, section 9-5. https://www.manualslib.com/manual/1056405/Yamaha-2014-Mt-07.html?page=552",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0030",
+      "title": "Oksijen sensörü ısıtıcı devresi",
+      "description": "Oksijen sensörü ısıtıcı devresinde açık/kısa devre.",
+      "system": "Emisyon",
+      "possibleCauses": [
+        "Oksijen sensörü ısıtıcı devresi",
+        "Soket/tesisat",
+        "Besleme"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0106",
+      "title": "Emme havası basınç sensörü aralık/performans",
+      "description": "Emme havası basınç sensöründe performans veya aralık sorunu; kılavuz tıkanmış/gevşek gaz kelebeği gövdesi bağlantısını olası nedenler arasında verir.",
+      "system": "Emme/MAP",
+      "possibleCauses": [
+        "MAP sensörü veya hortum",
+        "Gaz kelebeği gövdesi bağlantısı",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "MAP hortumunun tıkalı, gevşek veya çıkmış olup olmadığını kontrol edin.",
+        "Sensör bağlantısı ve tesisatını kılavuza göre inceleyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0112",
+      "title": "Emme havası sıcaklık sensörü düşük voltaj",
+      "description": "IAT sensör devresinde düşük voltaj/kısa devre durumu.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "IAT sensörü",
+        "Sinyal hattında şaseye kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0113",
+      "title": "Emme havası sıcaklık sensörü yüksek voltaj",
+      "description": "IAT sensör devresinde yüksek voltaj/açık devre durumu.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "IAT sensörü",
+        "Açık devre veya soket temassızlığı",
+        "Tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0117",
+      "title": "Soğutma suyu sıcaklık sensörü düşük voltaj",
+      "description": "ECT sensör devresinde düşük voltaj/kısa devre durumu.",
+      "system": "Motor sıcaklığı",
+      "possibleCauses": [
+        "ECT sensörü",
+        "Sinyal hattında şaseye kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0118",
+      "title": "Soğutma suyu sıcaklık sensörü yüksek voltaj",
+      "description": "ECT sensör devresinde yüksek voltaj/açık devre durumu.",
+      "system": "Motor sıcaklığı",
+      "possibleCauses": [
+        "ECT sensörü",
+        "Açık devre veya soket temassızlığı",
+        "Tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0122",
+      "title": "Gaz kelebeği konum sensörü düşük voltaj",
+      "description": "TPS devresinde düşük voltaj algılanıyor.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü",
+        "Sinyal hattında kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0123",
+      "title": "Gaz kelebeği konum sensörü yüksek voltaj",
+      "description": "TPS devresinde yüksek voltaj algılanıyor.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü",
+        "Açık devre veya beslemeye kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0201",
+      "title": "Yakıt enjektörü arızası",
+      "description": "Yakıt enjektöründen normal sinyal alınmıyor. Kılavuz motor gücü kaybı ve motorun çalışmaması riskini belirtir.",
+      "system": "Yakıt enjeksiyonu",
+      "possibleCauses": [
+        "Enjektör",
+        "Enjektör-SGCU soketleri",
+        "Kablo tesisatı",
+        "SGCU"
+      ],
+      "checks": [
+        "Enjektör soketini ve pinlerini kontrol edin.",
+        "Enjektör-SGCU tesisatında süreklilik ve kısa devre kontrolü yapın.",
+        "Enjektör direncini NMAX 2022 servis değerine göre ölçün."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0500",
+      "title": "Ön teker hız sensörü sinyali",
+      "description": "Ön teker hız sensöründen normal sinyal alınmıyor; hız göstergesi etkilenebilir.",
+      "system": "Hız sensörü",
+      "possibleCauses": [
+        "Ön teker hız sensörü",
+        "Soket/tesisat",
+        "Sensör rotoru"
+      ],
+      "checks": [
+        "Ön teker sensörü montajını ve rotorunu kontrol edin.",
+        "Soket ve tesisatı şemaya göre test edin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0507",
+      "title": "ISC valfi tamamen açık konumda takılı",
+      "description": "Rölanti kontrol valfi açık konumda takılı kalmış olarak algılanıyor.",
+      "system": "Rölanti/ISC",
+      "possibleCauses": [
+        "ISC valfi",
+        "Gaz kelebeği gövdesi",
+        "Ön teker hız sensörü geri bildirimi"
+      ],
+      "checks": [
+        "ISC ve gaz kelebeği gövdesini kontrol edin.",
+        "Ön teker hız sensörü geri bildirimini doğrulayın."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0511",
+      "title": "Rölanti hava kontrol sistemi devresi",
+      "description": "Rölanti hava kontrol devresinde arıza algılanıyor.",
+      "system": "Rölanti/ISC",
+      "possibleCauses": [
+        "ISC devresi",
+        "Valf soketi/tesisatı",
+        "SGCU"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0560",
+      "title": "Araç sistem besleme voltajı performansı",
+      "description": "Sistem besleme voltajı performansı anormal; kılavuz akü boşalmasını olası nedenler arasında belirtir.",
+      "system": "Elektrik/şarj",
+      "possibleCauses": [
+        "Akü boşalması",
+        "Şarj sistemi",
+        "Akü bağlantıları"
+      ],
+      "checks": [
+        "Akü voltajını dinlenme ve çalışma koşullarında ölçün.",
+        "Şarj sistemini NMAX 2022 servis değerlerine göre kontrol edin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0563",
+      "title": "Araç sistem besleme voltajı yüksek",
+      "description": "Araç sistem besleme voltajı yüksek algılanıyor.",
+      "system": "Elektrik/şarj",
+      "possibleCauses": [
+        "Regülatör/doğrultucu",
+        "Akü ve şarj bağlantıları",
+        "Şase"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0601",
+      "title": "SGCU dahili kontrol modülü bellek hatası",
+      "description": "SGCU dahili bellek/işlem kontrolünde arıza algılanıyor.",
+      "system": "SGCU/ECU",
+      "possibleCauses": [
+        "SGCU",
+        "Besleme ve şase",
+        "Soketler"
+      ],
+      "checks": [
+        "SGCU besleme, şase ve soketlerini kontrol edin.",
+        "Kod tekrarlanırsa üretici teşhis prosedürünü uygulayın."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P062F",
+      "title": "ECU/SGCU EEPROM hatası",
+      "description": "Kontrol ünitesi EEPROM belleğinde arıza algılanıyor.",
+      "system": "SGCU/ECU",
+      "possibleCauses": [
+        "SGCU dahili bellek",
+        "Besleme/şase",
+        "Kontrol ünitesi"
+      ],
+      "checks": [
+        "Besleme ve şase bağlantılarını doğrulayın.",
+        "Kontrol ünitesi için servis kılavuzu prosedürünü izleyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P1602",
+      "title": "SGCU yedek besleme voltajı yok",
+      "description": "SGCU dahili devresine normal yedek besleme voltajı ulaşmıyor.",
+      "system": "Elektrik/SGCU",
+      "possibleCauses": [
+        "Akü yedek besleme hattı",
+        "SGCU soketi",
+        "Sigorta veya tesisat"
+      ],
+      "checks": [
+        "Akü yedek besleme hattı ve SGCU soketini kontrol edin.",
+        "İlgili sigorta ve kablo sürekliliğini şemaya göre ölçün."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P2158",
+      "title": "Teker hız sensörü sinyal/geri bildirim arızası",
+      "description": "Teker hız sensörü sinyalinde anormallik algılanıyor.",
+      "system": "Hız sensörü/ABS",
+      "possibleCauses": [
+        "Teker hız sensörü",
+        "Sensör rotoru",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Ön ve arka teker sensörlerinin montajını ve rotorlarını kontrol edin.",
+        "Canlı hız verisini ve tesisatı model prosedürüne göre doğrulayın."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P2645",
+      "title": "VVA solenoid devresi sinyali yok",
+      "description": "Sürüş sırasında VVA solenoid devresinden normal sinyal alınmıyor.",
+      "system": "VVA",
+      "possibleCauses": [
+        "VVA solenoid",
+        "Solenoid soketi",
+        "SGCU tesisatı"
+      ],
+      "checks": [
+        "VVA solenoid soketini ve tesisatını kontrol edin.",
+        "Solenoid direncini NMAX 2022 servis değerine göre ölçün."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0106",
+      "title": "Emme havası basınç sensörü aralık/performans",
+      "description": "MAP sensörü performans/aralık arızası.",
+      "system": "Emme/MAP",
+      "possibleCauses": [
+        "MAP sensörü veya hortum",
+        "Gaz kelebeği gövdesi bağlantısı",
+        "Tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0112",
+      "title": "Emme havası sıcaklık sensörü düşük voltaj",
+      "description": "IAT sensör devresinde düşük voltaj algılanıyor.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "IAT sensörü",
+        "Kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0113",
+      "title": "Emme havası sıcaklık sensörü yüksek voltaj",
+      "description": "IAT sensör devresinde yüksek voltaj algılanıyor.",
+      "system": "Emme sıcaklığı",
+      "possibleCauses": [
+        "IAT sensörü",
+        "Açık devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0122",
+      "title": "Gaz kelebeği konum sensörü düşük voltaj",
+      "description": "TPS devresinde düşük voltaj algılanıyor.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü",
+        "Kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0123",
+      "title": "Gaz kelebeği konum sensörü yüksek voltaj",
+      "description": "TPS devresinde yüksek voltaj algılanıyor.",
+      "system": "Gaz kelebeği",
+      "possibleCauses": [
+        "TPS sensörü",
+        "Açık devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0335",
+      "title": "Krank mili konum sensörü sinyali yok",
+      "description": "ECU krank mili konum sensöründen normal sinyal alamıyor; motor çalışmayabilir.",
+      "system": "Krank/senkron",
+      "possibleCauses": [
+        "Krank sensörü",
+        "Sensör-SGCU/ECU soketleri",
+        "Tesisat veya sensör aralığı"
+      ],
+      "checks": [
+        "Krank sensörü soketini ve tesisatını kontrol edin.",
+        "Sensör montajı ve rotor aralığını ilgili XMAX servis prosedürüne göre kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0507",
+      "title": "ISC valfi tamamen açık konumda takılı",
+      "description": "Rölanti kontrol valfi açık konumda takılı algılanıyor.",
+      "system": "Rölanti/ISC",
+      "possibleCauses": [
+        "ISC valfi",
+        "Ön teker hız sensörü geri bildirimi",
+        "Gaz kelebeği gövdesi"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P0560",
+      "title": "Şarj voltajı anormal",
+      "description": "Şarj voltajı anormal; akünün aşırı şarj olması veya regülatör/doğrultucu arızası olası nedenler arasındadır.",
+      "system": "Şarj sistemi",
+      "possibleCauses": [
+        "Akü",
+        "Regülatör/doğrultucu",
+        "Şarj sistemi bağlantıları"
+      ],
+      "checks": [
+        "Akü voltajını ölçün.",
+        "Şarj sistemini XMAX 300 2017 servis değerlerine göre kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P1604",
+      "title": "Eğim sensörü düşük voltaj / şaseye kısa devre",
+      "description": "Eğim sensörü devresinde düşük voltaj/şaseye kısa devre durumu.",
+      "system": "Eğim sensörü",
+      "possibleCauses": [
+        "Eğim sensörü",
+        "Sinyal hattında şaseye kısa devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "P1605",
+      "title": "Eğim sensörü yüksek voltaj / açık devre",
+      "description": "Eğim sensörü devresinde yüksek voltaj/açık devre durumu.",
+      "system": "Eğim sensörü",
+      "possibleCauses": [
+        "Eğim sensörü",
+        "Açık devre",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "Önce ilgili soket ve pinlerde gevşeklik, oksitlenme veya hasar olup olmadığını kontrol edin.",
+        "Kablo sürekliliği ve kısa devre ölçümünü ilgili modelin elektrik şemasına göre yapın.",
+        "Sensör/aktüatör ölçüm değerlerini yalnızca ilgili modelin servis kılavuzundaki değerlerle karşılaştırın.",
+        "Kod silmeden önce arızanın mevcut mu geçmiş mi olduğunu ve ham ECU yanıtını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017
+      ],
+      "codeStandard": "YAMAHA_OEM_P_DTC",
+      "source": "Yamaha XMAX 300 (CZD300-A) 2017 Service Manual, Self-Diagnostic Function Table, pages 9-1 to 9-7. https://www.manualslib.com/manual/2549595/Yamaha-Mbk-X-Max-300-2017.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ENGINE"
+    },
+    {
+      "code": "11_ABS",
+      "title": "Ön teker hız sensörü darbeleri aralıklı veya yok",
+      "description": "Ön teker hız sensöründen aralıklı darbe alınıyor veya darbe alınmıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Ön teker hız sensörü",
+        "Sensör rotoru",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "12_ABS",
+      "title": "Arka teker hız sensörü darbeleri aralıklı veya yok",
+      "description": "Arka teker hız sensöründen aralıklı darbe alınıyor veya darbe alınmıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker hız sensörü",
+        "Sensör rotoru",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "16_ABS",
+      "title": "Arka teker hız sensörü açık/kısa devre",
+      "description": "Arka teker hız sensörü devresinde açık veya kısa devre algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker hız sensörü",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "17_ABS",
+      "title": "Ön teker sensörü eksik darbeler",
+      "description": "Ön teker sensöründe eksik darbe algılanıyor; servis kılavuzu 30 km/s ve üzerindeki koşullarda 17 kodunu kaydediyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Ön teker sensörü",
+        "Sensör rotoru kirlenmesi/hasarı",
+        "Montaj ve hava aralığı"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "45_ABS",
+      "title": "Ön teker sensörü düşük hızda eksik darbe",
+      "description": "Ön teker sensöründe düşük hız koşulunda eksik darbe algılanıyor; 29 km/s ve altında 45 kodu önce kaydedilebilir.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Ön teker sensörü",
+        "Sensör rotoru",
+        "Montaj/tesisat"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "18_ABS",
+      "title": "Arka teker sensörü eksik darbeler",
+      "description": "Arka teker sensöründe eksik darbe algılanıyor; servis kılavuzu 30 km/s ve üzerindeki koşullarda 18 kodunu kaydediyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker sensörü",
+        "Sensör rotoru",
+        "Montaj ve hava aralığı"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "46_ABS",
+      "title": "Arka teker sensörü düşük hızda eksik darbe",
+      "description": "Arka teker sensöründe düşük hız koşulunda eksik darbe algılanıyor; 29 km/s ve altında 46 kodu önce kaydedilebilir.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker sensörü",
+        "Sensör rotoru",
+        "Montaj/tesisat"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "21_ABS",
+      "title": "ABS hidrolik ünitesi solenoid sürücü devresi",
+      "description": "ABS hidrolik ünitesinin solenoid sürücü devresinde arıza.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS hidrolik ünitesi",
+        "Solenoid sürücü devresi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "31_ABS",
+      "title": "ABS solenoid besleme devresi",
+      "description": "ABS solenoid besleme devresinde arıza.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS solenoid sigortası",
+        "Besleme hattı",
+        "ABS hidrolik ünitesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "32_ABS",
+      "title": "ABS solenoid besleme devresi kısa devre",
+      "description": "ABS solenoid besleme devresinde kısa devre algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS hidrolik ünitesi",
+        "Solenoid besleme tesisatı"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "33_ABS",
+      "title": "ABS motor besleme voltajı anormal",
+      "description": "ABS motor besleme voltajında anormallik algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS motor sigortası",
+        "Akü ve besleme",
+        "ABS hidrolik ünitesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "34_ABS",
+      "title": "ABS motor besleme devresi kısa devre",
+      "description": "ABS motor besleme devresinde kısa devre algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS hidrolik ünitesi",
+        "Motor besleme tesisatı"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "41_ABS",
+      "title": "Ön teker ABS darbe aralığı / basınç boşaltma hatası",
+      "description": "Ön teker ABS darbe sinyalleri aralıklı veya basınç boşaltma işlemi anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Ön teker sensörü montajı",
+        "Sensör rotoru",
+        "ABS hidrolik ünitesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "42_ABS",
+      "title": "Arka teker ABS darbe aralığı / basınç boşaltma hatası",
+      "description": "Arka teker ABS darbe sinyalleri aralıklı veya basınç boşaltma işlemi anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker sensörü montajı",
+        "Sensör rotoru",
+        "ABS hidrolik ünitesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "47_ABS",
+      "title": "Arka teker ABS ek darbe/işlem hatası",
+      "description": "NMAX 2022 servis kılavuzu 42 ve 47 kodlarını aynı arka teker ABS kontrol başlığında listeliyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker sensörü",
+        "Sensör rotoru",
+        "ABS hidrolik ünitesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "54_ABS",
+      "title": "ABS solenoid ve motor besleme devreleri",
+      "description": "ABS solenoid ve ABS motor besleme devrelerinde arıza.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Akü",
+        "ABS sigortaları",
+        "Besleme tesisatı",
+        "ABS hidrolik ünitesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "55_ABS",
+      "title": "ABS kontrol ünitesi arızası",
+      "description": "ABS ECU/hidrolik ünite arızası.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS hidrolik ünitesi",
+        "ABS ECU bağlantıları"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "56_ABS",
+      "title": "ABS dahili güç beslemesi anormal",
+      "description": "ABS hidrolik ünitesi dahili güç beslemesinde anormallik.",
+      "system": "ABS",
+      "possibleCauses": [
+        "ABS hidrolik ünitesi",
+        "Besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "63_ABS",
+      "title": "Ön teker sensörü beslemesi düşük",
+      "description": "Ön teker hız sensörü besleme voltajı düşük.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Ön teker sensörü",
+        "Kablo/soket",
+        "ABS ECU beslemesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "64_ABS",
+      "title": "Arka teker sensörü beslemesi düşük",
+      "description": "Arka teker hız sensörü besleme voltajı düşük.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Arka teker sensörü",
+        "Kablo/soket",
+        "ABS ECU beslemesi"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; motosikleti normal trafikte kullanmaya devam etmeyin.",
+        "Sensör/rotor yüzeyinde metal parçacık, kir, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini yalnızca NMAX 2022 ABS elektrik şemasına göre yapın.",
+        "Hidrolik ünite/ABS ECU değiştirme kararını ölçüm ve servis prosedürü doğrulamadan vermeyin."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC tables and troubleshooting sections 9-37 to 9-168. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "11_ABS",
+      "title": "Ön teker hız sensörü darbeleri aralıklı veya yok",
+      "description": "Ön teker hız sensöründen aralıklı darbe alınıyor veya darbe alınmıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "12_ABS",
+      "title": "Arka teker hız sensörü darbeleri aralıklı veya yok",
+      "description": "Arka teker hız sensöründen aralıklı darbe alınıyor veya darbe alınmıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "13_ABS",
+      "title": "Ön teker hız sensörü darbe periyodu anormal",
+      "description": "Ön teker hız sensörü darbe periyodu anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "26_ABS",
+      "title": "Ön teker hız sensörü darbe periyodu anormal",
+      "description": "Ön teker hız sensörü darbe periyodu anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "14_ABS",
+      "title": "Arka teker hız sensörü darbe periyodu anormal",
+      "description": "Arka teker hız sensörü darbe periyodu anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "27_ABS",
+      "title": "Arka teker hız sensörü darbe periyodu anormal",
+      "description": "Arka teker hız sensörü darbe periyodu anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "15_ABS",
+      "title": "Ön teker hız sensörü açık/kısa devre",
+      "description": "Ön teker hız sensörü devresinde açık veya kısa devre algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "16_ABS",
+      "title": "Arka teker hız sensörü açık/kısa devre",
+      "description": "Arka teker hız sensörü devresinde açık veya kısa devre algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "21_ABS",
+      "title": "ABS solenoid sürücü devresi",
+      "description": "ABS hidrolik ünitesinin solenoid sürücü devresinde arıza.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "31_ABS",
+      "title": "ABS solenoid besleme devresi",
+      "description": "ABS solenoid güç devresinde arıza.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "33_ABS",
+      "title": "ABS motor besleme voltajı anormal",
+      "description": "ABS motor besleme voltajı anormal.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "34_ABS",
+      "title": "ABS motor besleme devresi kısa devre",
+      "description": "ABS motor besleme devresinde kısa devre.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "41_ABS",
+      "title": "Ön teker ABS darbe/basınç boşaltma hatası",
+      "description": "Ön teker ABS darbeleri aralıklı veya basınç boşaltma hatası.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "42_ABS",
+      "title": "Arka teker ABS darbe/basınç boşaltma hatası",
+      "description": "Arka teker ABS darbeleri aralıklı veya basınç boşaltma hatası.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "43_ABS",
+      "title": "Ön teker sensörü eksik darbeler",
+      "description": "Ön teker sensöründe eksik darbeler algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "45_ABS",
+      "title": "Ön teker sensörü eksik darbeler",
+      "description": "Ön teker sensöründe eksik darbeler algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "44_ABS",
+      "title": "Arka teker sensörü eksik darbeler",
+      "description": "Arka teker sensöründe eksik darbeler algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "46_ABS",
+      "title": "Arka teker sensörü eksik darbeler",
+      "description": "Arka teker sensöründe eksik darbeler algılanıyor.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "51_ABS",
+      "title": "ABS ECU besleme voltajı yüksek",
+      "description": "ABS ECU besleme voltajı yüksek.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "53_ABS",
+      "title": "ABS ECU besleme voltajı düşük",
+      "description": "ABS ECU besleme voltajı düşük.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "55_ABS",
+      "title": "ABS ECU/hidrolik ünite arızası",
+      "description": "ABS hidrolik ünitesi/ECU arızası.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "56_ABS",
+      "title": "ABS hidrolik ünitesi dahili devre arızası",
+      "description": "ABS hidrolik ünitesinin dahili devresinde anormallik.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "57_ABS",
+      "title": "Araç CAN hattı veya sistem beslemesi",
+      "description": "Araç CAN iletişim hattı veya araç sistem beslemesinde sorun.",
+      "system": "ABS",
+      "possibleCauses": [
+        "İlgili teker hız sensörü, rotor veya ABS hidrolik ünitesi",
+        "Soket, kablo veya besleme bağlantıları"
+      ],
+      "checks": [
+        "ABS uyarısı güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Teker sensörleri, rotorlar, soketler ve beslemeyi MT-09 2024 servis kılavuzuna göre kontrol edin.",
+        "ABS hidrolik ünitesini ölçüm ve üretici prosedürü olmadan değiştirmeyin."
+      ],
+      "models": [
+        "MT-09"
+      ],
+      "years": [
+        2024
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
     }
   ]
 }
