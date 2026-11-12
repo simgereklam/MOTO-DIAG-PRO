@@ -401,12 +401,13 @@ class OfflineVoiceAssistant(
                             speaking = false
                             processing = false
                             status("Seyfi Usta yanıtını tamamladı.")
-                            val hasCompletionCallback = onDone != null
                             try { onDone?.invoke() } catch (e: Exception) {
                                 Log.e("SeyfiVoice", "Konuşma sonrası işlem başarısız", e)
                             } finally {
-                                if (!hasCompletionCallback && listeningEnabled && !processing) {
-                                    startListeningInternal(350)
+                                // Callback bir ekran açsa veya tarama başlatsa da,
+                                // yeni bir TTS başlamadıysa mikrofon oturumunu geri getir.
+                                if (listeningEnabled && !processing && !speaking) {
+                                    startListeningInternal(450)
                                 }
                             }
                         }
@@ -420,12 +421,13 @@ class OfflineVoiceAssistant(
                             speaking = false
                             processing = false
                             status("Metin seslendirilemedi.")
-                            val hasCompletionCallback = onDone != null
                             try { onDone?.invoke() } catch (e: Exception) {
                                 Log.e("SeyfiVoice", "Konuşma sonrası işlem başarısız", e)
                             } finally {
-                                if (!hasCompletionCallback && listeningEnabled && !processing) {
-                                    startListeningInternal(350)
+                                // Callback bir ekran açsa veya tarama başlatsa da,
+                                // yeni bir TTS başlamadıysa mikrofon oturumunu geri getir.
+                                if (listeningEnabled && !processing && !speaking) {
+                                    startListeningInternal(450)
                                 }
                             }
                         }
@@ -449,7 +451,9 @@ class OfflineVoiceAssistant(
                 speaking = false
                 processing = false
                 status("Telefonun ses motoru konuşmayı başlatamadı.")
-                onDone?.invoke()
+                try { onDone?.invoke() } finally {
+                    if (listeningEnabled && !processing && !speaking) startListeningInternal(450)
+                }
             }
         }
     }
