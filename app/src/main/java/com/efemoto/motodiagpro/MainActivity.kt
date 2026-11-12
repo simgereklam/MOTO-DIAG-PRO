@@ -439,7 +439,7 @@ class MainActivity : ComponentActivity() {
         if (yamahaVehicleUtterance) seyfiAwaitingCommand = true
 
         // DTC kodu doğrudan tam eşleşme ile aranır; son taramadaki kodlar kullanılmaz.
-        val explicitDtcCode = extractSpokenDtc(commandInput)
+        val explicitDtcCode = SeyfiDtcCodeParser.extract(commandInput)
         if (explicitDtcCode != null) {
             seyfiAwaitingCommand = false
             log("DTC SORUSU • ham ifade: $rawCommand • kod: $explicitDtcCode")
