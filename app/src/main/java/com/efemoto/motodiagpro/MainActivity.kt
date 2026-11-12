@@ -1332,8 +1332,10 @@ class MainActivity : ComponentActivity() {
 
     private fun baseDtcCode(value: String): String = value.substringBefore(" •").trim()
 
-    private fun faultRecord(code: String): YamahaKnowledgeRecord? =
-        YamahaKnowledgeBase.find(this, baseDtcCode(code))
+    private fun faultRecord(code: String): YamahaKnowledgeRecord? {
+        val selectedModel = persistentPrefs().getString("yamaha_model_year", "").orEmpty()
+        return YamahaKnowledgeBase.find(this, baseDtcCode(code), selectedModel)
+    }
 
     private fun faultTitle(code: String): String {
         val record = faultRecord(code) ?: return DtcDatabase.title(baseDtcCode(code))
