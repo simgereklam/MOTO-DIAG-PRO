@@ -47,13 +47,8 @@ object YamahaKnowledgeBase {
             val scopes = scoped.flatMap { it.models }.distinct()
             return if (scopes.size == 1) scoped.firstOrNull() else null
         }
-        val wanted = normalizeModel(model)
-        return matches.firstOrNull { record ->
-            record.models.any { candidate ->
-                val available = normalizeModel(candidate)
-                available == wanted || available.contains(wanted) || wanted.contains(available)
-            }
-        } ?: matches.firstOrNull { it.models.isEmpty() }
+        return matches.firstOrNull { record -> matchesModel(record, model) }
+            ?: matches.firstOrNull { it.models.isEmpty() }
     }
 
     /**
@@ -72,11 +67,7 @@ object YamahaKnowledgeBase {
         return readRecords(context)
             .filter { record ->
                 model.isNullOrBlank() || record.models.isEmpty() ||
-                    record.models.any { candidate ->
-                        val wanted = normalizeModel(model)
-                        val available = normalizeModel(candidate)
-                        available == wanted || available.contains(wanted) || wanted.contains(available)
-                    }
+                    matchesModel(record, model)
             }
             .mapNotNull { record ->
                 val titleScore = overlap(queryTokens, tokens(record.title)) * 4
@@ -148,6 +139,18 @@ object YamahaKnowledgeBase {
             }
         } catch (_: Exception) {
             emptyList()
+        }
+    }
+
+    private fun matchesModel(record: YamahaKnowledgeRecord, model: String): Boolean {
+        if (record.models.isEmpty()) return true
+        val withoutYear = model.replace(Regex("\\b(?:19|20)\\d{2}\\b"), " ")
+        val wanted = normalizeModel(withoutYear)
+        val yearMatches = record.years.isEmpty() ||
+            record.years.any { Regex("\\b$it\\b").containsMatchIn(model) }
+        return yearMatches && record.models.any { candidate ->
+            val available = normalizeModel(candidate)
+            available == wanted || available.contains(wanted) || wanted.contains(available)
         }
     }
 
