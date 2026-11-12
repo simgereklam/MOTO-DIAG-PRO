@@ -25,6 +25,7 @@ enum class SeyfiAction {
     SHOW_TPS,
     SHOW_MAP,
     SHOW_CONNECTION_STATUS,
+    SHOW_LOGS,
     SHOW_HELP,
     GO_HOME,
     SHOW_TESTS,
@@ -229,6 +230,26 @@ class SeyfiUstaCommandHandler {
 
         if (containsAny(
                 commandText,
+                "hata dokumu",
+                "hata dokumunu ac",
+                "hata kayitlari",
+                "islem kayitlari",
+                "loglari goster",
+                "loglari ac",
+                "sistem gunlugu",
+                "kayitlari goster",
+                "son islemler"
+            )
+        ) {
+            return command(
+                SeyfiAction.SHOW_LOGS,
+                original,
+                "Hata dökümü ve işlem kayıtlarını açıyorum."
+            )
+        }
+
+        if (containsAny(
+                commandText,
                 "arizalari acikla",
                 "ariza kodlarini acikla",
                 "arizalari anlat",
@@ -386,6 +407,9 @@ class SeyfiUstaCommandHandler {
                 "mikrofon nasil calisiyor",
                 "ses nasil calisiyor",
                 "neler yapabilirsin",
+                "baska ne yapabilirsin",
+                "baska neler yapabilirsin",
+                "baska ne yapabiliyorsun",
                 "komutlar neler",
                 "ne yapabiliyorsun"
             )
@@ -393,7 +417,7 @@ class SeyfiUstaCommandHandler {
             return command(
                 SeyfiAction.SHOW_HELP,
                 original,
-                "Arıza taraması, arıza okuma, arıza silme ve canlı veri kontrolü yapabilirim."
+                "Gerçek ECU arıza taraması yapabilir, arıza kodlarını okuyup açıklayabilir, onayınızla silebilir, canlı sensör verilerini gösterebilir, hata dökümünü açabilir, bağlantıyı kontrol edebilir ve sistem testlerini çalıştırabilirim. ECU bağlı değilse ölçüm uydurmam."
             )
         }
 
@@ -523,6 +547,8 @@ class SeyfiUstaCommandHandler {
             "arızaları açıkla" to SeyfiAction.EXPLAIN_FAULTS,
             "arızaları sil" to SeyfiAction.CLEAR_FAULTS,
             "canlı verileri göster" to SeyfiAction.SHOW_LIVE_DATA,
+            "hata dökümü" to SeyfiAction.SHOW_LOGS,
+            "başka ne yapabiliyorsun" to SeyfiAction.SHOW_HELP,
             "ana sayfa" to SeyfiAction.GO_HOME,
             "motor verilerini yorumla" to SeyfiAction.ANALYZE_ENGINE_DATA
         )
