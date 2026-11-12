@@ -115,44 +115,19 @@ object DtcDatabase {
         "U0155" to "Gösterge paneli kontrol modülü ile iletişim kaybı"
     )
 
-    // Yamaha-style two-digit fault code references transcribed from the supplied Python app.
-    // Their exact application is ECU/model/year dependent; these are not generic SAE DTCs.
-    private val yamahaTwoDigit = mapOf(
-        "13" to "Pulsar bobin sinyali hatası",
-        "14" to "Krank konum sensörü sinyali hatası",
-        "15" to "Motor sıcaklık sensörü sinyali hatası",
-        "17" to "Vuruntu sensörü hatası",
-        "18" to "Gaz kelebeği konum sensörü sinyali hatası",
-        "19" to "Akü voltajı hatası",
-        "22" to "Atmosferik basınç sensörü sinyali hatası",
-        "23" to "Emme havası sıcaklık sensörü sinyali hatası",
-        "24" to "Eksantrik mili konum sensörü hatası",
-        "25" to "Yakıt basıncı sensörü sinyali hatası",
-        "26" to "Enjektör sinyali hatası",
-        "27" to "Yakıt filtresinde su algılandı",
-        "28" to "Vites konum anahtarı sinyali hatası",
-        "29" to "Emme basınç sensörü sinyali hatası",
-        "30" to "ECU kilitlenme / latch-up tespiti",
-        "33" to "Silindir 1 ateşleme bobini arızası",
-        "34" to "Silindir 2 ateşleme bobini arızası",
-        "39" to "Yağ basıncı sensörü hatası",
-        "41" to "Hız sensörü sinyali yok",
-        "42" to "Vites konum anahtarı açık / kısa devre",
-        "43" to "Yakıt sistemi voltajı anormal",
-        "44" to "EEPROM okuma / yazma hatası",
-        "46" to "Şarj voltajı anormal",
-        "50" to "ECU bellek arızası",
-        "70" to "Motor rölanti durdurma sistemi hatası"
-    )
+    // Yamaha two-digit and ABS codes are model/ECU-specific.
+    // Their verified definitions live in yamaha_fault_database.json.
+    // Never fall back to a universal two-digit meaning here.
+    private val yamahaTwoDigit = emptyMap<String, String>()
 
     fun title(code: String): String = generic[code.uppercase()] ?: yamahaTwoDigit[code]
-        ?: "Üreticiye özel / henüz eşleştirilmemiş arıza kodu"
+        ?: "Üreticiye özel Yamaha kodu (model/yıl eşleştirmesi gerekli)"
 
     fun description(code: String): String = when {
         generic.containsKey(code.uppercase()) ->
             "Bu, standart OBD arıza kodu ailesinde tanımlı bir güç aktarma sistemi kaydıdır. Kod tek başına arızalı parçayı kesinleştirmez; canlı veriler, kablo ölçümü ve araç servis dokümanıyla birlikte değerlendirilmelidir."
-        yamahaTwoDigit.containsKey(code) ->
-            "Bu iki haneli kod, sağlanan Python uygulamasındaki Yamaha tarzı üretici kod listesinde bulunur. Motosikletin model yılı ve ECU sürümüne ait servis tablosuyla teyit edilmelidir."
+        code.matches(Regex("\\d{2}(_ABS)?")) ->
+            "Bu Yamaha üretici kodu, model ve ECU sürümüne göre değişebilir. Doğru açıklama için Yamaha model/yıl servis tablosu eşleştirilmelidir."
         else ->
             "Kod ECU'dan alınmış olabilir ancak bu veri tabanında açıklaması bulunmuyor. Ham yanıtı, ECU kimliğini ve motosikletin marka-model-yıl bilgisini kaydedin."
     }
