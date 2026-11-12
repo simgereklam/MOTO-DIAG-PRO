@@ -368,27 +368,37 @@ class OfflineVoiceAssistant(
             onDone?.invoke()
             return
         }
-        // Durumu main kuyruğuna girmeden kilitle: tanıma callback'i konuşma
-        // başlarken yeni bir mikrofon oturumu açamasın.
+        // Seyfi konuşurken de uyandırma sözcüğünü duyabilmek için Vosk açık kalır.
+        // Konuşma sırasında deliverVoskResult yalnızca "Usta/Seyfi" kesme sözcüğünü kabul eder;
+        // diğer tanımalar TTS yankısı sayılıp komut olarak çalıştırılmaz.
         speaking = true
-        pauseForProcessing()
+        processing = false
         main.post {
             val engine = tts
             if (!ttsReady || engine == null) {
                 speaking = false
                 processing = false
+                bargeInListening = false
                 status("Sesli yanıt verilemiyor: Türkçe TTS hazır değil.")
                 try { onDone?.invoke() } finally {
                     if (listeningEnabled) startListeningInternal(350)
                 }
                 return@post
             }
-            // Yankı önleme: Seyfi konuşurken mikrofon kesin olarak duraklatılır.
-            // Hoparlörden çıkan TTS sesi Vosk tarafından kullanıcı komutu sanılmasın.
-            // Kullanıcı konuşmayı bitirdikten sonra mikrofon yeniden açılır.
-            bargeInListening = false
-            try { speechService?.setPause(true) } catch (e: Exception) {
-                status("Konuşma sırasında mikrofon duraklatılamadı: ${e.message}")
+            bargeInListening = listeningEnabled
+            if (listeningEnabled) {
+                try {
+                    if (speechService != null) {
+                        speechService?.setPause(false)
+                    } else {
+                        startListeningInternal()
+                    }
+                    status("Seyfi Usta konuşuyor; 'Usta' dersen konuşmamı keseceğim.")
+                } catch (e: Exception) {
+                    status("Konuşma sırasında mikrofon açılamadı: ${e.message}")
+                }
+            } else {
+                try { speechService?.setPause(true) } catch (_: Exception) {}
             }
             val utteranceId = "seyfi-${ids.incrementAndGet()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
