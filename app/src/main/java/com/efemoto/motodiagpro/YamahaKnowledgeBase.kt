@@ -40,8 +40,12 @@ object YamahaKnowledgeBase {
             it.code.equals(normalized, ignoreCase = true)
         }
         if (model.isNullOrBlank()) {
-            // Preserve the generic lookup behavior when no vehicle profile is selected.
-            return matches.firstOrNull { it.models.isEmpty() } ?: matches.firstOrNull()
+            // Generic SAE entries are safe without a selected model.
+            matches.firstOrNull { it.models.isEmpty() }?.let { return it }
+            // Do not guess when the same manufacturer code exists on multiple model families.
+            val scoped = matches.filter { it.models.isNotEmpty() }
+            val scopes = scoped.flatMap { it.models }.distinct()
+            return if (scopes.size == 1) scoped.firstOrNull() else null
         }
         val wanted = normalizeModel(model)
         return matches.firstOrNull { record ->
