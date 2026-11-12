@@ -159,7 +159,12 @@ class SeyfiBrain(context: Context) {
         val mentionedVehicle = detectVehicleMention(q)
         if (mentionedVehicle != null) {
             val spokenYear = Regex("\\b(19[89]\\d|20[0-3]\\d)\\b").find(q)?.value
-            val normalizedVehicle = if (spokenYear != null && !mentionedVehicle.contains(spokenYear)) "$mentionedVehicle $spokenYear" else mentionedVehicle
+            val modelName = mentionedVehicle.substringAfter(" ", mentionedVehicle)
+            val selectedBrand = pendingVehicleBrand.ifBlank { mentionedVehicle.substringBefore(" ") }
+            val normalizedVehicle = buildString {
+                append(selectedBrand).append(" ").append(modelName)
+                if (spokenYear != null && !contains(spokenYear)) append(" ").append(spokenYear)
+            }
             saveVehicleProfile(normalizedVehicle)
             rememberVehicleBrand("")
             if (pendingSymptom.isNotBlank()) {
@@ -168,6 +173,26 @@ class SeyfiBrain(context: Context) {
                 return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. Şikâyetin şu: $symptom. Şimdi adım adım bakalım. Belirti motor soğukken mi, ısınınca mı, gaz verince mi ortaya çıkıyor?"
             }
             return "Tamam usta, motosikletini $activeVehicleProfile olarak kaydettim. İstersen model yılını da söyle; sonraki değerlendirmede doğru servis bilgilerini seçeyim."
+        }
+        if (pendingVehicleBrand.isNotBlank() &&
+            q.split(" ").size in 1..5 &&
+            q !in listOf("evet", "hayir", "tesekkur", "sag ol", "tamam", "anladim")
+        ) {
+            val spokenYear = Regex("\\b(19[89]\\d|20[0-3]\\d)\\b").find(q)?.value
+            val modelName = q.replace(Regex("\\b(19[89]\\d|20[0-3]\\d)\\b"), "").trim()
+            if (modelName.isNotBlank()) {
+                saveVehicleProfile(buildString {
+                    append(pendingVehicleBrand).append(" ").append(modelName)
+                    if (spokenYear != null) append(" ").append(spokenYear)
+                })
+                rememberVehicleBrand("")
+                if (pendingSymptom.isNotBlank()) {
+                    val symptom = pendingSymptom
+                    rememberPendingSymptom("")
+                    return "Tamam usta, $activeVehicleProfile olarak kaydettim. Şikâyetin şu: $symptom. Belirti motor soğukken mi, ısınınca mı, yoksa gaz verince mi ortaya çıkıyor?"
+                }
+                return "Tamam usta, $activeVehicleProfile olarak kaydettim. Şimdi neyi merak ettiğini anlat; sırayla ilerleyelim."
+            }
         }
         val mentionedBrand = detectBrandMention(q)
         if (mentionedBrand != null) {
