@@ -66,7 +66,10 @@ class SeyfiUstaCommandHandler {
         text: String,
         vararg phrases: String
     ): Boolean {
-        return phrases.any { text.contains(it) }
+        return phrases.any { phrase ->
+            val normalizedPhrase = normalize(phrase)
+            normalizedPhrase.isNotBlank() && text.contains(normalizedPhrase)
+        }
     }
 
     fun handle(recognizedText: String): SeyfiCommand {
@@ -241,6 +244,9 @@ class SeyfiUstaCommandHandler {
                 commandText,
                 "hata dokumu",
                 "hata dokum",
+                "hatta dokumu",
+                "hata dokumlerini goster",
+                "hata raporlarini ac",
                 "hata dokumunu ac",
                 "hata dokumunu goster",
                 "hata dokumunu getir",
@@ -278,7 +284,9 @@ class SeyfiUstaCommandHandler {
                 "yapay zeka ekrani",
                 "sesli asistan ekrani",
                 "asistan ekranini ac",
-                "yerel yapay zeka"
+                "yerel yapay zeka",
+                "seyfi usta yerel yapay zeka",
+                "seyfi usta sesli sohbet"
             )
         ) {
             return command(SeyfiAction.SHOW_SEYFI_CHAT, original, "Seyfi Usta ekranını açıyorum.")
@@ -295,7 +303,10 @@ class SeyfiUstaCommandHandler {
                 "ariza kodu kutuphanesi",
                 "ariza kodlarini incele",
                 "ariza ekranini ac",
-                "arizalar ekranini ac"
+                "arizalar ekranini ac",
+                "ariza kodlarini incele",
+                "ariza kodlari bolumu",
+                "ariza kodlari ekrani"
             )
         ) {
             return command(SeyfiAction.SHOW_FAULT_SEARCH, original, "Arıza kodu arama bölümünü açıyorum.")
@@ -307,12 +318,13 @@ class SeyfiUstaCommandHandler {
                 "ecu iletisim raporu",
                 "iletisim raporu",
                 "tam iletisim raporu",
-                "adaptör iletisim raporu",
+                "adaptor iletisim raporu",
                 "adaptoru test et",
                 "ecu iletisimini test et",
                 "viecar raporu",
-                "adaptör raporu",
+                "adaptor raporu",
                 "adaptoru kontrol et",
+                "tam viecar ecu iletisim raporu",
                 "baglanti raporu"
             )
         ) {
@@ -560,7 +572,10 @@ class SeyfiUstaCommandHandler {
                 "teshis raporu olustur",
                 "servis formu",
                 "servis kaydi",
-                "servis bilgisi kaydet"
+                "servis bilgisi kaydet",
+                "raporu disa aktar paylas",
+                "servis kaydini ac",
+                "servis bilgi ekranini ac"
             )
         ) {
             return command(
@@ -628,6 +643,8 @@ class SeyfiUstaCommandHandler {
             "arızaları sil" to SeyfiAction.CLEAR_FAULTS,
             "canlı verileri göster" to SeyfiAction.SHOW_LIVE_DATA,
             "hata dökümü" to SeyfiAction.SHOW_LOGS,
+            "hatta dökümü" to SeyfiAction.SHOW_LOGS,
+            "hata döküm" to SeyfiAction.SHOW_LOGS,
             "hata dökümünü aç" to SeyfiAction.SHOW_LOGS,
             "hata dökümünü göster" to SeyfiAction.SHOW_LOGS,
             "işlem kayıtlarını aç" to SeyfiAction.SHOW_LOGS,
@@ -637,6 +654,13 @@ class SeyfiUstaCommandHandler {
             "Seyfi ekranını aç" to SeyfiAction.SHOW_SEYFI_CHAT,
             "sohbet ekranı" to SeyfiAction.SHOW_SEYFI_CHAT,
             "iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
+            "tam Viecar ECU iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
+            "adaptörü test et" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
+            "servis bilgisi kaydet" to SeyfiAction.EXPORT_REPORT,
+            "raporu dışa aktar paylaş" to SeyfiAction.EXPORT_REPORT,
+            "arıza kodlarını incele" to SeyfiAction.READ_FAULTS,
+            "canlı veri ekranını aç" to SeyfiAction.SHOW_LIVE_DATA,
+            "gerçek arıza taraması başlat" to SeyfiAction.START_SCAN,
             "başka ne yapabiliyorsun" to SeyfiAction.SHOW_HELP,
             "ana sayfa" to SeyfiAction.GO_HOME,
             "motor verilerini yorumla" to SeyfiAction.ANALYZE_ENGINE_DATA
