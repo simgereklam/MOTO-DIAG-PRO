@@ -398,8 +398,7 @@ class MainActivity : ComponentActivity() {
         // Konuşma tanıma metni yukarıda ASCII/Türkçe sadeleştirmeden geçtiği için
         // "sorcam", "soracağım", "sorucam" gibi günlük söyleyişleri de yakala.
         val normalizedDtcPrompt = commandInput.lowercase(Locale.US)
-        val asksToGiveDtcCode = normalizedDtcPrompt.contains("ariza kodu") &&
-            Regex("\\b(sor|ver|soyle|oku)[a-z]*\\b").containsMatchIn(normalizedDtcPrompt)
+        val asksToGiveDtcCode = SeyfiDtcCodeParser.isDtcPrompt(normalizedDtcPrompt)
         if (asksToGiveDtcCode) {
             seyfiAwaitingCommand = true
             seyfiAwaitingDtcCode = true
@@ -411,27 +410,8 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        fun extractSpokenDtc(value: String): String? {
-            var input = value.lowercase(Locale.US)
-                .replace("ı", "i").replace("ş", "s").replace("ğ", "g")
-                .replace("ü", "u").replace("ö", "o").replace("ç", "c")
-            // Konuşma motoru P harfini bazen "pe" olarak yazıya döker.
-            input = input.replace(Regex("\\bpe\\b"), "p")
-                .replace(Regex("\\bbe\\b"), "b")
-                .replace(Regex("\\bce\\b"), "c")
-                .replace(Regex("\\byu\\b"), "u")
-            val digits = mapOf("sifir" to "0", "bir" to "1", "iki" to "2", "uc" to "3", "dort" to "4", "bes" to "5", "alti" to "6", "yedi" to "7", "sekiz" to "8", "dokuz" to "9")
-            digits.forEach { (word, digit) -> input = input.replace(Regex("\\b" + word + "\\b"), digit) }
-            // "P 0 3 3 5", "P sıfır üç üç beş" ve "P0335" biçimlerini tek koda dönüştür.
-            input = input.replace(Regex("\\b([pbcu])\\s+([0-9a-f](?:\\s+[0-9a-f]){3})\\b")) { match ->
-                match.groupValues[1] + match.groupValues[2].replace(Regex("\\s+"), "")
-            }
-            input = input.replace(Regex("\\b([pbcu])\\s+([0-9a-f]{4})\\b"), "$1$2")
-            return Regex("\\b(?:[pbcu][0-9a-f]{4}|[0-9]{2}(?:_abs)?)\\b").find(input)?.value?.uppercase(Locale.US)
-        }
-
         if (seyfiAwaitingDtcCode) {
-            val suppliedCode = extractSpokenDtc(commandInput)
+            val suppliedCode = SeyfiDtcCodeParser.extract(commandInput)
             if (suppliedCode == null) {
                 val retry = "Arıza kodunu net algılayamadım usta. Örneğin P sıfır üç üç beş şeklinde tekrar söyle."
                 appendSeyfiConversation("SEYFİ USTA", retry)
@@ -653,8 +633,9 @@ class MainActivity : ComponentActivity() {
                 appendSeyfiConversation("SİZ", commandInput)
                 seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
                 assistant.chat(commandInput) { answer ->
+                    // SeyfiUstaAI.chat yanıtı zaten bir kez seslendirir.
+                    // Burada tekrar speak çağırmak QUEUE_FLUSH ile sesi kesip yineletebiliyordu.
                     appendSeyfiConversation("SEYFİ USTA", answer)
-                    if (!isFinishing && !isDestroyed) assistant.speak(answer)
                 }
             }
         }

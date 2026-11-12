@@ -11,6 +11,18 @@ class SeyfiUstaCommandHandlerTest {
     }
 
     @Test
+    fun spokenDtcPromptsAndCodesAreNormalizedExactly() {
+        assertTrue(SeyfiDtcCodeParser.isDtcPrompt("arıza kodu sorcam"))
+        assertTrue(SeyfiDtcCodeParser.isDtcPrompt("arıza kodu soracağım"))
+        assertTrue(SeyfiDtcCodeParser.isDtcPrompt("arıza kodu vereceğim"))
+        assertTrue(SeyfiDtcCodeParser.extract("P sıfır üç üç beş") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("P 0 3 3 5") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("P0335") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("pe sıfır üç üç beş") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("P 0 3") == null)
+    }
+
+    @Test
     fun testAndScanAliasesAreNotSentToFreeChat() {
         val handler = SeyfiUstaCommandHandler()
         assertTrue(handler.handle("usta seyfi usta test test yap").action == SeyfiAction.SHOW_TESTS)

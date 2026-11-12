@@ -19,8 +19,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Android yerel konuşma/TTS katmanı.
- * Vosk kullanılmaz. SpeechRecognizer'a tr-TR ve çevrimdışı tercih bilgisi verilir.
- * Android sağlayıcısı çevrimdışı Türkçe tanımayı desteklemiyorsa durum açıkça bildirilir.
+ * Vosk ile cihaz içinde Türkçe konuşmayı metne çevirir.
+ * Model APK assets içinden yüklenir; internet veya Android konuşma servisi gerekmez.
  */
 class OfflineVoiceAssistant(
     private val activity: Activity,
@@ -368,9 +368,8 @@ class OfflineVoiceAssistant(
             onDone?.invoke()
             return
         }
-        // Seyfi konuşurken de uyandırma sözcüğünü duyabilmek için Vosk açık kalır.
-        // Konuşma sırasında deliverVoskResult yalnızca "Usta/Seyfi" kesme sözcüğünü kabul eder;
-        // diğer tanımalar TTS yankısı sayılıp komut olarak çalıştırılmaz.
+        // TTS sırasında mikrofonu duraklat; hoparlörden çıkan Seyfi sesi
+        // yeni kullanıcı komutu sanılmasın. Yanıt bitince dinleme yeniden başlar.
         speaking = true
         processing = false
         main.post {
