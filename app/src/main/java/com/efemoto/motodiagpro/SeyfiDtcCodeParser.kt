@@ -15,7 +15,7 @@ object SeyfiDtcCodeParser {
         "iki" to "2", "ikiye" to "2", "ikiyi" to "2", "two" to "2",
         "uc" to "3", "üç" to "3", "uçu" to "3", "üçe" to "3", "üçü" to "3", "three" to "3",
         "dort" to "4", "dört" to "4", "dörde" to "4", "dördü" to "4", "four" to "4",
-        "bes" to "5", "beş" to "5", "beşe" to "5", "beşi" to "5", "five" to "5",
+        "bes" to "5", "beş" to "5", "bese" to "5", "besi" to "5", "beşe" to "5", "beşi" to "5", "five" to "5",
         "alti" to "6", "altı" to "6", "altıya" to "6", "altıyı" to "6", "six" to "6",
         "yedi" to "7", "yediyi" to "7", "seven" to "7",
         "sekiz" to "8", "sekizi" to "8", "eight" to "8",
