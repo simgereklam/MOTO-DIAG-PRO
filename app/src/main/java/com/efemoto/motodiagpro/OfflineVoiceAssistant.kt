@@ -39,6 +39,8 @@ class OfflineVoiceAssistant(
     private var ttsInitialized = false
     private var recognizerInitialized = false
     private var restartCount = 0
+    private var recognitionSessionActive = false
+    private var restartRunnable: Runnable? = null
 
     private fun status(value: String) {
         currentStatus = value
@@ -74,6 +76,9 @@ class OfflineVoiceAssistant(
     fun refreshRecognition(onReady: (() -> Unit)? = null) {
         if (released) return
         main.post {
+            restartRunnable?.let { main.removeCallbacks(it) }
+            restartRunnable = null
+            recognitionSessionActive = false
             try { recognizer?.cancel() } catch (_: Exception) {}
             try { recognizer?.destroy() } catch (_: Exception) {}
             recognizer = null
@@ -106,6 +111,7 @@ class OfflineVoiceAssistant(
             recognizer = speechEngine.also { speech ->
                 speech.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: android.os.Bundle?) {
+                        recognitionSessionActive = true
                         restartCount = 0
                         status("Seyfi Usta mikrofonu dinliyor (Türkçe).")
                     }
@@ -114,7 +120,13 @@ class OfflineVoiceAssistant(
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() { status("Konuşma alındı, metne çevriliyor.") }
                     override fun onError(error: Int) {
+                        recognitionSessionActive = false
                         if (released || processing || speaking) return
+                        if (error == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
+                            status("Konuşma tanıyıcı meşgul kaldı. Oturum yenileniyor...")
+                            resetRecognizerAfterBusy()
+                            return
+                        }
                         val message = when (error) {
                             SpeechRecognizer.ERROR_NETWORK,
                             SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
@@ -131,6 +143,7 @@ class OfflineVoiceAssistant(
                         scheduleRestart()
                     }
                     override fun onResults(results: android.os.Bundle?) {
+                        recognitionSessionActive = false
                         if (released || processing || speaking) return
                         val text = results
                             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
@@ -256,6 +269,7 @@ class OfflineVoiceAssistant(
                 status("Mikrofon dinlemesi kullanılamıyor; Android konuşma servisini kontrol edin.")
                 return@postDelayed
             }
+            if (recognitionSessionActive) return@postDelayed
             try {
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -266,30 +280,67 @@ class OfflineVoiceAssistant(
                     putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.packageName)
                 }
+                recognitionSessionActive = true
                 speech.startListening(intent)
             } catch (e: Exception) {
+                recognitionSessionActive = false
                 status("Mikrofon dinlemesi başlatılamadı: ${e.message}")
                 scheduleRestart()
             }
         }, delayMs)
     }
 
+    /** ERROR_RECOGNIZER_BUSY sonrası aynı SpeechRecognizer örneğini zorlamayız. */
+    private fun resetRecognizerAfterBusy() {
+        if (released) return
+        restartRunnable?.let { main.removeCallbacks(it) }
+        restartRunnable = null
+        recognitionSessionActive = false
+        try { recognizer?.destroy() } catch (_: Exception) {}
+        recognizer = null
+        recognitionAvailable = false
+        recognizerInitialized = false
+        restartCount = (restartCount + 1).coerceAtMost(8)
+        main.postDelayed({
+            if (released || !listeningEnabled || processing || speaking) return@postDelayed
+            initializeRecognizer()
+            if (recognitionAvailable) startListeningInternal(1200L + restartCount * 300L)
+            else status("Konuşma servisi yeniden kurulamadı. Mikrofonu yeniden başlatmayı deneyin.")
+        }, 900L + restartCount * 300L)
+    }
+
     private fun scheduleRestart(delayMs: Long = 700) {
         if (!listeningEnabled || processing || speaking || released) return
         restartCount = (restartCount + 1).coerceAtMost(8)
         val backoff = delayMs + (restartCount * 250L)
-        startListeningInternal(backoff)
+        restartRunnable?.let { main.removeCallbacks(it) }
+        val task = Runnable {
+            restartRunnable = null
+            startListeningInternal()
+        }
+        restartRunnable = task
+        main.postDelayed(task, backoff)
     }
 
     fun pauseForProcessing() {
         processing = true
-        main.post { try { recognizer?.cancel() } catch (_: Exception) {} }
+        main.post {
+            restartRunnable?.let { main.removeCallbacks(it) }
+            restartRunnable = null
+            recognitionSessionActive = false
+            try { recognizer?.cancel() } catch (_: Exception) {}
+        }
     }
 
     fun stopListening() {
         listeningEnabled = false
         processing = false
-        main.post { try { recognizer?.cancel() } catch (_: Exception) {} }
+        main.post {
+            restartRunnable?.let { main.removeCallbacks(it) }
+            restartRunnable = null
+            recognitionSessionActive = false
+            try { recognizer?.cancel() } catch (_: Exception) {}
+        }
     }
 
     fun isListening(): Boolean = listeningEnabled && !processing && !speaking
