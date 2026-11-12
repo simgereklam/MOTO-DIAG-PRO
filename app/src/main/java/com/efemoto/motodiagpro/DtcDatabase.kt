@@ -112,8 +112,7 @@ object DtcDatabase {
         "P2135" to "Gaz kelebeği / pedal konum sensörleri A-B korelasyon hatası",
         "U0100" to "Motor kontrol modülü ile iletişim kaybı",
         "U0121" to "ABS kontrol modülü ile iletişim kaybı",
-        "U0155" to "Gösterge paneli kontrol modülü ile iletişim kaybı"
-
+        "U0155" to "Gösterge paneli kontrol modülü ile iletişim kaybı",
         "P0013" to "Egzoz eksantrik mili zamanlama aktüatörü devresi",
         "P0014" to "Egzoz eksantrik mili zamanlaması fazla ileride",
         "P0015" to "Egzoz eksantrik mili zamanlaması fazla geride",
