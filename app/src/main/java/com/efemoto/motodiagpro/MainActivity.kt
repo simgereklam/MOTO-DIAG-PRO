@@ -557,6 +557,7 @@ class MainActivity : ComponentActivity() {
                 seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
                 assistant.chat(commandInput) { answer ->
                     appendSeyfiConversation("SEYFİ USTA", answer)
+                    if (!isFinishing && !isDestroyed) assistant.speak(answer)
                 }
             }
         }
