@@ -210,6 +210,7 @@ class MainActivity : ComponentActivity() {
             }
         )
         seyfiUstaAI = assistant
+        assistant.updateVehicleProfile(persistentPrefs().getString("yamaha_model_year", "").orEmpty())
         assistant.initializeVoiceOnly {
             val voiceFailures = mutableListOf<String>()
             if (!assistant.isTtsReady()) voiceFailures += "Türkçe TTS hazır değil."
