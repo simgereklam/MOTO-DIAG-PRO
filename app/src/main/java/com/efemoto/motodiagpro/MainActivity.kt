@@ -1172,6 +1172,7 @@ class MainActivity : ComponentActivity() {
                 updateScan(100, "Tarama tamamlandı")
                 mainHandler.post {
                     faults = found.toMutableList()
+                    saveMotorcycleFaultRecord(found, "Gerçek ECU taraması")
                     allPidReadings = completePidReadings
                     hasCompletedScan = true
                     val fullPidReport = buildFullPidReport(completePidReadings)
@@ -2411,31 +2412,44 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun saveMotorcycleFaultRecord(foundCodes: List<String>, result: String = "ECU taraması") {
+        val prefs = persistentPrefs()
+        val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("tr", "TR")).format(Date())
+        val vehicle = prefs.getString("yamaha_model_year", "").orEmpty()
+            .ifBlank { servicePlate.ifBlank { "Model bilgisi girilmedi" } }
+        val codes = foundCodes.map { it.substringBefore(" •").trim().uppercase(Locale.US) }.distinct()
+        val line = "$time • $vehicle • $result • " +
+            (codes.joinToString(", ").ifBlank { "ECU yanıtında arıza kodu yok" })
+        val history = prefs.getString("motorcycle_fault_history", "").orEmpty()
+            .lineSequence().filter { it.isNotBlank() }.toMutableList()
+        history.add(0, line)
+        prefs.edit().putString("motorcycle_fault_history", history.take(100).joinToString("\n")).apply()
+    }
+
+    private fun motorcycleFaultHistory(): List<String> =
+        persistentPrefs().getString("motorcycle_fault_history", "").orEmpty()
+            .lineSequence().filter { it.isNotBlank() }.take(100).toList()
+
     private fun showLogs() {
         val c = baseScreen("LOGS")
-        c.addView(header("HATA DÖKÜMÜ / İŞLEM KAYITLARI"))
-        val service = neonCard("SERVİS KAYDI", cyan)
-        val customerInput = EditText(this).apply { hint = "Müşteri adı (isteğe bağlı)"; setSingleLine(); setText(serviceCustomer); setTextColor(white); setHintTextColor(muted); setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(panel2, blue, 10) }
-        val plateInput = EditText(this).apply { hint = "Plaka / motor bilgisi"; setSingleLine(); setText(servicePlate); setTextColor(white); setHintTextColor(muted); setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(panel2, blue, 10) }
-        val complaintInput = EditText(this).apply { hint = "Müşteri şikâyeti / servis notu"; setText(serviceComplaint); setTextColor(white); setHintTextColor(muted); minLines = 2; gravity = Gravity.TOP; setPadding(dp(10), dp(8), dp(10), dp(8)); background = rounded(panel2, blue, 10) }
-        service.addView(customerInput); addGap(service, 5); service.addView(plateInput); addGap(service, 5); service.addView(complaintInput)
-        service.addView(actionButton("SERVİS BİLGİSİNİ KAYDET", green) {
-            serviceCustomer = customerInput.text.toString().trim()
-            servicePlate = plateInput.text.toString().trim()
-            serviceComplaint = complaintInput.text.toString().trim()
-            persistServiceFields()
-            log("SERVİS KAYDI • Müşteri: ${serviceCustomer.ifBlank { "—" }} • Araç: ${servicePlate.ifBlank { "—" }} • Şikâyet: ${serviceComplaint.ifBlank { "—" }}")
-            Toast.makeText(this, "Servis bilgisi işlem kayıtlarına eklendi.", Toast.LENGTH_SHORT).show()
-            showLogs()
-        })
-        c.addView(service)
-        val card = neonCard("SON İŞLEMLER VE HATA KAYITLARI", cyan)
-        if (logs.isEmpty()) card.addView(text("Henüz işlem kaydı yok.", 14, muted))
-        else logs.forEach { line -> card.addView(text("•  $line", 12, white).apply { setPadding(0, dp(5), 0, dp(5)) }) }
+        c.addView(header("MOTOSİKLET ARIZA KAYITLARI"))
+        c.addView(text("Bu bölüm yalnızca gerçek ECU taramalarında okunan motosiklet arıza kayıtlarını gösterir. Genel uygulama günlükleri burada yer almaz.", 13, muted))
+        addGap(c, 8)
+        val history = motorcycleFaultHistory()
+        val card = neonCard("KAYITLI ECU TARAMALARI  (${history.size})", cyan)
+        if (history.isEmpty()) {
+            card.addView(text("Henüz gerçek ECU tarama kaydı yok. Viecar adaptörünü bağlayıp motosikleti taradığında kayıt burada saklanacak.", 14, muted))
+        } else {
+            history.forEachIndexed { index, line ->
+                card.addView(text("${index + 1}.  $line", 13, white).apply {
+                    setPadding(0, dp(7), 0, dp(7))
+                })
+            }
+        }
         c.addView(card)
-        c.addView(actionButton("↻  KAYITLARI YENİLE", blue) { showLogs() })
+        c.addView(actionButton("↻  ARIZA KAYITLARINI YENİLE", blue) { showLogs() })
         addGap(c, 5)
-        c.addView(actionButton("⇧  RAPORU DIŞA AKTAR / PAYLAŞ", cyan) { exportDiagnosticReport() })
+        c.addView(actionButton("⇧  ARIZA RAPORUNU DIŞA AKTAR / PAYLAŞ", cyan) { exportDiagnosticReport() })
         addGap(c, 7)
         c.addView(actionButton("⌂  ANA SAYFA", blue) { showHome() })
     }
@@ -2453,8 +2467,10 @@ class MainActivity : ComponentActivity() {
             if (liveValues.isEmpty()) appendLine("Canlı veri snapshot'ı alınmadı.")
             else liveValues.forEach { (key, value) -> appendLine("$key = ${"%.2f".format(Locale.US, value)}") }
             appendLine()
-            appendLine("İŞLEM GEÇMİŞİ")
-            if (logs.isEmpty()) appendLine("Henüz kayıt yok.") else logs.forEach { appendLine(it) }
+            appendLine("MOTOSİKLET ECU ARIZA KAYIT GEÇMİŞİ")
+            val history = motorcycleFaultHistory()
+            if (history.isEmpty()) appendLine("Henüz gerçek ECU tarama kaydı yok.")
+            else history.forEach { appendLine(it) }
         }
         val send = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
