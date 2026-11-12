@@ -247,8 +247,13 @@ class OfflineVoiceAssistant(
                             }
                         })
                         status(
-                            if (ttsReady) "Türkçe TTS hazır; telefonun sistemde seçili Türkçe sesi kullanılacak."
-                            else "Türkçe TTS dili telefonda yüklü değil."
+                            if (ttsReady) {
+                                val names = turkishVoices.joinToString(", ") { it.name }
+                                    .ifBlank { "ses listesi sağlayıcı tarafından açıklanmadı" }
+                                "Türkçe TTS hazır. Sistem sesi korunuyor. Kullanılabilir Türkçe sesler: $names"
+                            } else {
+                                "Türkçe TTS dili telefonda yüklü değil."
+                            }
                         )
                     } else {
                         ttsReady = false
