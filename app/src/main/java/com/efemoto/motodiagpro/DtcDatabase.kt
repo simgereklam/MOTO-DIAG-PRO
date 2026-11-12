@@ -159,7 +159,8 @@ object DtcDatabase {
 
     fun causes(code: String): List<String> = when (code.uppercase()) {
         "P0335", "P0336" -> listOf("Krank konum sensörü veya tetikleyici çark", "Sensör kablosunda kopukluk / kısa devre", "Sokette oksitlenme veya gevşek pin", "Sensör hava aralığı veya mekanik hasar")
-        "P0115", "P0117", "P0118", "P0128" -> listOf("Sıcaklık sensörü arızası", "Soket / kablo temassızlığı", "Şase veya referans beslemesi", "Soğutma sistemi veya termostat sorunu")
+        "P0115", "P0117", "P0118" -> listOf("Soğutma suyu sıcaklık sensörü veya iç direnci", "Sensör soketi, kablo kopukluğu ya da kısa devre", "5 V referans / sensör şasesi sorunu", "ECU giriş devresi veya gerçek soğutma sistemi sıcaklık sorunu")
+        "P0128" -> listOf("Termostat açık kalmış olabilir", "Motorun çalışma sıcaklığına ulaşmasını engelleyen soğutma sistemi sorunu", "ECT sensörü veya kablo ölçüm hatası")
         "P0120", "P0121", "P0122", "P0123", "P2135" -> listOf("TPS sensörü veya elektronik gaz kelebeği gövdesi", "Sensör referans voltajı / şase sorunu", "Soket pinleri ve kablo hattı", "Gaz kelebeğinde mekanik sıkışma veya adaptasyon sorunu")
         "P0105", "P0107", "P0108", "P0100", "P0101", "P0102", "P0103" -> listOf("MAP / MAF sensörü kirlenmesi veya arızası", "Emme hortumu kaçağı veya tıkanıklık", "Besleme, şase veya sinyal kablosu sorunu")
         "P0171", "P0172", "P0174", "P0175" -> listOf("Emme hattında hava kaçağı", "Yakıt basıncı / enjektör akış sorunu", "Oksijen sensörü veya yakıt düzeltme verisi", "MAF / MAP ölçüm hatası")
@@ -172,8 +173,10 @@ object DtcDatabase {
 
     fun checks(code: String): List<String> = when (code.uppercase()) {
         "P0335", "P0336" -> listOf("Krank sensörü soketini ve kablo hattını inceleyin", "Sensör direncini / sinyalini servis değerleriyle karşılaştırın", "Tetik çarkı ve sensör aralığını kontrol edin", "Onarım sonrası arıza kodunu yeniden okuyun")
-        "P0115", "P0117", "P0118", "P0128" -> listOf("Sensör soketini ve kabloyu kontrol edin", "Soğuk ve sıcak motor değerlerini karşılaştırın", "Soğutma suyu ve termostatı kontrol edin", "Servis dokümanındaki direnç / voltaj değerini doğrulayın")
+        "P0115", "P0117", "P0118" -> listOf("Motor tamamen soğukken ECT değerini ortam sıcaklığıyla karşılaştırın", "Sensör soketi ve kablo hattında oksitlenme, kopukluk veya kısa devre arayın", "Sensör direncini sıcaklığa göre üretici servis tablosuyla karşılaştırın", "Referans besleme ve sensör şasesini ölçün; gerçek hararet şüphesinde soğutma sistemini güvenli şekilde kontrol edin")
+        "P0128" -> listOf("Motorun ısınma süresini ve ECT değişimini izleyin", "Termostatın açık kalıp kalmadığını servis prosedürüyle kontrol edin", "ECT sensörü ve kablo ölçümünü doğrulayın")
         "P0120", "P0121", "P0122", "P0123", "P2135" -> listOf("TPS kapalı ve tam açık konum sinyallerini ölçün", "5 V referans ve sensör şasesini kontrol edin", "Kelebek gövdesinde sıkışma olup olmadığını kontrol edin", "Yalnızca araç prosedürü destekliyorsa adaptasyon uygulayın")
+        "P0130" -> listOf("O2 sensörü sinyal kablosu, soketi ve ısıya maruz kalan tesisatı inceleyin", "Egzoz manifoldunda sensör öncesi kaçak olup olmadığını kontrol edin", "Motor çalışma koşullarında O2 sinyali ile STFT / LTFT düzeltmelerini birlikte izleyin", "Sensör beslemesi ve şasesini üretici şemasına göre doğrulayın")
         "P0171", "P0172", "P0174", "P0175" -> listOf("Emme manifoldu ve vakum hortumlarında kaçak arayın", "Yakıt basıncını servis değerleriyle ölçün", "STFT / LTFT ve O2 verilerini birlikte inceleyin", "MAF / MAP verisini karşılaştırın")
         "P0201", "P0202", "P0261", "P0262" -> listOf("Kontak kapalıyken enjektör soketi ve kabloyu kontrol edin", "Enjektör bobin direncini servis değerleriyle ölçün", "Besleme ve ECU kontrol hattını uygun test prosedürüyle doğrulayın")
         "P0300", "P0301", "P0302", "P0303", "P0304" -> listOf("Buji, bobin ve bağlantılarını kontrol edin", "Enjektör ve yakıt beslemesini inceleyin", "Gerekirse kompresyon / kaçak testi yapın", "Arıza tekrarını canlı verilerle doğrulayın")
