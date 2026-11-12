@@ -2,6 +2,10 @@ package com.efemoto.motodiagpro
 
 import android.app.Activity
 import android.content.Intent
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.os.Bundle
 import android.os.Handler
 import android.os.Build
 import android.os.Looper
@@ -35,6 +39,7 @@ class OfflineVoiceAssistant(
     private val ids = AtomicInteger(0)
     @Volatile private var voskModel: Model? = null
     @Volatile private var speechService: SpeechService? = null
+    @Volatile private var nativeDtcRecognizer: SpeechRecognizer? = null
     @Volatile private var tts: TextToSpeech? = null
     @Volatile private var ttsReady = false
     @Volatile private var listeningEnabled = false
@@ -263,6 +268,85 @@ class OfflineVoiceAssistant(
         }, delayMs)
     }
 
+
+    /**
+     * Android'in cihazdaki Türkçe konuşma tanımasını yalnızca DTC diktesi için açar.
+     * Vosk genel komutlar ve uyandırma kelimesi için aynen çalışmaya devam eder.
+     */
+    fun listenForDtcCode(onResult: (List<String>) -> Unit) {
+        if (released) return
+        listeningEnabled = true
+        main.post {
+            restartRunnable?.let { main.removeCallbacks(it) }
+            restartRunnable = null
+            processing = true
+            bargeInListening = false
+            try { speechService?.setPause(true) } catch (_: Exception) {}
+
+            if (!SpeechRecognizer.isRecognitionAvailable(activity)) {
+                processing = false
+                status("Android'in telefon içi konuşma tanıma hizmeti bulunamadı; çevrimdışı Vosk kullanılacak.")
+                onResult(emptyList())
+                return@post
+            }
+
+            try {
+                nativeDtcRecognizer?.destroy()
+                val recognizer = SpeechRecognizer.createSpeechRecognizer(activity)
+                nativeDtcRecognizer = recognizer
+                recognizer.setRecognitionListener(object : RecognitionListener {
+                    private fun finish(results: List<String>) {
+                        if (nativeDtcRecognizer !== recognizer || released) return
+                        nativeDtcRecognizer = null
+                        try { recognizer.destroy() } catch (_: Exception) {}
+                        processing = false
+                        status(if (results.isEmpty()) "Telefonun ses tanıması kodu net algılayamadı." else "Telefonun ses tanıması arıza kodunu aldı.")
+                        onResult(results)
+                    }
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        status("Telefonun Türkçe ses tanıması arıza kodunu dinliyor.")
+                    }
+                    override fun onBeginningOfSpeech() {}
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() { status("Arıza kodu çözümleniyor...") }
+                    override fun onError(error: Int) {
+                        Log.w(TAG, "Android DTC konuşma tanıma hatası: $error")
+                        finish(emptyList())
+                    }
+                    override fun onResults(results: Bundle?) {
+                        val phrases = results
+                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                            ?.map { it.trim() }
+                            ?.filter { it.isNotBlank() }
+                            .orEmpty()
+                        finish(phrases)
+                    }
+                    override fun onPartialResults(partialResults: Bundle?) {}
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                })
+                val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "tr-TR")
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 8)
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+                    // Android sağlayıcısına çevrimdışı tanımayı tercih etmesini bildir.
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                    putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, activity.packageName)
+                }
+                recognizer.startListening(intent)
+            } catch (e: Exception) {
+                Log.e(TAG, "Android yerel DTC tanıma başlatılamadı", e)
+                try { nativeDtcRecognizer?.destroy() } catch (_: Exception) {}
+                nativeDtcRecognizer = null
+                processing = false
+                status("Telefonun ses tanıması başlatılamadı; çevrimdışı Vosk kullanılacak.")
+                onResult(emptyList())
+            }
+        }
+    }
+
     private fun parseVoskText(json: String?): String {
         if (json.isNullOrBlank()) return ""
         return try { JSONObject(json).optString("text", "").trim() } catch (_: Exception) { "" }
@@ -357,6 +441,8 @@ class OfflineVoiceAssistant(
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
             try { speechService?.setPause(true) } catch (_: Exception) {}
+            try { nativeDtcRecognizer?.cancel(); nativeDtcRecognizer?.destroy() } catch (_: Exception) {}
+            nativeDtcRecognizer = null
             recognitionSessionActive = false
         }
     }
@@ -468,6 +554,8 @@ class OfflineVoiceAssistant(
         main.post {
             restartRunnable?.let { main.removeCallbacks(it) }
             restartRunnable = null
+            try { nativeDtcRecognizer?.cancel(); nativeDtcRecognizer?.destroy() } catch (_: Exception) {}
+            nativeDtcRecognizer = null
             try { speechService?.stop() } catch (_: Exception) {}
             try { speechService?.shutdown() } catch (_: Exception) {}
             speechService = null
