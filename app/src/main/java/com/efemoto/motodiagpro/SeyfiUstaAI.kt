@@ -66,6 +66,11 @@ class SeyfiUstaAI(
     }
     fun speak(text: String, onDone: (() -> Unit)? = null) = voice.speak(text, onDone)
     fun startListening() = voice.startListening()
+    fun listenForDtcCode(onResult: (List<String>) -> Unit) = voice.listenForDtcCode { phrases ->
+        activity.runOnUiThread {
+            if (!activity.isFinishing && !activity.isDestroyed) onResult(phrases)
+        }
+    }
     fun pauseForProcessing() = voice.pauseForProcessing()
     fun stopListening() = voice.stopListening()
     fun isListening(): Boolean = voice.isListening()
