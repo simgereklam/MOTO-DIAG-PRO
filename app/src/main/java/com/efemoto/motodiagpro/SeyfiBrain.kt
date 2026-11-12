@@ -105,7 +105,7 @@ class SeyfiBrain(context: Context) {
 
     private fun reason(question: String): String {
         val q = normalize(question)
-        val codePattern = Regex("\\b(?:P[0-9A-F]{4}|[0-9]{2}(?:_ABS)?)\\b", RegexOption.IGNORE_CASE)
+        val codePattern = Regex("\\b(?:[PBCU][0-9A-F]{4}|[0-9]{2}(?:_ABS)?)\\b", RegexOption.IGNORE_CASE)
         // ECU strings may contain display suffixes such as "P0335 • KAYITLI".
         // Extract only the actual DTC before looking it up.
         val codes = (
