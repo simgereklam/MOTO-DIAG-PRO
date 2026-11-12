@@ -396,6 +396,14 @@ class MainActivity : ComponentActivity() {
 
         // Bilinen, güvenli ekran/yardım komutları uyandırma sözü kaçırıldığında da çalışsın.
         // Bilinmeyen sıradan konuşmalar komut olarak yürütülmez; mikrofon dinlemeye devam eder.
+        // Yamaha marka/model/yıl bilgisi sohbet girdisidir; uyandırma kelimesi
+        // kaçırılmış olsa bile bu önemli araç bilgisini yok sayma.
+        val yamahaVehicleUtterance =
+            YamahaVehicleCatalog.detectBrand(commandInput) ||
+            YamahaVehicleCatalog.detectModel(commandInput) != null ||
+            (seyfiAwaitingCommand && YamahaVehicleCatalog.extractYear(commandInput) != null)
+        if (yamahaVehicleUtterance) seyfiAwaitingCommand = true
+
         val command = seyfiCommandHandler.handle(commandInput)
         if (command.action == SeyfiAction.UNKNOWN && !wakeDetected && !seyfiAwaitingCommand) {
             log("Seyfi Usta: bilinen bir komut algılanmadı, ifade yok sayıldı: $rawCommand")
