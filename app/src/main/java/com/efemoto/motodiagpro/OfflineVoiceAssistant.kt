@@ -40,7 +40,7 @@ class OfflineVoiceAssistant(
     @Volatile private var listeningEnabled = false
     @Volatile private var processing = false
     @Volatile private var speaking = false
-    // TTS sırasında yalnızca "usta/seyfi" kesme sözcüğünü yakalamak için açık kalır.
+    // TTS sırasında yankıyı önlemek için mikrofon kapalı tutulur.
     @Volatile private var bargeInListening = false
     @Volatile private var released = false
     @Volatile private var currentStatus = "Android konuşma sistemi hazırlanıyor."
@@ -383,17 +383,12 @@ class OfflineVoiceAssistant(
                 }
                 return@post
             }
-            bargeInListening = listeningEnabled
-            if (bargeInListening) {
-                processing = false
-                try {
-                    val service = speechService
-                    if (service != null) service.setPause(false)
-                    else startListeningInternal(0)
-                } catch (e: Exception) {
-                    bargeInListening = false
-                    status("Konuşma kesme dinlemesi başlatılamadı: ${e.message}")
-                }
+            // Yankı önleme: Seyfi konuşurken mikrofon kesin olarak duraklatılır.
+            // Hoparlörden çıkan TTS sesi Vosk tarafından kullanıcı komutu sanılmasın.
+            // Kullanıcı konuşmayı bitirdikten sonra mikrofon yeniden açılır.
+            bargeInListening = false
+            try { speechService?.setPause(true) } catch (e: Exception) {
+                status("Konuşma sırasında mikrofon duraklatılamadı: ${e.message}")
             }
             val utteranceId = "seyfi-${ids.incrementAndGet()}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
