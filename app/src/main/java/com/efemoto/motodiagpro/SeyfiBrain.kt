@@ -105,13 +105,23 @@ class SeyfiBrain(context: Context) {
 
     private fun reason(question: String): String {
         val q = normalize(question)
+        // Konuşma tanıma "P 0335" şeklinde boşluk bırakabilir; kodu önce birleştir.
+        val codeInput = question.replace(
+            Regex("\\b([PBCU])\\s+([0-9A-F]{4})\\b", RegexOption.IGNORE_CASE),
+            "$1$2"
+        )
         val codePattern = Regex("\\b(?:[PBCU][0-9A-F]{4}|[0-9]{2}(?:_ABS)?)\\b", RegexOption.IGNORE_CASE)
         // ECU strings may contain display suffixes such as "P0335 • KAYITLI".
         // Extract only the actual DTC before looking it up.
         val codes = (
-            codePattern.findAll(question).map { it.value.uppercase(Locale.US) } +
+            codePattern.findAll(codeInput).map { it.value.uppercase(Locale.US) } +
                 ecuFaults.flatMap { raw -> codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList() }
         ).distinct().take(12).toList()
+        // Arıza kodu sorusu bütün sohbet/model sezgisinden önce çözülür.
+        // Böylece "P0335 nedir?" asla rastgele bir parça/immobilizer cevabına düşmez.
+        if (codes.isNotEmpty()) {
+            return explainCodes(codes, activeVehicleProfile.takeIf { it.isNotBlank() })
+        }
         // Günlük sohbet, ECU bağlantısından bağımsız ele alınır.
         // Önce kullanıcının kendi hâlini bildirdiğini yakala: "iyiyim, sen nasılsın"
         // cümlesindeki nasılsın kelimesi Seyfi'nin aynı soruyu tekrar ettirmemeli.
@@ -251,7 +261,6 @@ class SeyfiBrain(context: Context) {
             return "$mentionedBrand olduğunu anladım usta. Motosikletinin tam modeli nedir? Model adını ve varsa model yılını söyle."
         }
         val modelHint = activeVehicleProfile.takeIf { it.isNotBlank() }
-        if (codes.isNotEmpty()) return explainCodes(codes, modelHint)
         if (listOf("canli", "sensor", "veri", "motor durumu", "analiz", "yorumla", "degerlendir").any { q.contains(it) }) return analyzeValues()
         val symptomTerms = listOf("tekleme", "tekliyor", "calismiyor", "stop ediyor", "stop etme", "cekis dusuk", "gaz yemiyor", "gec calisiyor", "zor calisiyor", "hararet", "isinma", "titresim", "duman atiyor", "yakit tuketimi", "rolanti")
         if (symptomTerms.any { q.contains(it) } && modelHint == null) {
