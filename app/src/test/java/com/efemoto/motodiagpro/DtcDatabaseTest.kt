@@ -13,6 +13,14 @@ class DtcDatabaseTest {
     }
 
     @Test
+    fun crankshaftCodeIsNeverReportedAsImmobilizer() {
+        assertTrue(DtcDatabase.title("P0335").contains("Krank", ignoreCase = true))
+        assertTrue(!DtcDatabase.title("P0335").contains("immobilizer", ignoreCase = true))
+        assertTrue(DtcDatabase.title("P0513").contains("immobilizer", ignoreCase = true))
+        assertTrue(DtcDatabase.title("P1604").contains("Üreticiye özel", ignoreCase = true))
+    }
+
+    @Test
     fun classifiesBodyChassisAndNetworkCodes() {
         assertTrue(DtcDatabase.title("B1000").contains("Gövde"))
         assertTrue(DtcDatabase.title("C0035").contains("tekerlek hız"))
