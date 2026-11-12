@@ -95,23 +95,32 @@ class OfflineVoiceAssistant(
 
     private fun initializeRecognizer() {
         try {
-            // Bulut/karma tanıma yedeği kesinlikle kullanılmaz.
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            // Önce gerçek cihaz içi tanıyıcıyı kullan. MIUI/Google sağlayıcısı
+            // bu API'yi sunmuyorsa standart Android tanıyıcıya düş; istekte
+            // EXTRA_PREFER_OFFLINE=true gönderilir ve çevrimdışı model tercih edilir.
+            // Eski kod yalnızca özel API'yi kabul ettiği için MIUI cihazlarda
+            // servis görünmediğinde mikrofonu tamamen kapatıyordu.
+            val hasOnDeviceRecognizer =
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
+            val hasSystemRecognizer = SpeechRecognizer.isRecognitionAvailable(activity)
+            if (!hasOnDeviceRecognizer && !hasSystemRecognizer) {
                 recognitionAvailable = false
-                status("Bu Android sürümünde güvenilir cihaz içi konuşma tanıma API'si yok. İnternet üzerinden tanımaya geçilmeyecek.")
-                recognizerInitialized = true
-                finishInitializationIfReady()
-                return
-            }
-            recognitionAvailable = SpeechRecognizer.isOnDeviceRecognitionAvailable(activity)
-            if (!recognitionAvailable) {
-                status("Cihaz içi konuşma servisi bulunamadı. Türkçe çevrimdışı dil paketini yükleyin.")
+                status("Telefonda kullanılabilir konuşma tanıma servisi bulunamadı.")
                 recognizerInitialized = true
                 finishInitializationIfReady()
                 return
             }
             recognizer?.destroy()
-            val speechEngine = SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
+            val speechEngine = if (hasOnDeviceRecognizer) {
+                recognitionAvailable = true
+                status("Cihaz içi Türkçe konuşma tanıma servisi seçildi.")
+                SpeechRecognizer.createOnDeviceSpeechRecognizer(activity)
+            } else {
+                recognitionAvailable = true
+                status("Android konuşma servisi seçildi. Çevrimdışı tanıma tercihi etkin; Türkçe çevrimdışı model gerekir.")
+                SpeechRecognizer.createSpeechRecognizer(activity)
+            }
             recognizer = speechEngine.also { speech ->
                 speech.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: android.os.Bundle?) {
@@ -172,12 +181,7 @@ class OfflineVoiceAssistant(
                 })
             }
             recognizerInitialized = true
-            status(
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                    "Android cihaz içi Türkçe konuşma tanıma servisi hazır."
-                else
-                    "Android konuşma servisi hazır; çevrimdışı tercih etkin, bu Android sürümünde cihaz içi çalışma garanti edilemiyor."
-            )
+            status("Seyfi Usta konuşma servisi hazır. Çevrimdışı tanıma tercihi etkin.")
         } catch (e: Exception) {
             recognitionAvailable = false
             recognizerInitialized = true
