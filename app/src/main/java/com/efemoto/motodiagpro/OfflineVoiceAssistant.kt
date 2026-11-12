@@ -193,36 +193,43 @@ class OfflineVoiceAssistant(
                     val engine = tts
                     if (released) return@post
                     if (result == TextToSpeech.SUCCESS && engine != null) {
-                        val language = engine.setLanguage(Locale("tr", "TR"))
-                        ttsReady = language != TextToSpeech.LANG_MISSING_DATA &&
-                            language != TextToSpeech.LANG_NOT_SUPPORTED
-                        // Varsa kurulu Türkçe erkek sesini tercih et. Android her ses
-                        // için cinsiyet alanı sunmadığından yalnızca ses adı belirtiyorsa seçilir.
                         val turkishVoices = engine.voices
-                            ?.filter { it.locale.language.equals("tr", ignoreCase = true) }
+                            ?.filter {
+                                it.locale.language.equals("tr", ignoreCase = true) &&
+                                    !it.isNetworkConnectionRequired
+                            }
                             .orEmpty()
-                        // Android TTS API'si sesin cinsiyetini standart bir alanda sunmaz.
-                        // Yalnızca sağlayıcı adında açıkça erkek belirten sesi seç.
+
+                        // İnternet kullanmamak için yalnızca cihaza kurulu Türkçe sesleri seç.
+                        // Android tüm TTS sağlayıcılarında standart cinsiyet bilgisi sunmaz;
+                        // varsa açık erkek etiketi/ismi önceliklidir.
                         val maleVoice = turkishVoices
-                            .filter {
-                                val n = it.name.lowercase(Locale.ROOT)
+                            .filter { voice ->
+                                val n = voice.name.lowercase(Locale.ROOT)
                                 n.contains("male") || n.contains("masculine") ||
                                     n.contains("erkek") ||
-                                    it.features.any { feature ->
+                                    voice.features.any { feature ->
                                         feature.contains("gender=male", ignoreCase = true)
                                     }
                             }
                             .maxByOrNull { it.quality }
-                        if (maleVoice != null) {
-                            engine.voice = maleVoice
-                            status("Erkek Türkçe ses seçildi: ${maleVoice.name}")
+                        val selectedVoice = maleVoice ?: turkishVoices.maxByOrNull { it.quality }
+
+                        ttsReady = if (selectedVoice != null) {
+                            val voiceResult = engine.setVoice(selectedVoice)
+                            voiceResult != TextToSpeech.ERROR
+                        } else {
+                            val language = engine.setLanguage(Locale("tr", "TR"))
+                            language != TextToSpeech.LANG_MISSING_DATA &&
+                                language != TextToSpeech.LANG_NOT_SUPPORTED
+                        }
+
+                        if (maleVoice != null && ttsReady) {
+                            status("Çevrimdışı erkek Türkçe ses seçildi: ${maleVoice.name}")
+                        } else if (selectedVoice != null && ttsReady) {
+                            status("Çevrimdışı Türkçe ses hazır: ${selectedVoice.name}. Telefonda erkek olduğu doğrulanabilen ses bulunamadı; erkek ses paketi yüklenirse otomatik seçilecek.")
                         } else if (ttsReady) {
-                            // Erkek ses etiketi yoksa cihazın seçili sistem sesini değiştirme.
-                            val voiceNames = turkishVoices
-                                .joinToString(", ") { it.name }
-                                .ifBlank { "Sağlayıcı ses listesini bildirmedi" }
-                            Log.i(TAG, "Türkçe TTS sesleri: $voiceNames")
-                            status("Türkçe TTS hazır. Sağlayıcı cinsiyet bilgisini vermedi; sistemde seçili ses korunuyor. Sesler: $voiceNames")
+                            status("Türkçe TTS dili hazır ancak çevrimdışı Türkçe ses bulunamadı. İnternet sesine geçilmeyecek.")
                         }
                         engine.setSpeechRate(0.94f)
                         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
@@ -250,15 +257,9 @@ class OfflineVoiceAssistant(
                                 }
                             }
                         })
-                        status(
-                            if (ttsReady) {
-                                val names = turkishVoices.joinToString(", ") { it.name }
-                                    .ifBlank { "ses listesi sağlayıcı tarafından açıklanmadı" }
-                                "Türkçe TTS hazır. Sistem sesi korunuyor. Kullanılabilir Türkçe sesler: $names"
-                            } else {
-                                "Türkçe TTS dili telefonda yüklü değil."
-                            }
-                        )
+                        if (!ttsReady) {
+                            status("Çevrimdışı Türkçe ses bu telefonda hazır değil. İnternet üzerinden ses kullanılmayacak; Android metin okuma ayarlarından Türkçe ses paketi yükleyin.")
+                        }
                     } else {
                         ttsReady = false
                         status("Android metin okuma motoru başlatılamadı.")
