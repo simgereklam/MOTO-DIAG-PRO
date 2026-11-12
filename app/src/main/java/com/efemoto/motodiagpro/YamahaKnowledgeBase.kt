@@ -146,8 +146,9 @@ object YamahaKnowledgeBase {
         if (record.models.isEmpty()) return true
         val withoutYear = model.replace(Regex("\\b(?:19|20)\\d{2}\\b"), " ")
         val wanted = normalizeModel(withoutYear)
-        val yearMatches = record.years.isEmpty() ||
-            record.years.any { Regex("\\b$it\\b").containsMatchIn(model) }
+        val requestedYear = Regex("\\b(?:19|20)\\d{2}\\b").find(model)?.value?.toIntOrNull()
+        val yearMatches = requestedYear == null || record.years.isEmpty() ||
+            requestedYear in record.years
         return yearMatches && record.models.any { candidate ->
             val available = normalizeModel(candidate)
             available == wanted || available.contains(wanted) || wanted.contains(available)
