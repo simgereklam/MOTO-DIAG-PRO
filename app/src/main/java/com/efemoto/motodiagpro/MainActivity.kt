@@ -412,6 +412,9 @@ class MainActivity : ComponentActivity() {
             var input = value.lowercase(Locale("tr", "TR"))
             val digits = mapOf("sifir" to "0", "bir" to "1", "iki" to "2", "uc" to "3", "dort" to "4", "bes" to "5", "alti" to "6", "yedi" to "7", "sekiz" to "8", "dokuz" to "9")
             digits.forEach { (word, digit) -> input = input.replace(Regex("\\b" + word + "\\b"), digit) }
+            input = input.replace(Regex("\\b([pbcu])\\s+([0-9a-f](?:\\s+[0-9a-f]){3})\\b")) { match ->
+                match.groupValues[1] + match.groupValues[2].replace(Regex("\\s+"), "")
+            }
             input = input.replace(Regex("\\b([pbcu])\\s+([0-9a-f]{4})\\b"), "$1$2")
             return Regex("\\b(?:[pbcu][0-9a-f]{4}|[0-9]{2}(?:_abs)?)\\b").find(input)?.value?.uppercase(Locale.US)
         }
