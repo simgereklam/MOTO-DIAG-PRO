@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.SpeechService
@@ -48,6 +49,8 @@ class OfflineVoiceAssistant(
     private var restartCount = 0
     private var recognitionSessionActive = false
     private var restartRunnable: Runnable? = null
+    @Volatile private var lastDeliveredText: String = ""
+    @Volatile private var lastDeliveredAtMs: Long = 0L
 
     private fun status(value: String) {
         currentStatus = value
@@ -265,6 +268,14 @@ class OfflineVoiceAssistant(
         if (released || processing || speaking) return
         val heard = parseVoskText(json)
         if (heard.isNotBlank()) {
+            // Vosk aynı cümleyi onResult ve onFinalResult üzerinden iki kez
+            // bildirebilir. Kısa aralıkta aynı metni tekrar komut olarak işleme.
+            val now = SystemClock.elapsedRealtime()
+            if (heard.equals(lastDeliveredText, ignoreCase = true) &&
+                now - lastDeliveredAtMs < 1800L
+            ) return
+            lastDeliveredText = heard
+            lastDeliveredAtMs = now
             status("Seyfi Usta duydu: $heard")
             try { onRecognized(heard) } catch (e: Exception) {
                 Log.e("SeyfiVoice", "Tanınan metin aktarılamadı", e)
