@@ -28,49 +28,6 @@ android {
 }
 
 
-val voskAssetsDir = layout.buildDirectory.dir("generated/voskAssets")
-android.sourceSets.getByName("main").assets.srcDir(voskAssetsDir)
-
-val prepareVoskTurkishModel by tasks.registering {
-    outputs.dir(voskAssetsDir)
-    doLast {
-        val root = voskAssetsDir.get().asFile
-        val modelDir = root.resolve("model-tr")
-        val uuid = modelDir.resolve("uuid")
-        if (!uuid.exists()) {
-            modelDir.deleteRecursively()
-            modelDir.mkdirs()
-            val archive = layout.buildDirectory.file("vosk-model-small-tr-0.3.zip").get().asFile
-            if (!archive.exists()) {
-                java.net.URL("https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip").openStream().use { input ->
-                    archive.outputStream().use { output -> input.copyTo(output) }
-                }
-            }
-            java.util.zip.ZipInputStream(archive.inputStream().buffered()).use { zip ->
-                while (true) {
-                    val entry = zip.nextEntry ?: break
-                    val relative = entry.name.substringAfter("/", "")
-                    if (relative.isNotBlank()) {
-                        val target = modelDir.resolve(relative)
-                        if (entry.isDirectory) target.mkdirs()
-                        else {
-                            target.parentFile?.mkdirs()
-                            target.outputStream().use { output -> zip.copyTo(output) }
-                        }
-                    }
-                    zip.closeEntry()
-                }
-            }
-            if (!uuid.exists()) uuid.writeText("vosk-model-small-tr-0.3")
-            check(modelDir.resolve("conf").exists() && modelDir.resolve("am").exists()) {
-                "Türkçe Vosk modeli eksik veya arşiv yapısı beklenenden farklı."
-            }
-        }
-    }
-}
-
-tasks.named("preBuild").configure { dependsOn(prepareVoskTurkishModel) }
-
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
