@@ -360,7 +360,7 @@ class MainActivity : ComponentActivity() {
             .replace(Regex("[^\\p{L}\\p{N} ]"), " ")
             // Vosk'un "Seyfi Usta" için sık ürettiği fonetik yanlışları düzelt.
             // "e posta" eşleşmesi yalnızca sesli komut metninde, başta/tek başına kabul edilir.
-            .replace(Regex("^e posta(?:\\\\s+|$)"), "seyfi usta ")
+            .replace(Regex("^e posta(?:\\s+|$)"), "seyfi usta ")
             .replace(Regex("\\b(on kinal|on kanal|sey fusta|seyf usta|seyfiusta|sefi usta|seifi usta|seyfi usta)\\b"), "seyfi usta")
             .replace(Regex("\\b(seyfi|seyf|sefi|seifi)\\b"), "seyfi")
             .replace(Regex("\\s+"), " ")
