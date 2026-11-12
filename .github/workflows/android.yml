@@ -56,9 +56,12 @@ jobs:
           mkdir -p app/src/main/assets/model-tr /tmp/vosk-tr
           curl -fL --retry 3 "https://alphacephei.com/vosk/models/vosk-model-small-tr-0.3.zip" -o /tmp/vosk-tr/model.zip
           unzip -q /tmp/vosk-tr/model.zip -d /tmp/vosk-tr
-          cp -a /tmp/vosk-tr/vosk-model-small-tr-0.3/. app/src/main/assets/model-tr/
-          test -f app/src/main/assets/model-tr/uuid
+          MODEL_DIR="$(find /tmp/vosk-tr -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          test -n "$MODEL_DIR"
+          cp -a "$MODEL_DIR"/. app/src/main/assets/model-tr/
           test -d app/src/main/assets/model-tr/am
+          test -d app/src/main/assets/model-tr/conf
+          test -f app/src/main/assets/model-tr/uuid || echo "vosk-model-small-tr-0.3" > app/src/main/assets/model-tr/uuid
           echo "Türkçe çevrimdışı model APK assets içine hazırlandı."
       - name: Hazır model bağımlılığı olmadığını doğrula
         run: |
