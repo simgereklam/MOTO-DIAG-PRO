@@ -136,6 +136,15 @@ class SeyfiBrain(context: Context) {
         if (ecuFaults.isNotEmpty()) append("Kayıtlı kodlar: ${ecuFaults.joinToString()}. ")
         else append("Son bildirilen arıza kodu listesi boş. ")
 
+        // Efe Moto bağımsız çekirdeği: yalnızca gerçek ECU snapshot'ını analiz eder.
+        val efeMotoResult = EfeMotoDiagnosticEngine.analyze(
+            EfeMotoSnapshot(values = ecuValues, dtcs = ecuFaults, ecuConnected = ecuConnected)
+        )
+        efeMotoResult.findings.forEach { finding ->
+            append("${finding.title}: ${finding.detail} Önerilen kontrol: ${finding.nextCheck} ")
+        }
+        efeMotoResult.notes.forEach { note -> append("$note ") }
+
         fun valueFor(vararg names: String): Double? =
             ecuValues.entries.firstOrNull { entry ->
                 names.any { name -> entry.key.contains(name, ignoreCase = true) }
