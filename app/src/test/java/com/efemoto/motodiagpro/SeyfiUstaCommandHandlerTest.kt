@@ -20,6 +20,11 @@ class SeyfiUstaCommandHandlerTest {
         assertTrue(SeyfiDtcCodeParser.extract("P0335") == "P0335")
         assertTrue(SeyfiDtcCodeParser.extract("pe sıfır üç üç beş") == "P0335")
         assertTrue(SeyfiDtcCodeParser.extract("P 0 3") == null)
+        assertTrue(SeyfiDtcCodeParser.extract("P 0 33 5") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("pe sıfır otuz üç beş") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("P 0335") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("arıza kodu P sıfır üç üç beş") == "P0335")
+        assertTrue(SeyfiDtcCodeParser.extract("B sıfır bir iki üç") == "B0123")
     }
 
     @Test
