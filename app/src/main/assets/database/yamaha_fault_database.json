@@ -2871,6 +2871,32 @@
       "source": "Yamaha MT-09 2024 Service Manual, ABS DTC Table, section 9-41. https://www.manualslib.com/manual/4219084/Yamaha-Mt-09-2024.html?page=530",
       "verification": "OEM_MANUAL_VERIFIED",
       "namespace": "ABS"
+    },
+    {
+      "code": "25_ABS",
+      "title": "Ön teker hız sensörü darbeleri aralıklı veya yok",
+      "description": "NMAX 2022 servis kılavuzu 11 ve 25_ABS kodlarını ön teker hız sensöründen aralıklı darbe alınması veya darbe alınmaması başlığında birlikte listeler.",
+      "system": "ABS",
+      "possibleCauses": [
+        "Ön teker hız sensörü",
+        "Sensör rotoru",
+        "Soket/tesisat"
+      ],
+      "checks": [
+        "ABS arızası güvenlik açısından önemlidir; normal sürüşe devam etmeyin.",
+        "Sensör/rotor yüzeyinde kir, metal parçacık, hasar ve yanlış montaj olup olmadığını kontrol edin.",
+        "Soket, kablo ve besleme kontrollerini NMAX 2022 ABS elektrik şemasına göre yapın."
+      ],
+      "models": [
+        "NMAX 155 (GPD155-A)"
+      ],
+      "years": [
+        2022
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC table 9-37 and troubleshooting 9-138. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
     }
   ]
 }
