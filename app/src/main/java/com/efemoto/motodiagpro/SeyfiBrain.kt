@@ -128,13 +128,47 @@ class SeyfiBrain(context: Context) {
     private fun analyzeValues(): String = buildString {
         if (!ecuConnected) { append("ECU bağlantısı yok; canlı veri analizi yapamam."); return@buildString }
         if (ecuValues.isEmpty()) { append("ECU bağlı görünüyor ancak geçerli canlı ölçüm alınmamış."); return@buildString }
+
         append("Son ECU örneğinde ${ecuValues.size} gerçek ölçüm var. ")
-        ecuValues.toSortedMap().forEach { (key, value) -> append("$key: ${"%.2f".format(Locale("tr", "TR"), value)}. ") }
-        if (ecuFaults.isNotEmpty()) append("Kayıtlı kodlar: ${ecuFaults.joinToString()}. ") else append("Son bildirilen arıza kodu listesi boş. ")
-        val voltage = ecuValues.entries.firstOrNull { it.key.contains("volt", true) }?.value
-        if (voltage != null && voltage < 11.8) append("Voltaj düşük görünüyor; aküyü uygun cihazla ve üretici prosedürüne göre kontrol ettir. ")
-        if (voltage != null && voltage > 15.2) append("Voltaj yüksek görünüyor; şarj sistemi ölçümünü servis prosedürüne göre doğrulat. ")
-        append("Tek anlık örnek kesin teşhis değildir; motor sıcaklığı ve ölçüm koşullarıyla birlikte değerlendirelim.")
+        ecuValues.toSortedMap().forEach { (key, value) ->
+            append("$key: ${"%.2f".format(Locale("tr", "TR"), value)}. ")
+        }
+        if (ecuFaults.isNotEmpty()) append("Kayıtlı kodlar: ${ecuFaults.joinToString()}. ")
+        else append("Son bildirilen arıza kodu listesi boş. ")
+
+        fun valueFor(vararg names: String): Double? =
+            ecuValues.entries.firstOrNull { entry ->
+                names.any { name -> entry.key.contains(name, ignoreCase = true) }
+            }?.value
+
+        val rpm = valueFor("rpm", "devir")
+        val tps = valueFor("tps", "kelebek")
+        val coolant = valueFor("coolant", "soğutma", "sicaklik", "sıcaklık")
+        val map = valueFor("map", "manifold")
+        val voltage = valueFor("volt", "akü", "aku")
+
+        // Fiziksel olarak beklenmeyen değerler arıza diye etiketlenmez;
+        // PID yanıtının/ölçeklemenin yeniden doğrulanması istenir.
+        if (rpm != null && rpm !in 0.0..16000.0)
+            append("RPM ölçümü beklenen genel OBD aralığının dışında; PID yanıtını tekrar doğrula. ")
+        if (tps != null && tps !in 0.0..100.0)
+            append("TPS yüzdesi 0–100 aralığının dışında; ham PID çözümlemesini kontrol et. ")
+        if (coolant != null && coolant !in -40.0..215.0)
+            append("Soğutma suyu sıcaklığı PID aralığının dışında; sensör verisini tekrar oku. ")
+        if (map != null && map !in 0.0..255.0)
+            append("MAP değeri standart PID aralığının dışında; ölçüm çözümlemesini doğrula. ")
+
+        if (voltage != null && voltage < 11.8)
+            append("Voltaj düşük görünüyor; aküyü uygun cihazla ve üretici prosedürüne göre kontrol ettir. ")
+        if (voltage != null && voltage > 15.2)
+            append("Voltaj yüksek görünüyor; şarj sistemi ölçümünü servis prosedürüne göre doğrulat. ")
+
+        if (latestDiagnosticTestResult != "Henüz salt-okunur test sonucu alınmadı.")
+            append("Son sistem testi: ${latestDiagnosticTestResult.take(700)}. ")
+        if (diagnosticPlanContext != "Henüz teşhis planı oluşturulmadı.")
+            append("Mevcut kontrol planı: ${diagnosticPlanContext.take(500)}. ")
+
+        append("Aralık dışı değer tek başına parça arızasını kanıtlamaz; PID yanıtı ve ölçüm koşulları tekrar doğrulanmalıdır. Tek anlık örnek kesin teşhis değildir.")
     }
 
     fun close() { ready = false }
