@@ -47,8 +47,11 @@ object YamahaKnowledgeBase {
             val scopes = scoped.flatMap { it.models }.distinct()
             return if (scopes.size == 1) scoped.firstOrNull() else null
         }
-        return matches.firstOrNull { record -> matchesModel(record, model) }
-            ?: matches.firstOrNull { it.models.isEmpty() }
+        // Model/yıl seçildiyse önce o motosiklet için doğrulanmış OEM kaydı seç.
+        // Genel SAE açıklaması yalnızca model özelinde kayıt bulunmadığında yedektir.
+        return matches.firstOrNull { record ->
+            record.models.isNotEmpty() && matchesModel(record, model)
+        } ?: matches.firstOrNull { it.models.isEmpty() }
     }
 
     /**
