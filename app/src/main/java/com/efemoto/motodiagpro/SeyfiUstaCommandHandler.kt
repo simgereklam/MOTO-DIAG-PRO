@@ -95,6 +95,12 @@ class SeyfiUstaCommandHandler {
             .replace("usta", "")
             .trim()
 
+        // Vosk konuşmayı kısa parçalara böldüğünde "dinliyorum" gibi
+        // ara ifadeler komut oturumunu kapatmasın.
+        if (commandText in listOf("dinliyorum", "buradayim", "hazirim", "beni dinle")) {
+            return command(SeyfiAction.WAKE_WORD, original, "Dinliyorum.")
+        }
+
         // Sadece uyandırma kelimesi söylendiyse
         if (commandText.isBlank() && wakeDetected) {
             return command(
