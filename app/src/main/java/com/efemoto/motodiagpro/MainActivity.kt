@@ -345,6 +345,37 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /**
+     * Yalnızca DTC kodu beklenirken Android'in kendi Türkçe konuşma tanımasını açar.
+     * Alternatifler aynı koda çıkıyorsa kabul eder; P/B gibi farklı kodları tahmin etmez.
+     */
+    private fun startSeyfiDtcNativeCapture(assistant: SeyfiUstaAI, retryCount: Int = 0) {
+        assistant.listenForDtcCode { phrases ->
+            val possibleCodes = phrases
+                .mapNotNull { SeyfiDtcCodeParser.extract(it) }
+                .distinct()
+            when {
+                possibleCodes.size == 1 -> handleSeyfiCommand(possibleCodes.first())
+                phrases.isEmpty() -> {
+                    assistant.speak("Telefonun kendi ses tanıması hazır değil. Çevrimdışı ses tanımayla devam ediyorum.")
+                    assistant.startListening()
+                }
+                retryCount < 2 -> {
+                    assistant.speak("Arıza kodunun harfini net ayırt edemedim usta. Harfi ve rakamları biraz yavaş, ayrı ayrı söyle.") {
+                        startSeyfiDtcNativeCapture(assistant, retryCount + 1)
+                    }
+                }
+                else -> {
+                    seyfiAwaitingDtcCode = false
+                    seyfiAwaitingCommand = false
+                    seyfiDtcSpeechBuffer = ""
+                    assistant.speak("Yanlış arıza kodu söylemek istemiyorum. Kodu ekrandaki arıza kodu alanına yazabilirsin.")
+                    assistant.startListening()
+                }
+            }
+        }
+    }
+
     private fun handleSeyfiCommand(rawCommand: String) {
         val assistant = seyfiUstaAI ?: return
         if (rawCommand.isNotBlank()) {
@@ -419,7 +450,9 @@ class MainActivity : ComponentActivity() {
             appendSeyfiConversation("SİZ", commandInput)
             val prompt = "Tamam usta, dinliyorum. Arıza kodunu harfi ve rakamlarıyla söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım."
             appendSeyfiConversation("SEYFİ USTA", prompt)
-            assistant.speak(prompt)
+            assistant.speak(prompt) {
+                startSeyfiDtcNativeCapture(assistant)
+            }
             return
         }
 
@@ -442,7 +475,9 @@ class MainActivity : ComponentActivity() {
                     seyfiAwaitingDtcConfirmation = false
                     seyfiAwaitingDtcCode = true
                     seyfiDtcSpeechBuffer = ""
-                    assistant.speak("Tamam usta. Arıza kodunu baştan, harfi ve dört rakamıyla söyle.")
+                    assistant.speak("Tamam usta. Arıza kodunu baştan, harfi ve dört rakamıyla söyle.") {
+                        startSeyfiDtcNativeCapture(assistant)
+                    }
                 }
                 else -> assistant.speak("Yanlış kod söylememek için soruyorum usta. $seyfiPendingShortDtcCode kodu doğru mu? Evet ya da hayır de.")
             }
