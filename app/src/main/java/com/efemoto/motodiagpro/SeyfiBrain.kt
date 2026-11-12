@@ -133,9 +133,14 @@ class SeyfiBrain(context: Context) {
                 codePattern.findAll(raw).map { it.value.uppercase(Locale.US) }.toList()
             }
         } else emptyList()
-        val codes = (questionCodes + storedEcuCodes).distinct().take(12)
-        // Önce kullanıcının açıkça sorduğu kodu, sonra yalnızca arıza istediğinde
-        // son ECU taramasındaki kodları açıkla. Normal sohbeti kayıtlı DTC kesmesin.
+        // Kullanıcı belirli bir kod sorduysa yalnızca o kodu açıkla.
+        // Son ECU taramasındaki diğer kodlar (ABS/immobilizer vb.) bu soruya eklenemez.
+        // Kodsuz genel "kayıtlı arızalarım ne?" sorusunda ECU kayıtlarını kullan.
+        val codes = if (questionCodes.isNotEmpty()) {
+            questionCodes.distinct().take(12)
+        } else {
+            storedEcuCodes.distinct().take(12)
+        }
         if (codes.isNotEmpty()) {
             return explainCodes(codes, activeVehicleProfile.takeIf { it.isNotBlank() })
         }
