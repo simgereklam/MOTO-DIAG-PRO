@@ -1057,11 +1057,14 @@ def handle_clear():
         if not after_codes:
             write_log("DTC SİLME DOĞRULANDI", f"Önce: {before_codes}\nSonra: boş")
             socketio.emit('dtc_cleared', {'ok': True, 'msg': 'ECU yeniden okundu; kayıtlı arıza kodu kalmadı.'})
+            safe_speak("Arıza silme işlemi tamamlandı. ECU yeniden okundu ve kayıtlı arıza kodu kalmadığı doğrulandı.")
         else:
             write_log("DTC SİLME SONRASI KOD KALDI", f"Önce: {before_codes}\nSonra: {after_codes}")
             socketio.emit('dtc_cleared', {'ok': False, 'msg': 'ECU yeniden okundu; bazı kodlar hâlâ mevcut: ' + ', '.join(after_codes)})
+            safe_speak("Silme işleminden sonra ECU tekrar okundu. Bazı arıza kodları hâlâ mevcut: " + ", ".join(after_codes))
     except Exception as exc:
         socketio.emit('dtc_cleared', {'ok': False, 'msg': f"Silme işlemi başarısız: {exc}"})
+        safe_speak("Arıza silme işlemi başarısız oldu: " + str(exc)[:180])
 
 
 @socketio.on('test_info')
