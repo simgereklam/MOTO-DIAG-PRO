@@ -22,6 +22,7 @@ object DtcDatabase {
         "P0101" to "MAF sensörü aralık / performans hatası",
         "P0102" to "MAF sensörü düşük giriş sinyali",
         "P0103" to "MAF sensörü yüksek giriş sinyali",
+        "P0104" to "MAF hava kütle akış devresinde aralıklı / kesintili sinyal",
         "P0105" to "Manifold mutlak basınç (MAP) sensörü devresi",
         "P0107" to "MAP sensörü düşük giriş sinyali",
         "P0108" to "MAP sensörü yüksek giriş sinyali",
@@ -161,6 +162,7 @@ object DtcDatabase {
         "P0335", "P0336" -> listOf("Krank konum sensörü veya tetikleyici çark", "Sensör kablosunda kopukluk / kısa devre", "Sokette oksitlenme veya gevşek pin", "Sensör hava aralığı veya mekanik hasar")
         "P0115", "P0117", "P0118", "P0128" -> listOf("Sıcaklık sensörü arızası", "Soket / kablo temassızlığı", "Şase veya referans beslemesi", "Soğutma sistemi veya termostat sorunu")
         "P0120", "P0121", "P0122", "P0123", "P2135" -> listOf("TPS sensörü veya elektronik gaz kelebeği gövdesi", "Sensör referans voltajı / şase sorunu", "Soket pinleri ve kablo hattı", "Gaz kelebeğinde mekanik sıkışma veya adaptasyon sorunu")
+        "P0104" -> listOf("MAF sensörü varsa sensör içinde aralıklı temas / sinyal kesintisi", "MAF soketi veya kablo demetinde titreşimle oluşan temassızlık", "Sensör beslemesi veya şasesinde kesinti", "Hava filtresi kutusu ve emiş kanalında gevşeklik / kaçak"),
         "P0105", "P0107", "P0108", "P0100", "P0101", "P0102", "P0103" -> listOf("MAP / MAF sensörü kirlenmesi veya arızası", "Emme hortumu kaçağı veya tıkanıklık", "Besleme, şase veya sinyal kablosu sorunu")
         "P0171", "P0172", "P0174", "P0175" -> listOf("Emme hattında hava kaçağı", "Yakıt basıncı / enjektör akış sorunu", "Oksijen sensörü veya yakıt düzeltme verisi", "MAF / MAP ölçüm hatası")
         "P0201", "P0202", "P0261", "P0262" -> listOf("Enjektör bobini veya mekanik tıkanma", "Enjektör kablosu ve soketi", "ECU sürücü devresi veya besleme")
@@ -171,6 +173,7 @@ object DtcDatabase {
     }
 
     fun checks(code: String): List<String> = when (code.uppercase()) {
+        "P0104" -> listOf("Önce bu motosikletin gerçekten MAF sensörü kullanıp kullanmadığını servis şemasıyla doğrulayın", "MAF soketi ve kablo demetini motor titreşimi sırasında oluşabilecek temassızlık açısından inceleyin", "Sensör beslemesi, şasesi ve sinyalini modelin servis değerleriyle ölçün", "Hava filtresi kutusu ve emiş kanalını kontrol edin; onarımdan sonra kodu silip tekrar tarayın"),
         "P0335", "P0336" -> listOf("Krank sensörü soketini ve kablo hattını inceleyin", "Sensör direncini / sinyalini servis değerleriyle karşılaştırın", "Tetik çarkı ve sensör aralığını kontrol edin", "Onarım sonrası arıza kodunu yeniden okuyun")
         "P0115", "P0117", "P0118", "P0128" -> listOf("Sensör soketini ve kabloyu kontrol edin", "Soğuk ve sıcak motor değerlerini karşılaştırın", "Soğutma suyu ve termostatı kontrol edin", "Servis dokümanındaki direnç / voltaj değerini doğrulayın")
         "P0120", "P0121", "P0122", "P0123", "P2135" -> listOf("TPS kapalı ve tam açık konum sinyallerini ölçün", "5 V referans ve sensör şasesini kontrol edin", "Kelebek gövdesinde sıkışma olup olmadığını kontrol edin", "Yalnızca araç prosedürü destekliyorsa adaptasyon uygulayın")
