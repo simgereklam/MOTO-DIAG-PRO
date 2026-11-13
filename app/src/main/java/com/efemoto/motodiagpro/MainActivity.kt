@@ -1307,8 +1307,8 @@ class MainActivity : ComponentActivity() {
                             )
                                 .setMessage(
                                     "ECU tekrar sorgulandı. Kayıtlı ve bekleyen arıza yanıtlarında kod bulunmadı." +
-                                        if (clearAcknowledged) "\nECU, 04 → 44 olumlu yanıtıyla silme komutunu kabul etti."
-                                        else "\nAncak ECU'dan 04 → 44 olumlu silme onayı alınamadı; sonuç yalnızca yeniden okuma ile doğrulandı." +
+                                        (if (clearAcknowledged) "\nECU, 04 → 44 olumlu yanıtıyla silme komutunu kabul etti."
+                                        else "\nAncak ECU'dan 04 → 44 olumlu silme onayı alınamadı; sonuç yalnızca yeniden okuma ile doğrulandı.") +
                                     "\n\n" + attempts.joinToString("\n")
                                 )
                                 .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
@@ -1320,8 +1320,8 @@ class MainActivity : ComponentActivity() {
                             )
                                 .setMessage(
                                     "Kayıtlı ve bekleyen kodlar yeniden okumada bulunmadı. " +
-                                        if (clearAcknowledged) "ECU silme komutunu kabul etti."
-                                        else "ECU'dan 04 → 44 olumlu silme onayı alınmadı." +
+                                        (if (clearAcknowledged) "ECU silme komutunu kabul etti."
+                                        else "ECU'dan 04 → 44 olumlu silme onayı alınmadı.") +
                                     " ECU'nun kalıcı (Mode 0A) kodları normal Mode 04 komutuyla zorla silinemez; ECU kendi izleme koşulları tamamlandığında kaldırabilir.\n\nKalan kalıcı kodlar:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n")
                                 )
                                 .setPositiveButton("KALICI KODLARI GÖR") { _, _ -> showFaults() }.show()
