@@ -599,6 +599,8 @@ def real_data_loop(target, run_id):
                         if alerts:
                             _last_alert_time = now
                             socketio.emit('alert', {'msg': alerts[0]})
+                            # Sesli yorum yalnızca gerçek ECU verisinden üretilen uyarılarda çalışır.
+                            safe_speak(alerts[0])
                 else:
                     empty_cycles += 1
                     if empty_cycles >= 5:
@@ -997,6 +999,12 @@ def handle_scan():
         write_log("GERÇEK ECU ARIZA TARAMASI", log_details)
         socketio.emit('dtc_result', {'codes': codes, 'ok': True, 'smart_diag': smart_diag,
             'live_data_used': sorted(live_snapshot.keys())})
+        if codes:
+            spoken = "ECU arıza taraması tamamlandı. " + ". ".join(codes[:4])
+            if smart_diag: spoken += ". Akıllı değerlendirme: " + ". ".join(smart_diag[:2])
+            safe_speak(spoken)
+        else:
+            safe_speak("ECU yanıt verdi. Kayıtlı arıza kodu bulunmadı.")
     except Exception as exc:
         socketio.emit('dtc_result', {'codes': [], 'ok': False, 'error': f"ECU arıza okuma hatası: {exc}"})
 
