@@ -20,13 +20,31 @@ from typing import Callable, Optional
 
 
 def app_root() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
-    return Path(__file__).resolve().parent
+    """Find bundled resources in both normal Python and PyInstaller 6 layouts.
+
+    PyInstaller 6 onedir builds put --add-data files under _internal by default.
+    Older builds and source runs may keep assets beside the executable/module.
+    """
+    module_dir = Path(__file__).resolve().parent
+    if not getattr(sys, "frozen", False):
+        return module_dir
+
+    exe_dir = Path(sys.executable).resolve().parent
+    candidates = [
+        exe_dir / "_internal",
+        module_dir,
+        Path(getattr(sys, "_MEIPASS", exe_dir)),
+        exe_dir,
+    ]
+    for candidate in candidates:
+        if ((candidate / "assets" / "models").is_dir()
+                or (candidate / "assets" / "audio").is_dir()):
+            return candidate
+    # Keep a deterministic fallback so the status message shows the expected path.
+    return candidates[0]
 
 
 def model_path(name: str) -> Path:
-    # PyInstaller one-folder builds keep the models beside the executable.
     return app_root() / "assets" / "models" / name
 
 
