@@ -1281,9 +1281,6 @@ class App:
         self.log("SES KOMUTU: " + raw)
         if any(x in normalized for x in ("yardim", "komutlar")):
             safe_speak("Şu komutları anlayabiliyorum: bağlan, bağlantıyı kes, arıza tara, arızaları oku, arızaları sil, canlı verileri oku, test yap ve durumu söyle.")
-        elif "dinlemeyi kapat" in normalized:
-            if VOICE_ENGINE: VOICE_ENGINE.stop()
-            safe_speak("Sesli komut dinlemeyi kapatıyorum.")
         elif "baglantiyi kes" in normalized or "baglantiyi durdur" in normalized:
             if self._active_run_id is not None: self._stop_real()
             else: safe_speak("Şu anda aktif ECU bağlantısı yok.")
@@ -1425,5 +1422,9 @@ if __name__ == "__main__":
     print("Web Arayüzü: http://localhost:5000")
     root = tk.Tk(); app_gui = App(root)
     def on_closing():
-        app_gui.running = False; _cancel_runs(); root.after(200, lambda: (close_obd(), root.destroy()))
+        app_gui.running = False
+        _cancel_runs()
+        if VOICE_ENGINE is not None:
+            VOICE_ENGINE.stop()
+        root.after(200, lambda: (close_obd(), root.destroy()))
     root.protocol("WM_DELETE_WINDOW", on_closing); root.mainloop()
