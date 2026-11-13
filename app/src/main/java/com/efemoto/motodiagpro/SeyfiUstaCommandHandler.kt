@@ -116,6 +116,28 @@ class SeyfiUstaCommandHandler {
             .replace("usta", "")
             .trim()
 
+        // En sık kullanılan kısa test komutlarını uzun komut sözlüğüne girmeden çöz.
+        // Böylece "test" / "test yap" komutları beklemeden Testler ekranına gider.
+        if (commandText in setOf(
+                "test",
+                "test yap",
+                "testleri ac",
+                "test bolumunu ac",
+                "sistem testi",
+                "sistem testleri",
+                "sistem testlerini ac",
+                "kendini test et",
+                "mikrofon testi",
+                "sensor testi"
+            )
+        ) {
+            return command(
+                SeyfiAction.SHOW_TESTS,
+                original,
+                "Sistem testleri ekranını açıyorum."
+            )
+        }
+
         // Vosk konuşmayı kısa parçalara böldüğünde "dinliyorum" gibi
         // ara ifadeler komut oturumunu kapatmasın.
         if (commandText in listOf("dinliyorum", "buradayim", "hazirim", "beni dinle")) {
