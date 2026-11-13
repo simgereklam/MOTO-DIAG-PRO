@@ -241,10 +241,17 @@ class MainActivity : ComponentActivity() {
                     parserFailures.isNotEmpty() ->
                         "Merhaba. Ben Seyfi Usta. Ses sistemim hazır; komut sözlüğünde uyarı var."
                     else ->
-                        "Merhaba. Ben Seyfi Usta. Ses sistemim hazır. Şimdi mikrofonu açıyorum. Bana Seyfi Usta diye seslenin."
+                        "Merhaba, ben Seyfi Usta. OBD kablosunu motosiklete takın. Adaptörün açık olduğundan emin olun, kontağı açın ve telefonun Wi-Fi bağlantısını Viecar adaptörüne bağlayın. Ben bağlantı kurup taramayı otomatik başlatacağım."
                 }
-                assistant.speak(startupMessage) {
-                    if (assistant.isRecognitionAvailable()) assistant.startListening()
+                if (assistant.isTtsReady() && voiceFailures.isEmpty() && parserFailures.isEmpty()) {
+                    assistant.stopListening()
+                    assistant.speak(startupMessage) {
+                        if (!isFinishing && !isDestroyed) startDiagnosis()
+                    }
+                } else {
+                    assistant.speak(startupMessage) {
+                        if (assistant.isRecognitionAvailable()) assistant.startListening()
+                    }
                 }
             }
         }
@@ -1247,6 +1254,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startDiagnosis() {
+        // Tarama boyunca ses tanımayı kapat: ECU yanıtları ve Seyfi'nin TTS'i
+        // yeni bir komut gibi algılanmasın.
+        seyfiUstaAI?.stopListening()
         if (!scanRunning.compareAndSet(false, true)) {
             seyfiUstaAI?.speak("Usta, ECU taraması zaten devam ediyor.")
             return
@@ -1272,6 +1282,11 @@ class MainActivity : ComponentActivity() {
             try {
                 updateScan(8, "Viecar adaptörüne bağlanılıyor…")
                 ensureConnected()
+                mainHandler.post {
+                    if (!isFinishing && !isDestroyed) {
+                        seyfiUstaAI?.speak("Bağlantı kuruldu. ECU yanıt veriyor. Otomatik tarama başlatılıyor.")
+                    }
+                }
                 updateScan(35, "ECU yanıtı kontrol ediliyor…")
                 val support = elm("0100", 5000)
                 val supportHex = support.filter { it in "0123456789ABCDEF" }
@@ -1349,23 +1364,27 @@ class MainActivity : ComponentActivity() {
 
                     if (currentScreen == "SCAN") showFaults()
                     if (faults.isEmpty()) {
-                        seyfiUstaAI?.speak("Gerçek ECU taraması tamamlandı. Okunan arıza yanıtlarında kayıtlı, bekleyen veya kalıcı arıza kodu bulunmadı.")
+                        seyfiUstaAI?.speak(
+                            "Gerçek ECU taraması tamamlandı. ECU kayıtlı, bekleyen veya kalıcı bir arıza kodu bildirmedi. Dinlemeye devam ediyorum."
+                        ) { seyfiUstaAI?.startListening() }
                     } else {
+                        // Kullanıcıya kodu harf harf söyletmek yerine ECU'nun
+                        // arıza kodu için uygulamada bulunan adını oku.
                         val spokenFaults = faults.take(4).joinToString(". ") { code ->
-                            "${baseDtcCode(code)}. ${faultTitle(code)}"
+                            faultTitle(code)
                         }
                         seyfiUstaAI?.speak(
-                            "Tarama tamamlandı. ${faults.size} arıza kaydı bulundu. $spokenFaults"
-                        )
+                            "Tarama tamamlandı. ${faults.size} arıza kaydı bulundu. $spokenFaults. Hangi arızayı incelememi istersiniz?"
+                        ) { seyfiUstaAI?.startListening() }
                     }
                 }
             } catch (e: Exception) {
                 mainHandler.post {
                     log("Tarama hatası: ${e.message}")
+                    closeAdapter()
                     seyfiUstaAI?.speak(
-                        "ECU'ya bağlanamadım. Kablo ve adaptör bağlantısını kontrol eder misiniz? " +
-                            "Motorun kontağı açık mı?"
-                    )
+                        "Bağlantı kuramadım usta. Lütfen motosiklet ile OBD kablosunun bağlantısını, Viecar adaptörünün açık olduğunu, kontağın açık olduğunu ve telefonun Wi-Fi üzerinden Viecar ağına bağlı olduğunu kontrol edin. Kontrollerden sonra yeniden deneyebiliriz."
+                    ) { seyfiUstaAI?.startListening() }
                     if (currentScreen == "SCAN") {
                         progressLine?.text = "ECU'YA BAĞLANILAMADI\nKablo ve adaptör bağlantısını kontrol edin.\nMotor kontağının açık olduğundan emin olun."
                         statusLine?.text = "● ECU BAĞLANTISI KURULAMADI"
