@@ -201,6 +201,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 _connection = None; _mode = 'idle'; _conn_lock = threading.Lock(); _query_lock = threading.Lock()
 _live_data_lock = threading.Lock(); _last_live_data = {}
 _run_id = 0; _run_lock = threading.Lock(); _last_alert_time = 0
+_last_spoken_alert = {'text': '', 'time': 0.0}
 
 def _is_current_run(rid):
     with _run_lock: return rid == _run_id
@@ -637,8 +638,11 @@ def real_data_loop(target, run_id):
                         if alerts:
                             _last_alert_time = now
                             socketio.emit('alert', {'msg': alerts[0]})
-                            # Sesli yorum yalnızca gerçek ECU verisinden üretilen uyarılarda çalışır.
-                            safe_speak(alerts[0])
+                            # Aynı arıza uyarısını her ölçüm turunda tekrarlama.
+                            if (alerts[0] != _last_spoken_alert['text'] or
+                                    now - _last_spoken_alert['time'] >= 60):
+                                _last_spoken_alert.update({'text': alerts[0], 'time': now})
+                                safe_speak(alerts[0])
                 else:
                     empty_cycles += 1
                     if empty_cycles >= 5:
