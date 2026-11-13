@@ -1,0 +1,13 @@
+Flask>=3.1,<4
+Flask-SocketIO>=5.5,<6
+pyserial>=3.5,<4
+python-can>=4.5,<5
+udsoncan>=1.24,<2
+can-isotp>=2.0,<3
+obd>=0.7,<1
+numpy>=1.26,<3
+sounddevice>=0.5,<1
+vosk==0.3.45
+pocket-tts-turkish>=0.1.0
+huggingface_hub>=0.27
+PyInstaller>=6.10,<7
