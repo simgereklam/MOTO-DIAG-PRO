@@ -31,18 +31,25 @@ def prepare_vosk():
         zf.extractall(MODELS)
     archive.unlink(missing_ok=True)
 
-    # Do not assume the archive's top-level folder name; locate the actual Kaldi model root.
+    # Turkish small-tr-0.3 is an older Vosk v1 model: final.mdl and mfcc.conf
+    # are in the model root (not in am/ as newer v2 models are).
     final_models = list(MODELS.rglob("final.mdl"))
-    if not final_models:
-        raise RuntimeError("Vosk archive contains no final.mdl acoustic model.")
-    final_model = final_models[0]
+    valid_models = [p for p in final_models
+                    if (p.parent / "mfcc.conf").is_file()
+                    or (p.parent / "am" / "final.mdl").is_file()]
+    if not valid_models:
+        raise RuntimeError("Vosk archive has no valid model: expected final.mdl + mfcc.conf.")
+    final_model = valid_models[0]
     model_root = final_model.parent.parent if final_model.parent.name.lower() == "am" else final_model.parent
     if target.exists():
         shutil.rmtree(target)
     if model_root.resolve() != target.resolve():
         shutil.move(str(model_root), str(target))
-    if not (target / "am" / "final.mdl").is_file():
-        raise RuntimeError("Vosk model folder is incomplete: am/final.mdl not found.")
+    # Vosk supports both legacy flat v1 and nested v2 model layouts.
+    valid_flat = (target / "final.mdl").is_file() and (target / "mfcc.conf").is_file()
+    valid_nested = (target / "am" / "final.mdl").is_file() and (target / "conf" / "model.conf").is_file()
+    if not (valid_flat or valid_nested):
+        raise RuntimeError("Vosk model extraction is incomplete (legacy or v2 layout).")
 
 def prepare_tts():
     target = MODELS / "pocket-tts-turkish"
@@ -73,6 +80,10 @@ def prepare_greeting() -> None:
             "yapmamı, canlı verileri yorumlamamı veya test ekranını açmamı söyleyebilirsiniz.")
     audio = tts.generate(text, voice="male_1", emotion="sakin")
     save_wav(str(output_file), audio, tts.sample_rate)
+    # Windows winsound needs standard PCM WAV, not IEEE-float WAV.
+    import soundfile as sf
+    rendered, rate = sf.read(str(output_file), dtype="float32")
+    sf.write(str(output_file), rendered, int(rate), subtype="PCM_16", format="WAV")
     if not output_file.is_file() or output_file.stat().st_size < 10000:
         raise RuntimeError("Startup greeting audio was not generated correctly.")
 
