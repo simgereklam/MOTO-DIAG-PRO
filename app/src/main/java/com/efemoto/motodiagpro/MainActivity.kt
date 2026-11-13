@@ -101,10 +101,6 @@ class MainActivity : ComponentActivity() {
     private var seyfiConversationView: TextView? = null
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
-    @Volatile private var seyfiAwaitingDtcCode = false
-    @Volatile private var seyfiAwaitingDtcConfirmation = false
-    @Volatile private var seyfiPendingShortDtcCode = ""
-    private var seyfiDtcSpeechBuffer = ""
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -352,37 +348,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    /**
-     * Yalnızca DTC kodu beklenirken Android'in kendi Türkçe konuşma tanımasını açar.
-     * Alternatifler aynı koda çıkıyorsa kabul eder; P/B gibi farklı kodları tahmin etmez.
-     */
-    private fun startSeyfiDtcNativeCapture(assistant: SeyfiUstaAI, retryCount: Int = 0) {
-        assistant.listenForDtcCode { phrases ->
-            val possibleCodes = phrases
-                .mapNotNull { SeyfiDtcCodeParser.extract(it) }
-                .distinct()
-            when {
-                possibleCodes.size == 1 -> handleSeyfiCommand(possibleCodes.first())
-                phrases.isEmpty() -> {
-                    assistant.speak("Telefonun kendi ses tanıması hazır değil. Çevrimdışı ses tanımayla devam ediyorum.")
-                    assistant.startListening()
-                }
-                retryCount < 2 -> {
-                    assistant.speak("Arıza kodunun harfini net ayırt edemedim usta. Harfi ve rakamları biraz yavaş, ayrı ayrı söyle.") {
-                        startSeyfiDtcNativeCapture(assistant, retryCount + 1)
-                    }
-                }
-                else -> {
-                    seyfiAwaitingDtcCode = false
-                    seyfiAwaitingCommand = false
-                    seyfiDtcSpeechBuffer = ""
-                    assistant.speak("Yanlış arıza kodu söylemek istemiyorum. Kodu ekrandaki arıza kodu alanına yazabilirsin.")
-                    assistant.startListening()
-                }
-            }
-        }
-    }
-
     private fun handleSeyfiCommand(rawCommand: String) {
         val assistant = seyfiUstaAI ?: return
         if (rawCommand.isNotBlank()) {
@@ -443,93 +408,19 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        // Konuşma tanıma metni yukarıda ASCII/Türkçe sadeleştirmeden geçtiği için
-        // "sorcam", "soracağım", "sorucam" gibi günlük söyleyişleri de yakala.
+        // Kullanıcının sesle arıza kodu söyleyerek kütüphane sorgulama akışı kaldırıldı.
+        // Gerçek ECU arızaları READ_FAULTS / EXPLAIN_FAULTS komutlarıyla okunur;
+        // kodla manuel arama yalnızca ekrandaki mevcut arama alanında kalır.
         val normalizedDtcPrompt = commandInput.lowercase(Locale.US)
-        val asksToGiveDtcCode = SeyfiDtcCodeParser.isDtcPrompt(normalizedDtcPrompt)
-        if (asksToGiveDtcCode) {
-            seyfiAwaitingCommand = true
-            seyfiAwaitingDtcCode = true
-            seyfiAwaitingDtcConfirmation = false
-            seyfiPendingShortDtcCode = ""
-            seyfiDtcSpeechBuffer = ""
-            log("DTC SORU MODU AÇILDI • ifade: $commandInput")
-            appendSeyfiConversation("SİZ", commandInput)
-            val prompt = "Tamam usta, dinliyorum. Arıza kodunu harfi ve rakamlarıyla söyle. Yalnızca veri tabanımda kayıtlıysa açıklayacağım."
-            appendSeyfiConversation("SEYFİ USTA", prompt)
-            assistant.speak(prompt) {
-                startSeyfiDtcNativeCapture(assistant)
-            }
-            return
-        }
-
-        if (seyfiAwaitingDtcConfirmation) {
-            val confirmation = commandInput.lowercase(Locale.US).trim()
-            when (confirmation) {
-                "evet", "dogru", "aynen", "evet dogru", "evet usta" -> {
-                    val confirmedCode = seyfiPendingShortDtcCode
-                    seyfiPendingShortDtcCode = ""
-                    seyfiAwaitingDtcConfirmation = false
-                    seyfiAwaitingCommand = false
-                    appendSeyfiConversation("SİZ", "Evet, $confirmedCode")
-                    assistant.brain.lookupDtcCode(confirmedCode) { answer ->
-                        appendSeyfiConversation("SEYFİ USTA", answer)
-                        if (!isFinishing && !isDestroyed) assistant.speak(answer)
-                    }
-                }
-                "hayir", "hayir usta", "yanlis", "degil", "tekrar" -> {
-                    seyfiPendingShortDtcCode = ""
-                    seyfiAwaitingDtcConfirmation = false
-                    seyfiAwaitingDtcCode = true
-                    seyfiDtcSpeechBuffer = ""
-                    assistant.speak("Tamam usta. Arıza kodunu baştan, harfi ve dört rakamıyla söyle.") {
-                        startSeyfiDtcNativeCapture(assistant)
-                    }
-                }
-                else -> assistant.speak("Yanlış kod söylememek için soruyorum usta. $seyfiPendingShortDtcCode kodu doğru mu? Evet ya da hayır de.")
-            }
-            return
-        }
-
-        if (seyfiAwaitingDtcCode) {
-            // Vosk konuşmayı sessizlik noktalarında parçalara ayırabilir.
-            // Eksik parçayı hata sayıp kullanıcıyı konuşturmayı kesme; sonraki
-            // ses parçasını birleştirerek tam kod oluşana kadar dinlemeyi sürdür.
-            if (commandInput.isNotBlank()) {
-                seyfiDtcSpeechBuffer = (seyfiDtcSpeechBuffer + " " + commandInput)
-                    .trim().takeLast(120)
-            }
-            val suppliedCode = SeyfiDtcCodeParser.extract(seyfiDtcSpeechBuffer)
-            if (suppliedCode == null) {
-                // İki haneli Yamaha kodları, P0335 gibi dört haneli bir kodun
-                // yanlış tanınmış parçası olabilir. Asla doğrudan teşhis etme;
-                // önce kullanıcıdan açık onay al.
-                val shortCode = SeyfiDtcCodeParser.extract(
-                    seyfiDtcSpeechBuffer,
-                    allowShortCode = true
-                )
-                if (shortCode != null) {
-                    seyfiDtcSpeechBuffer = ""
-                    seyfiPendingShortDtcCode = shortCode
-                    seyfiAwaitingDtcCode = false
-                    seyfiAwaitingDtcConfirmation = true
-                    assistant.speak("$shortCode kodunu duydum usta. Doğru mu? Evet veya hayır de.")
-                } else {
-                    assistant.startListening()
-                }
-                return
-            }
-            seyfiDtcSpeechBuffer = ""
-            seyfiAwaitingDtcCode = false
+        if (SeyfiDtcCodeParser.isDtcPrompt(normalizedDtcPrompt) ||
+            SeyfiDtcCodeParser.extract(commandInput) != null
+        ) {
             seyfiAwaitingCommand = false
-            appendSeyfiConversation("SİZ", suppliedCode)
-            seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
-            assistant.brain.lookupDtcCode(suppliedCode) { answer ->
-                appendSeyfiConversation("SEYFİ USTA", answer)
-                if (!isFinishing && !isDestroyed) assistant.speak(answer)
-            }
+            log("Seyfi Usta: sesli arıza kodu sorgulama komutu devre dışı; ECU arızaları ekrandan incelenebilir.")
+            assistant.speak("Sesli arıza kodu söyleme komutu kaldırıldı usta. Gerçek ECU arızalarını arıza ekranından inceleyebilirsin.")
             return
         }
+
         // Bilinen, güvenli ekran/yardım komutları uyandırma sözü kaçırıldığında da çalışsın.
         // Bilinmeyen sıradan konuşmalar komut olarak yürütülmez; mikrofon dinlemeye devam eder.
         // Yamaha marka/model/yıl bilgisi sohbet girdisidir; uyandırma kelimesi
@@ -539,20 +430,6 @@ class MainActivity : ComponentActivity() {
             YamahaVehicleCatalog.detectModel(commandInput) != null ||
             (seyfiAwaitingCommand && YamahaVehicleCatalog.extractYear(commandInput) != null)
         if (yamahaVehicleUtterance) seyfiAwaitingCommand = true
-
-        // DTC kodu doğrudan tam eşleşme ile aranır; son taramadaki kodlar kullanılmaz.
-        val explicitDtcCode = SeyfiDtcCodeParser.extract(commandInput)
-        if (explicitDtcCode != null) {
-            seyfiAwaitingCommand = false
-            log("DTC SORUSU • ham ifade: $rawCommand • kod: $explicitDtcCode")
-            appendSeyfiConversation("SİZ", explicitDtcCode)
-            seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
-            assistant.brain.lookupDtcCode(explicitDtcCode) { answer ->
-                appendSeyfiConversation("SEYFİ USTA", answer)
-                if (!isFinishing && !isDestroyed) assistant.speak(answer)
-            }
-            return
-        }
 
         val command = seyfiCommandHandler.handle(commandInput)
         if (command.action == SeyfiAction.UNKNOWN && !wakeDetected && !seyfiAwaitingCommand) {
