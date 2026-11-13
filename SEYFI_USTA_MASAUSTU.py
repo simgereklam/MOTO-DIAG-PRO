@@ -206,6 +206,11 @@ class ELM327TcpConnection:
             if not self._has_response(support, '4100'):
                 raise ConnectionError('Adaptör yanıt verdi ancak ECU 0100 destek sorgusuna geçerli cevap vermedi: ' + self._short(support))
             self.last_support_response = support
+            # ECU'nun desteklediği Mode 01 PID'lerini bağlantı kurulurken bir kez keşfet.
+            # Bitmap okunamazsa None bırakılır; bu durumda mevcut sorgulama davranışı korunur.
+            self.supported_pids = self._discover_supported_pids(support)
+            self._live_aux_index = 0
+            self._pid_retry_after = {}
         except Exception:
             self._closed = True
             try: self.sock.close()
@@ -220,6 +225,44 @@ class ELM327TcpConnection:
     def _has_response(raw, prefix):
         compact = re.sub(r'[^0-9A-F]', '', (raw or '').upper())
         return prefix in compact
+
+    def _discover_supported_pids(self, first_response):
+        """0100/0120/0140/0160 bitmap zincirini okuyup desteklenen PID numaralarını döndürür."""
+        supported = set()
+        response = first_response
+        for block_start in (1, 21, 41, 61):
+            prefix = f'41{block_start:02X}'
+            payload = self._hex_payload(response)
+            pos = payload.find(prefix)
+            if pos < 0:
+                return None
+            hex_data = payload[pos + len(prefix):]
+            if len(hex_data) < 8:
+                return None
+            try:
+                bitmap = bytes.fromhex(hex_data[:8])
+            except ValueError:
+                return None
+            for bit_index in range(32):
+                if bitmap[bit_index // 8] & (1 << (7 - (bit_index % 8))):
+                    supported.add(block_start + bit_index)
+            # Her bitmap'in son PID biti, bir sonraki bitmap'in mevcut olduğunu belirtir.
+            continuation_pid = block_start + 31
+            if block_start == 61 or continuation_pid not in supported:
+                break
+            next_start = block_start + 20
+            response = self._exchange(f'01{next_start:02X}', wait=5.0)
+        return supported
+
+    def pid_supported(self, pid_hex):
+        """PID destek bilgisi varsa kullan; yoksa geriye dönük uyumluluk için sorguya izin ver."""
+        supported = getattr(self, 'supported_pids', None)
+        if supported is None:
+            return True
+        try:
+            return int(pid_hex, 16) in supported
+        except (TypeError, ValueError):
+            return False
 
     def _exchange(self, command, wait=None):
         if self._closed:
@@ -284,9 +327,19 @@ class ELM327TcpConnection:
         if not command:
             return None
         pid = command[2:]
+        if not self.pid_supported(pid):
+            return None
+        now = time.monotonic()
+        retry_after = getattr(self, '_pid_retry_after', {}).get(pid, 0.0)
+        if now < retry_after:
+            return None
         data, raw = self._pid_bytes(command, '41' + pid)
         if not data:
+            # Destekli görünen ancak cevap vermeyen PID'yi her çevrimde bekletme.
+            # 8 saniye sonra tekrar deneyerek geçici ECU/adaptör gecikmesine tolerans tanı.
+            self._pid_retry_after[pid] = now + 8.0
             return None
+        self._pid_retry_after.pop(pid, None)
         a = data[0]
         try:
             if key == 'rpm' or key.upper() == 'RPM':
@@ -459,8 +512,16 @@ def _obd_value(response):
 
 def _query_live_values(conn):
     if isinstance(conn, ELM327TcpConnection):
-        keys = ('rpm', 'speed', 'temp', 'tps', 'map', 'iat', 'volt', 'stft', 'o2')
+        # Temel göstergeler her turda; daha yavaş değişen yardımcı PID'ler sırayla okunur.
+        # Böylece tek çevrimde dokuz ardışık sorgu gönderilmez.
+        core_keys = ('rpm', 'tps', 'temp', 'map', 'volt')
+        auxiliary_keys = ('speed', 'iat', 'stft', 'o2')
         result = {}
+        keys = list(core_keys)
+        if auxiliary_keys:
+            index = getattr(conn, '_live_aux_index', 0) % len(auxiliary_keys)
+            keys.append(auxiliary_keys[index])
+            conn._live_aux_index = (index + 1) % len(auxiliary_keys)
         for key in keys:
             try:
                 value = conn.query_pid(key)
