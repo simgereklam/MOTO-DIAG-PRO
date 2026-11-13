@@ -1,0 +1,24 @@
+MOTO DIAG PRO — THIRD-PARTY MODEL AND RUNTIME NOTICES
+
+Pocket TTS Turkish
+- Model: wite-tech/pocket-tts-turkish
+- Authors: Khaled Moawad, Ammar Rashed, Ekrem Çetinkaya
+- Model weights: Creative Commons Attribution 4.0 International (CC BY 4.0)
+- Based on Kyutai Labs Pocket TTS, also distributed under CC BY 4.0.
+- Model card: https://huggingface.co/wite-tech/pocket-tts-turkish
+- Project: https://github.com/witetech/pocket-tts-turkish
+- Research paper: Rouard et al., "Continuous Audio Language Models", arXiv:2509.06926.
+Changes: integrated for local Turkish voice output in MOTO DIAG PRO. No model training is claimed by EFE MOTO.
+
+Vosk Turkish Speech Recognition
+- Model: vosk-model-small-tr-0.3
+- Publisher: Alpha Cephei
+- License: Apache License 2.0
+- Model listing: https://alphacephei.com/vosk/models
+- Runtime: https://github.com/alphacep/vosk-api
+
+PyTorch
+- CPU runtime distributed under its applicable BSD-style license.
+- https://pytorch.org/
+
+The installer build includes the corresponding third-party runtime/model files. Each component remains under its own license; this notice does not replace the full license texts.
