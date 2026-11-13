@@ -1312,13 +1312,27 @@ class App:
         if self._ai_ready:
             phrase = "Seyfi Usta akıllı teşhis asistanı hazır. Adaptör bağlantısını kontrol ediyorum."
         else:
-            phrase = "Merhaba, Seyfi Usta akıllı motosiklet teşhis sistemine hoş geldiniz. Bağlantı cihazınızı arıyorum."
+            phrase = "Merhaba, Seyfi Usta akıllı motosiklet teşhis sistemine hoş geldiniz. Ses ve komut motorları hazırlanıyor."
         safe_speak(phrase)
+
+    def _handle_voice_status(self, message):
+        self.log(message)
+        if message.startswith("Türkçe çevrimdışı ses motoru hazır"):
+            self._voice_tts_ready = True
+        elif message.startswith("MİKROFON/KOMUT TANIMA HATASI"):
+            self._voice_asr_ready = False
+        elif message.startswith("Seyfi Usta mikrofonu dinliyor"):
+            self._voice_asr_ready = True
+        elif message.startswith("SES MOTORU HATASI"):
+            self._voice_tts_ready = False
+        self._ai_ready = self._voice_tts_ready and self._voice_asr_ready
 
     def startup_assistant(self):
         if self._startup_done: return
         self._startup_done = True
-        self._ai_ready = True
+        self._voice_tts_ready = False
+        self._voice_asr_ready = False
+        self._ai_ready = False
         self.set_status("ÇEVRİMDIŞI TEŞHİS HAZIR")
         self.log("Yerel teşhis kuralları hazır; internet veya harici AI servisi kullanılmıyor.")
         try:
@@ -1326,7 +1340,7 @@ class App:
             from seyfi_voice import SeyfiVoice
             VOICE_ENGINE = SeyfiVoice(
                 on_command=lambda phrase: self.root.after(0, lambda p=phrase: self.handle_voice_command(p)),
-                on_status=lambda message: self.root.after(0, lambda m=message: self.log(m)),
+                on_status=lambda message: self.root.after(0, lambda m=message: self._handle_voice_status(m)),
             )
             VOICE_ENGINE.start(local_ai_greeting())
             self.log("Seyfi Usta yerel ses ve Türkçe komut motorları başlatılıyor.")
