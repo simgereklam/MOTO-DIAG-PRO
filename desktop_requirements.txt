@@ -7,6 +7,7 @@ can-isotp>=2.0,<3
 obd>=0.7,<1
 numpy>=1.26,<3
 sounddevice>=0.5,<1
+soundfile>=0.12,<1
 vosk==0.3.45
 pocket-tts-turkish>=0.1.0
 huggingface_hub>=0.27
