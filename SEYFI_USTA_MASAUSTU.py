@@ -1359,6 +1359,9 @@ class App:
                 for key, label, unit in labels:
                     if key in snapshot: parts.append(f"{label} {snapshot[key]} {unit}")
                 safe_speak("Canlı ECU ölçümleri: " + ". ".join(parts))
+        elif "rapor olustur" in normalized:
+            self.save_log()
+            safe_speak("Servis kayıt raporunu kaydetme işlemini başlattım.")
         elif "test yap" in normalized or "testleri ac" in normalized:
             safe_speak("Test ve servis ekranını açıyorum.")
             webbrowser.open("http://localhost:5000")
