@@ -44,7 +44,28 @@ def prepare_tts():
     if not (target / "config.yaml").is_file() or not (target / "model.safetensors").is_file():
         raise RuntimeError("Pocket TTS model files are incomplete.")
 
+def prepare_greeting() -> None:
+    """Pre-render the welcome line so it is audible before the live TTS model loads."""
+    from pocket_tts_turkish import TurkishTTS, save_wav
+    model_dir = MODELS / "pocket-tts-turkish"
+    output_dir = ROOT / "assets" / "audio"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "seyfi_greeting.wav"
+    if output_file.is_file() and output_file.stat().st_size > 10000:
+        print("Seyfi Usta startup greeting already rendered.")
+        return
+    print("Rendering Seyfi Usta Turkish startup greeting...")
+    tts = TurkishTTS.from_pretrained(source=str(model_dir), device="cpu")
+    text = ("Merhaba, ben Seyfi Usta. MOTO DIAG PRO çevrimdışı teşhis sistemine hoş geldiniz. "
+            "Şimdi bağlantı cihazınızı kontrol ediyorum. Bana seslenerek arıza taraması "
+            "yapmamı, canlı verileri yorumlamamı veya test ekranını açmamı söyleyebilirsiniz.")
+    audio = tts.generate(text, voice="male_1", emotion="sakin")
+    save_wav(str(output_file), audio, tts.sample_rate)
+    if not output_file.is_file() or output_file.stat().st_size < 10000:
+        raise RuntimeError("Startup greeting audio was not generated correctly.")
+
 if __name__ == "__main__":
     prepare_vosk()
     prepare_tts()
+    prepare_greeting()
     print("Offline Turkish voice assets are ready.")
