@@ -561,38 +561,27 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.SHOW_TESTS -> {
+                // Ekran geçişi ilk iş: sesli komut sırasında ağır öz testleri
+                // ana UI iş parçacığında çalıştırıp sayfanın açılmasını geciktirme.
                 showTests()
-                val failures = seyfiCommandHandler.selfTest() + YamahaVehicleCatalog.selfTest() + assistant.runCompatibilitySelfTest()
-                val report = if (failures.isEmpty()) {
-                    "Seyfi Usta yazılım öz testleri başarılı."
-                } else {
-                    "Seyfi Usta yazılım öz testinde uyarı var: " + failures.joinToString(". ")
-                }
-                log(report)
-                if (failures.isNotEmpty()) {
-                    Toast.makeText(this, report, Toast.LENGTH_LONG).show()
-                }
                 val quickTest = SeyfiDiagnosticTestCatalog.find("basic_live_data")
                 when {
                     busy.get() || scanRunning.get() -> assistant.speak(
-                        "Sistem testleri ekranını açtım. Başka bir ECU işlemi sürdüğü için test başlatılamadı."
+                        "Testler açıldı. Başka bir ECU işlemi devam ediyor."
                     )
                     quickTest == null -> assistant.speak(
-                        "Sistem testleri ekranını açtım ancak temel sensör testinin tanımı bulunamadı."
+                        "Testler açıldı ancak temel sensör testi tanımlı değil."
                     )
-                    else -> assistant.speak(
-                        "Sistem testleri ekranını açtım. Şimdi gerçek ECU üzerinden temel sensör kontrolünü başlatıyorum.",
-                        onDone = {
-                            if (!isFinishing && !isDestroyed) {
-                                runReadOnlyTest(
-                                    quickTest.title,
-                                    quickTest.description,
-                                    quickTest.queries,
-                                    voiceTriggered = true
-                                )
-                            }
-                        }
-                    )
+                    else -> {
+                        assistant.speak("Testler açıldı. Temel ECU kontrolünü başlatıyorum.")
+                        // TTS cümlesinin bitmesini bekleme; salt-okunur test hemen başlasın.
+                        runReadOnlyTest(
+                            quickTest.title,
+                            quickTest.description,
+                            quickTest.queries,
+                            voiceTriggered = true
+                        )
+                    }
                 }
             }
 
