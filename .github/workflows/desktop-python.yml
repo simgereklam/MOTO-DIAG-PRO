@@ -6,11 +6,11 @@ on:
       - main
       - desktop-seyfi-live-data-stage1
     paths:
-      - "SEYFI_USTA_MASAUSTA.py"
+      - "SEYFI_USTA_MASAUSTU.py"
       - ".github/workflows/desktop-python.yml"
   pull_request:
     paths:
-      - "SEYFI_USTA_MASAUSTA.py"
+      - "SEYFI_USTA_MASAUSTU.py"
       - ".github/workflows/desktop-python.yml"
 
 jobs:
@@ -24,4 +24,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check Python syntax
-        run: python -m py_compile SEYFI_USTA_MASAUSTA.py
+        run: python -m py_compile SEYFI_USTA_MASAUSTU.py
