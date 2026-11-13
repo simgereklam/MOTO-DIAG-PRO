@@ -37,7 +37,10 @@ class SeyfiVoice:
         "tekrar bağlan", "yeniden bağlan", "taramaya başla", "arıza tara",
         "arızaları oku", "arızaları sil", "arıza kodlarını sil",
         "canlı verileri oku", "motor verilerini oku", "test yap",
-        "testleri aç", "durumu söyle", "rapor oluştur", "dinlemeyi kapat",
+        "testleri aç", "durumu söyle", "rapor oluştur",
+        "seyfi usta taramaya başla", "seyfi usta arıza tara",
+        "seyfi usta arızaları oku", "seyfi usta canlı verileri oku",
+        "seyfi usta bağlan", "seyfi usta bağlantıyı kes", "seyfi usta test yap",
     ]
 
     def __init__(
