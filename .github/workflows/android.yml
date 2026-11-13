@@ -6,6 +6,15 @@ on:
     branches:
       - main
       - master
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradle/libs.versions.toml"
+      - "gradlew*"
+      - ".github/workflows/android.yml"
   workflow_dispatch:
 
 permissions:
