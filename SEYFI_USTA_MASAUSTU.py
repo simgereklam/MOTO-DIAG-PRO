@@ -122,10 +122,48 @@ def akilli_teshis(dtc_codes, live_data):
     return teshisler
 
 def anomali_kontrol(data):
+    """Gerçek ECU PID'lerinden ihtiyatlı, açıklanabilir canlı uzman sistemi uyarıları üretir."""
     uyarilar = []
-    if data.get('temp', 0) > 105: uyarilar.append(f"KRİTİK HARARET: Motor {data['temp']}°C! Radyatör fanını ve termostatı kontrol edin.")
-    if 0 < data.get('volt', 12) < 11.8: uyarilar.append(f"AKÜ UYARISI: Voltaj {data['volt']}V. Şarj dinamosu veya akü zayıf.")
-    if data.get('stft', 0) > 25: uyarilar.append(f"YAKIT TRİMİ: STFT %{data['stft']}. Aşırı zayıf karışım, motor ısınabilir.")
+    def number(key):
+        try:
+            value = float(data.get(key))
+            return value if value == value and abs(value) != float("inf") else None
+        except (TypeError, ValueError):
+            return None
+
+    temp = number('temp')
+    volt = number('volt')
+    stft = number('stft')
+    rpm = number('rpm')
+    tps = number('tps')
+    map_kpa = number('map')
+
+    if temp is not None:
+        if temp >= 115:
+            uyarilar.append(f"ÇOK KRİTİK HARARET: Motor sıcaklığı {temp:.1f} derece. Güvenli yerde durun, motoru zorlamayın ve soğumasını bekleyin. Soğutma sistemi kontrol edilmeli.")
+        elif temp > 105:
+            uyarilar.append(f"HARARET UYARISI: Motor sıcaklığı {temp:.1f} derece. Fan, radyatör, soğutma sıvısı ve termostatı kontrol edin.")
+        elif temp < -35 or temp > 150:
+            uyarilar.append(f"SICAKLIK SİNYALİ ŞÜPHELİ: ECU {temp:.1f} derece bildirdi. Sensör ve kablo bağlantısını doğrulayın.")
+
+    if volt is not None:
+        if 0 < volt < 11.8:
+            uyarilar.append(f"DÜŞÜK BESLEME VOLTAJI: {volt:.2f} volt. Akü, kutup başları ve şarj sistemi ölçülmeli.")
+        elif volt > 15.0:
+            uyarilar.append(f"YÜKSEK ŞARJ VOLTAJI: {volt:.2f} volt. Regülatör/doğrultucu ve şarj sistemi kontrol edilmeli; elektronik bileşenler risk altında olabilir.")
+
+    if stft is not None:
+        if stft > 25:
+            uyarilar.append(f"YAKIT DÜZELTMESİ POZİTİF: STFT yüzde {stft:.1f}. Fakir karışım eğilimi var; emme kaçağı, yakıt beslemesi ve egzoz kaçağı ölçümle kontrol edilmeli.")
+        elif stft < -20:
+            uyarilar.append(f"YAKIT DÜZELTMESİ NEGATİF: STFT yüzde {stft:.1f}. Zengin karışım eğilimi var; enjektör, yakıt basıncı ve sensör verileri doğrulanmalı.")
+
+    if tps is not None and not 0 <= tps <= 100:
+        uyarilar.append(f"TPS VERİSİ SINIR DIŞI: ECU gaz kelebeğini yüzde {tps:.1f} bildirdi. PID ölçeği ve sensör sinyali doğrulanmalı.")
+
+    if map_kpa is not None and not 0 <= map_kpa <= 255:
+        uyarilar.append(f"MAP VERİSİ SINIR DIŞI: ECU emme basıncını {map_kpa:.1f} kPa bildirdi. PID ölçeği ve sensör sinyali doğrulanmalı.")
+
     return uyarilar
 
 def risk_skoru_hesapla(data):
