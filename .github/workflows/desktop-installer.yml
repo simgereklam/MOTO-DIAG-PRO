@@ -56,6 +56,12 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --collect-all torch --collect-all pocket_tts --collect-all pocket_tts_turkish --collect-all vosk --collect-all sounddevice --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
 
+      - name: Download Microsoft Visual C++ runtime
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force installer/redist | Out-Null
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "installer/redist/vc_redist.x64.exe"
+
       - name: Install Inno Setup
         shell: pwsh
         run: |
