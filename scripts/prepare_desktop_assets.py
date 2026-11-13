@@ -2,6 +2,7 @@
 """Fetch and verify the offline speech models for the Windows installer build."""
 from __future__ import annotations
 import hashlib
+import shutil
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -29,8 +30,19 @@ def prepare_vosk():
     with zipfile.ZipFile(archive) as zf:
         zf.extractall(MODELS)
     archive.unlink(missing_ok=True)
-    if not (target / "am").is_dir():
-        raise RuntimeError("Vosk model extraction did not produce the expected folder.")
+
+    # Do not assume the archive's top-level folder name; locate the actual Kaldi model root.
+    final_models = list(MODELS.rglob("final.mdl"))
+    if not final_models:
+        raise RuntimeError("Vosk archive contains no final.mdl acoustic model.")
+    final_model = final_models[0]
+    model_root = final_model.parent.parent if final_model.parent.name.lower() == "am" else final_model.parent
+    if target.exists():
+        shutil.rmtree(target)
+    if model_root.resolve() != target.resolve():
+        shutil.move(str(model_root), str(target))
+    if not (target / "am" / "final.mdl").is_file():
+        raise RuntimeError("Vosk model folder is incomplete: am/final.mdl not found.")
 
 def prepare_tts():
     target = MODELS / "pocket-tts-turkish"
