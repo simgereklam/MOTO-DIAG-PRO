@@ -96,11 +96,17 @@ class SeyfiVoice:
 
     def _play_pre_rendered_greeting(self, path: Path) -> None:
         try:
-            import soundfile as sf
-            import sounddevice as sd
-            audio, sample_rate = sf.read(str(path), dtype="float32")
-            if audio.size:
-                sd.play(audio, samplerate=int(sample_rate), blocking=True)
+            # On Windows use the native WAV player first: it avoids PortAudio/default-device
+            # selection problems and does not depend on an installed speech voice.
+            if os.name == "nt":
+                import winsound
+                winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_SYNC)
+            else:
+                import soundfile as sf
+                import sounddevice as sd
+                audio, sample_rate = sf.read(str(path), dtype="float32")
+                if audio.size:
+                    sd.play(audio, samplerate=int(sample_rate), blocking=True)
             self.on_status("Seyfi Usta karşılama konuşması tamamlandı.")
         except Exception as exc:
             self.on_status("HAZIR KARŞILAMA SESİ ÇALINAMADI: " + str(exc)[:180])
@@ -149,10 +155,13 @@ class SeyfiVoice:
             from vosk import Model, KaldiRecognizer
             import sounddevice as sd
             model_dir = model_path("vosk-model-small-tr-0.3")
-            if not (model_dir / "am").is_dir():
+            # vosk-model-small-tr-0.3 is a legacy flat-layout model.
+            valid_flat = (model_dir / "final.mdl").is_file() and (model_dir / "mfcc.conf").is_file()
+            valid_nested = (model_dir / "am" / "final.mdl").is_file() and (model_dir / "conf" / "model.conf").is_file()
+            if not (valid_flat or valid_nested):
                 raise FileNotFoundError(
-                    f"Türkçe komut tanıma modeli bulunamadı: {model_dir}. "
-                    "Kurulum paketinde Vosk modeli bulunmalı."
+                    f"Türkçe Vosk modeli eksik veya bozuk: {model_dir}. "
+                    "final.mdl ve mfcc.conf dosyaları doğrulanamadı."
                 )
             model = Model(str(model_dir))
             grammar = json.dumps(self.COMMAND_GRAMMAR + ["[unk]"], ensure_ascii=False)
