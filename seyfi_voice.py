@@ -59,6 +59,7 @@ class SeyfiVoice:
         self._tts_queue: queue.Queue[str | None] = queue.Queue()
         self._audio_queue: queue.Queue[bytes | None] = queue.Queue(maxsize=40)
         self._stop = threading.Event()
+        self._greeting_finished = threading.Event()
         self._started = False
         self._start_lock = threading.Lock()
 
@@ -67,7 +68,15 @@ class SeyfiVoice:
             if self._started:
                 return
             self._started = True
-        threading.Thread(target=self._tts_worker, args=(greeting,), daemon=True,
+        greeting_wav = app_root() / "assets" / "audio" / "seyfi_greeting.wav"
+        if greeting_wav.is_file():
+            threading.Thread(target=self._play_pre_rendered_greeting,
+                             args=(greeting_wav,), daemon=True,
+                             name="Seyfi-Greeting").start()
+            tts_greeting = ""
+        else:
+            tts_greeting = greeting
+        threading.Thread(target=self._tts_worker, args=(tts_greeting,), daemon=True,
                          name="Seyfi-TTS").start()
         threading.Thread(target=self._asr_worker, daemon=True,
                          name="Seyfi-ASR").start()
@@ -85,6 +94,19 @@ class SeyfiVoice:
         except queue.Full:
             pass
 
+    def _play_pre_rendered_greeting(self, path: Path) -> None:
+        try:
+            import soundfile as sf
+            import sounddevice as sd
+            audio, sample_rate = sf.read(str(path), dtype="float32")
+            if audio.size:
+                sd.play(audio, samplerate=int(sample_rate), blocking=True)
+            self.on_status("Seyfi Usta karşılama konuşması tamamlandı.")
+        except Exception as exc:
+            self.on_status("HAZIR KARŞILAMA SESİ ÇALINAMADI: " + str(exc)[:180])
+        finally:
+            self._greeting_finished.set()
+
     def _tts_worker(self, greeting: str) -> None:
         try:
             from pocket_tts_turkish import TurkishTTS
@@ -100,6 +122,7 @@ class SeyfiVoice:
             self.on_status("Türkçe çevrimdışı ses motoru hazır.")
             if greeting:
                 self._synthesize_and_play(greeting)
+                self._greeting_finished.set()
             while not self._stop.is_set():
                 phrase = self._tts_queue.get()
                 try:
@@ -109,6 +132,7 @@ class SeyfiVoice:
                 finally:
                     self._tts_queue.task_done()
         except Exception as exc:
+            self._greeting_finished.set()
             self.on_status("SES MOTORU HATASI: " + str(exc)[:240])
 
     def _synthesize_and_play(self, phrase: str) -> None:
@@ -143,6 +167,10 @@ class SeyfiVoice:
                 except queue.Full:
                     pass
 
+            # Hoparlörden gelen açılış cümlesini komut sanmaması için mikrofonu beklet.
+            self._greeting_finished.wait(timeout=45)
+            if self._stop.is_set():
+                return
             self.on_status("Seyfi Usta mikrofonu dinliyor. Çevrimdışı komut tanıma hazır.")
             with sd.RawInputStream(samplerate=16000, blocksize=8000, dtype="int16",
                                    channels=1, callback=audio_callback):
