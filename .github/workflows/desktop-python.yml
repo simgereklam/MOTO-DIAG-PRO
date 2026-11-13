@@ -1,0 +1,27 @@
+name: Desktop Python Check
+
+on:
+  push:
+    branches:
+      - main
+      - desktop-seyfi-live-data-stage1
+    paths:
+      - "SEYFI_USTA_MASAUSTU.py"
+      - ".github/workflows/desktop-python.yml"
+  pull_request:
+    paths:
+      - "SEYFI_USTA_MASAUSTU.py"
+      - ".github/workflows/desktop-python.yml"
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Python syntax
+        run: python -m py_compile SEYFI_USTA_MASAUSTU.py
