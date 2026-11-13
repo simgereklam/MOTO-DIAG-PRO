@@ -162,8 +162,9 @@ object DtcDatabase {
         "P0335", "P0336" -> listOf("Krank konum sensörü veya tetikleyici çark", "Sensör kablosunda kopukluk / kısa devre", "Sokette oksitlenme veya gevşek pin", "Sensör hava aralığı veya mekanik hasar")
         "P0115", "P0117", "P0118", "P0128" -> listOf("Sıcaklık sensörü arızası", "Soket / kablo temassızlığı", "Şase veya referans beslemesi", "Soğutma sistemi veya termostat sorunu")
         "P0120", "P0121", "P0122", "P0123", "P2135" -> listOf("TPS sensörü veya elektronik gaz kelebeği gövdesi", "Sensör referans voltajı / şase sorunu", "Soket pinleri ve kablo hattı", "Gaz kelebeğinde mekanik sıkışma veya adaptasyon sorunu")
+        "P0103" -> listOf("MAF sensörü varsa sinyal hattında beslemeye kısa devre veya yüksek çıkış", "MAF soketinde yanlış pin teması / oksitlenme", "Kablo demetinde ezilme veya izolasyon hasarı", "Sensör beslemesi ve şasesinin servis değerleri dışında olması")
         "P0104" -> listOf("MAF sensörü varsa sensör içinde aralıklı temas / sinyal kesintisi", "MAF soketi veya kablo demetinde titreşimle oluşan temassızlık", "Sensör beslemesi veya şasesinde kesinti", "Hava filtresi kutusu ve emiş kanalında gevşeklik / kaçak")
-        "P0105", "P0107", "P0108", "P0100", "P0101", "P0102", "P0103" -> listOf("MAP / MAF sensörü kirlenmesi veya arızası", "Emme hortumu kaçağı veya tıkanıklık", "Besleme, şase veya sinyal kablosu sorunu")
+        "P0105", "P0107", "P0108", "P0100", "P0101", "P0102" -> listOf("MAP / MAF sensörü kirlenmesi veya arızası", "Emme hortumu kaçağı veya tıkanıklık", "Besleme, şase veya sinyal kablosu sorunu")
         "P0171", "P0172", "P0174", "P0175" -> listOf("Emme hattında hava kaçağı", "Yakıt basıncı / enjektör akış sorunu", "Oksijen sensörü veya yakıt düzeltme verisi", "MAF / MAP ölçüm hatası")
         "P0201", "P0202", "P0261", "P0262" -> listOf("Enjektör bobini veya mekanik tıkanma", "Enjektör kablosu ve soketi", "ECU sürücü devresi veya besleme")
         "P0300", "P0301", "P0302", "P0303", "P0304", "P0351", "P0352" -> listOf("Buji ve ateşleme bobini", "Enjektör veya yakıt beslemesi", "Kompresyon / mekanik durum", "Krank / eksantrik sinyal senkronu")
@@ -173,6 +174,7 @@ object DtcDatabase {
     }
 
     fun checks(code: String): List<String> = when (code.uppercase()) {
+        "P0103" -> listOf("Önce motosikletin MAF sensörü kullanıp kullanmadığını servis şemasıyla doğrulayın", "MAF sinyal hattında beslemeye kısa devre ve soket pinlerinde hasar arayın", "Besleme, şase ve sinyal gerilimini modelin servis değerleriyle ölçün", "Kablo onarımından sonra arıza kodunu silip yeniden tarayın")
         "P0104" -> listOf("Önce bu motosikletin gerçekten MAF sensörü kullanıp kullanmadığını servis şemasıyla doğrulayın", "MAF soketi ve kablo demetini motor titreşimi sırasında oluşabilecek temassızlık açısından inceleyin", "Sensör beslemesi, şasesi ve sinyalini modelin servis değerleriyle ölçün", "Hava filtresi kutusu ve emiş kanalını kontrol edin; onarımdan sonra kodu silip tekrar tarayın")
         "P0335", "P0336" -> listOf("Krank sensörü soketini ve kablo hattını inceleyin", "Sensör direncini / sinyalini servis değerleriyle karşılaştırın", "Tetik çarkı ve sensör aralığını kontrol edin", "Onarım sonrası arıza kodunu yeniden okuyun")
         "P0115", "P0117", "P0118", "P0128" -> listOf("Sensör soketini ve kabloyu kontrol edin", "Soğuk ve sıcak motor değerlerini karşılaştırın", "Soğutma suyu ve termostatı kontrol edin", "Servis dokümanındaki direnç / voltaj değerini doğrulayın")
