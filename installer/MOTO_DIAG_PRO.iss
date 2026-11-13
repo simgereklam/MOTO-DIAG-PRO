@@ -28,10 +28,22 @@ Name: "desktopicon"; Description: "Masaüstüne kısayol oluştur"; GroupDescrip
 
 [Files]
 Source: "..\dist\MOTO DIAG PRO\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "redist\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; StatusMsg: "Gerekli Windows çalışma kitaplıkları kuruluyor..."; Flags: waituntilterminated; Check: not IsVCRedistInstalled
 Filename: "{app}\{#MyAppExeName}"; Description: "MOTO DIAG PRO'yu başlat"; Flags: postinstall nowait skipifsilent
+
+[Code]
+function IsVCRedistInstalled: Boolean;
+var
+  Installed: Cardinal;
+begin
+  Result := RegQueryDWordValue(HKLM64,
+    'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64',
+    'Installed', Installed) and (Installed = 1);
+end;
