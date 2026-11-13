@@ -52,7 +52,7 @@ class SeyfiVoice:
     """Offline TTS + Vosk Turkish command recognition, both CPU-capable."""
 
     COMMAND_GRAMMAR = [
-        "seyfi", "seyfi usta", "merhaba seyfi", "yardım", "komutlar",
+        "seyfi", "seyfi usta", "usta", "merhaba seyfi", "yardım", "komutlar",
         "bağlan", "adaptöre bağlan", "bağlantıyı kes", "bağlantıyı durdur",
         "tekrar bağlan", "yeniden bağlan", "taramaya başla", "arıza tara",
         "arızaları oku", "arızaları sil", "arıza kodlarını sil",
