@@ -13,6 +13,8 @@ import os
 import queue
 import sys
 import threading
+import tempfile
+import wave
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -143,12 +145,50 @@ class SeyfiVoice:
 
     def _synthesize_and_play(self, phrase: str) -> None:
         import numpy as np
-        import sounddevice as sd
+
         voice = self._voice_state if self._voice_state is not None else self.voice_name
         audio = self._tts.generate(phrase, voice=voice, emotion="sakin")
-        samples = np.asarray(audio, dtype=np.float32)
-        if samples.size:
-            sd.play(samples, samplerate=int(self._tts.sample_rate), blocking=True)
+        samples = np.asarray(audio, dtype=np.float32).squeeze()
+        if not samples.size:
+            return
+
+        sample_rate = int(self._tts.sample_rate)
+        if os.name == "nt":
+            # Windows output is played through the native audio API. This avoids
+            # relying on sounddevice/PortAudio to select the correct speaker.
+            pcm = np.clip(samples, -1.0, 1.0)
+            pcm16 = (pcm * 32767.0).astype("<i2")
+            if pcm16.ndim == 1:
+                channels = 1
+            elif pcm16.ndim == 2:
+                channels = int(pcm16.shape[1])
+            else:
+                pcm16 = pcm16.reshape(-1)
+                channels = 1
+
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp:
+                    temp_path = temp.name
+                with wave.open(temp_path, "wb") as wav:
+                    wav.setnchannels(channels)
+                    wav.setsampwidth(2)
+                    wav.setframerate(sample_rate)
+                    wav.writeframes(pcm16.tobytes())
+                import winsound
+                winsound.PlaySound(
+                    temp_path,
+                    winsound.SND_FILENAME | winsound.SND_SYNC,
+                )
+            finally:
+                if temp_path:
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+        else:
+            import sounddevice as sd
+            sd.play(samples, samplerate=sample_rate, blocking=True)
 
     def _asr_worker(self) -> None:
         try:
