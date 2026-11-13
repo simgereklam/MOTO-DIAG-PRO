@@ -82,6 +82,9 @@ class SeyfiVoice:
         self._greeting_finished = threading.Event()
         self._started = False
         self._start_lock = threading.Lock()
+        self._tts_error: Optional[str] = None
+        self._tts_error_reported = False
+        self._tts_error_lock = threading.Lock()
 
     def start(self, greeting: str) -> None:
         with self._start_lock:
@@ -103,8 +106,20 @@ class SeyfiVoice:
 
     def speak(self, phrase: str) -> None:
         phrase = str(phrase or "").strip()
-        if phrase and not self._stop.is_set():
-            self._tts_queue.put(phrase)
+        if not phrase or self._stop.is_set():
+            return
+        with self._tts_error_lock:
+            error = self._tts_error
+            if error and not self._tts_error_reported:
+                self._tts_error_reported = True
+                report_error = True
+            else:
+                report_error = False
+        if error:
+            if report_error:
+                self.on_status("SEYFİ USTA KONUŞAMIYOR: " + error[:220])
+            return
+        self._tts_queue.put(phrase)
 
     def stop(self) -> None:
         self._stop.set()
@@ -158,8 +173,18 @@ class SeyfiVoice:
                 finally:
                     self._tts_queue.task_done()
         except Exception as exc:
+            message = str(exc) or exc.__class__.__name__
+            with self._tts_error_lock:
+                self._tts_error = message
             self._greeting_finished.set()
-            self.on_status("SES MOTORU HATASI: " + str(exc)[:240])
+            self.on_status("SES MOTORU HATASI: " + message[:240])
+            # A failed worker must not leave old speech requests silently queued.
+            while True:
+                try:
+                    self._tts_queue.get_nowait()
+                    self._tts_queue.task_done()
+                except queue.Empty:
+                    break
 
     def _synthesize_and_play(self, phrase: str) -> None:
         import numpy as np
@@ -234,8 +259,10 @@ class SeyfiVoice:
                 except queue.Full:
                     pass
 
-            # Hoparlörden gelen açılış cümlesini komut sanmaması için mikrofonu beklet.
-            self._greeting_finished.wait(timeout=45)
+            # Açılış sesi bitmeden mikrofonu açma; yavaş CPU'larda da bekle.
+            while not self._greeting_finished.wait(timeout=0.5):
+                if self._stop.is_set():
+                    return
             if self._stop.is_set():
                 return
             self.on_status("Seyfi Usta mikrofonu dinliyor. Çevrimdışı komut tanıma hazır.")
