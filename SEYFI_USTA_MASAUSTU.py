@@ -86,22 +86,39 @@ def write_log(action, details):
     except: pass
 
 def akilli_teshis(dtc_codes, live_data):
+    """Yalnizca bilinen DTC anlamlarini ve mevcut canli veriyi kullanir."""
+    live_data = live_data if isinstance(live_data, dict) else {}
+    codes = {str(code).strip().upper() for code in (dtc_codes or []) if str(code).strip()}
     teshisler = []
-    has_p0171 = any("P0171" in c for c in dtc_codes)
-    has_p0300 = any("P0300" in c or "P0301" in c or "P0302" in c for c in dtc_codes)
-    has_p0511 = any("P0511" in c for c in dtc_codes)
-    has_p0335 = any("P0335" in c for c in dtc_codes)
-    if has_p0171:
-        stft = live_data.get('stft', 0); map_val = live_data.get('map', 100)
-        if stft > 15 and map_val < 40: teshisler.append("🔴 P0171 -> Olası Vakum Kaçağı. Emme hortumlarını kontrol edin.")
-        elif stft < -15: teshisler.append("🔴 P0171 -> Olası Yakıt Basıncı Sorunu. Yakıt filtresini kontrol edin.")
-        else: teshisler.append("🟡 P0171 -> Hava/Yakıt karışımı zayıf. Hava filtresi ve egzoz kaçağı kontrol edilmeli.")
-    if has_p0300: teshisler.append("🔴 P0300 -> Ateşleme hatası. Buji, bobin ve enjektörler kontrol edilmeli.")
-    if has_p0511:
-        tps = live_data.get('tps', 0)
-        if tps > 5: teshisler.append(f"🔴 P0511 -> Rölanti Hatası + Gaz Kelebeği %{tps} açık. Adaptasyon veya TPS kalibrasyonu gerekli.")
-        else: teshisler.append("🟡 P0511 -> Rölanti Hava Kontrol (IAC) valfi kirlenmiş veya takılı kalmış olabilir.")
-    if has_p0335: teshisler.append("🟡 P0335 -> Krank sensörü sinyali kesilmiş. Motor yan sehpa açıkken mi durduruldu? Kodu silip test edin.")
+    if "P0171" in codes:
+        details = []
+        try:
+            stft = live_data.get("stft")
+            if stft is not None and float(stft) > 15:
+                details.append("STFT yuksek; zayif karisim egilimini destekliyor")
+            elif stft is not None and float(stft) < -15:
+                details.append("STFT negatif; ayri incelenmeli")
+        except (TypeError, ValueError):
+            pass
+        try:
+            map_val = live_data.get("map")
+            if map_val is not None:
+                details.append("olculen emme basinci: {} kPa".format(float(map_val)))
+        except (TypeError, ValueError):
+            pass
+        suffix = (" Canli veri: " + "; ".join(details) + ".") if details else ""
+        teshisler.append("P0171 — Sistem cok fakir (Bank 1). Olası nedenler: emme/vakum kacagi, yakit beslemesi veya egzoz kacagi. Hortumlari, yakit basincini ve egzoz sizdirmazligini olcerek kontrol edin." + suffix)
+    misfire_codes = sorted(code for code in codes if code in {"P0300", "P0301", "P0302", "P0303", "P0304"})
+    for code in misfire_codes:
+        meaning = "rastgele/coklu silindir teklemesi" if code == "P0300" else "silindir {} teklemesi".format(code[-1])
+        teshisler.append("{} — {}. Bujiyi, bobin/buji basligini, enjektoru ve kompresyonu kontrol edin; kod tek basina parca degisimini kanitlamaz.".format(code, meaning))
+    if "P0511" in codes:
+        teshisler.append("P0511 — Rolanti hava kontrol devresi arizasi. Kablo/soket, aracta mevcutsa rolanti hava kontrol valfi ve gaz kelebegi hava kanalini servis prosedurune gore kontrol edin. Bu kod TPS yuzdesiyle tek basina teshis edilmez.")
+    if "P0335" in codes:
+        teshisler.append("P0335 — Krank mili konum sensoru A devresi/sinyali. Sensor soketi ve kablosu, sensor montaji, tetik carki ve mars sirasinda devir sinyalini kontrol edin. Kodu silmek arizayi onarmaz.")
+    known = {"P0171", "P0511", "P0335", "P0300", "P0301", "P0302", "P0303", "P0304"}
+    for code in sorted(codes - known):
+        teshisler.append("{} — Bu kod icin dogrulanmis aciklama kutuphanede yok. Marka/model ECU servis dokumanina gore dogrulayin; tahmini parca onerisi verilmedi.".format(code))
     return teshisler
 
 def anomali_kontrol(data):
@@ -807,10 +824,10 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 </div></div>
 <div id="tab-dash" class="container"><div class="rpm-bar-container"><div class="rpm-numbers"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span><span>13</span></div><div class="rpm-leds" id="rpm-leds"></div></div>
 <div class="dash-grid"><div class="panel rpm"><div class="title">DEVİR (RPM)</div><div class="value" id="rpm">0</div></div><div class="panel speed"><div class="title">HIZ (KM/H)</div><div class="value" id="speed">0</div></div><div class="panel gear"><div class="title">VİTES</div><div class="value" id="gear">—</div></div></div>
-<div class="sub-dash"><div class="panel sub-panel c-yellow"><div class="s-header"><div class="title">GAZ KELEBEĞİ</div><div class="s-val" id="dash_tps">0<span class="s-unit">%</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_tps"></canvas></div></div><div class="panel sub-panel c-green"><div class="s-header"><div class="title">HAVA/YAKIT</div><div class="s-val" id="dash_afr">14.7<span class="s-unit">AFR</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_afr"></canvas></div></div><div class="panel sub-panel c-orange"><div class="s-header"><div class="title">MOTOR SICAKLIĞI</div><div class="s-val" id="dash_temp">0<span class="s-unit">°C</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_temp"></canvas></div></div><div class="panel sub-panel c-green"><div class="s-header"><div class="title">AKÜ VOLTAJI</div><div class="s-val" id="dash_volt">0.0<span class="s-unit">V</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_volt"></canvas></div></div></div>
+<div class="sub-dash"><div class="panel sub-panel c-yellow"><div class="s-header"><div class="title">GAZ KELEBEĞİ</div><div class="s-val" id="dash_tps">0<span class="s-unit">%</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_tps"></canvas></div></div><div class="panel sub-panel c-green"><div class="s-header"><div class="title">HAVA/YAKIT</div><div class="s-val" id="dash_afr">VERİ YOK<span class="s-unit">AFR</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_afr"></canvas></div></div><div class="panel sub-panel c-orange"><div class="s-header"><div class="title">MOTOR SICAKLIĞI</div><div class="s-val" id="dash_temp">0<span class="s-unit">°C</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_temp"></canvas></div></div><div class="panel sub-panel c-green"><div class="s-header"><div class="title">AKÜ VOLTAJI</div><div class="s-val" id="dash_volt">0.0<span class="s-unit">V</span></div></div><div class="graph-wrapper"><canvas id="chart_dash_volt"></canvas></div></div></div>
 <div class="panel" style="border-color:#ffaa00; margin-top:15px;"><div class="title" style="text-align:center;">ANLIK MOTOR RİSK SKORU</div><div class="risk-box"><div class="risk-val" id="risk-score" style="color:#00ff00">0</div><div style="color:#888;font-size:12px;">(0-30: İyi | 31-60: Dikkat | 61-100: Riskli)</div></div></div></div>
 <div id="tab-sens" class="container"><div class="sensor-grid">
-<div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">DEVİR</div><div class="s-val" id="s_rpm">0<span class="s-unit">rpm</span></div></div><div class="sensor-graph"><canvas id="chart_rpm"></canvas></div></div><div class="panel sensor-box c-orange"><div class="sensor-info"><div class="s-title">MOTOR SICAKLIĞI</div><div class="s-val" id="s_temp">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_temp"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">HAVA SICAKLIĞI</div><div class="s-val" id="s_iat">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_iat"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">AKÜ VOLTAJI</div><div class="s-val" id="s_volt">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_volt"></canvas></div></div><div class="panel sensor-box c-yellow"><div class="sensor-info"><div class="s-title">GAZ KELEBEĞİ</div><div class="s-val" id="s_tps">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_tps"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">ENJEKTÖR</div><div class="s-val" id="s_inj">0<span class="s-unit">ms</span></div></div><div class="sensor-graph"><canvas id="chart_inj"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">HAVA/YAKIT</div><div class="s-val" id="s_afr">14.7<span class="s-unit">AFR</span></div></div><div class="sensor-graph"><canvas id="chart_afr"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">OKSİJEN (O2)</div><div class="s-val" id="s_o2">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_o2"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">YAKIT TRİMİ</div><div class="s-val" id="s_stft">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_stft"></canvas></div></div><div class="panel sensor-box c-blue"><div class="sensor-info"><div class="s-title">EMİŞ BASINCI</div><div class="s-val" id="s_map">0<span class="s-unit">kPa</span></div></div><div class="sensor-graph"><canvas id="chart_map"></canvas></div></div>
+<div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">DEVİR</div><div class="s-val" id="s_rpm">0<span class="s-unit">rpm</span></div></div><div class="sensor-graph"><canvas id="chart_rpm"></canvas></div></div><div class="panel sensor-box c-orange"><div class="sensor-info"><div class="s-title">MOTOR SICAKLIĞI</div><div class="s-val" id="s_temp">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_temp"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">HAVA SICAKLIĞI</div><div class="s-val" id="s_iat">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_iat"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">AKÜ VOLTAJI</div><div class="s-val" id="s_volt">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_volt"></canvas></div></div><div class="panel sensor-box c-yellow"><div class="sensor-info"><div class="s-title">GAZ KELEBEĞİ</div><div class="s-val" id="s_tps">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_tps"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">ENJEKTÖR</div><div class="s-val" id="s_inj">0<span class="s-unit">ms</span></div></div><div class="sensor-graph"><canvas id="chart_inj"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">HAVA/YAKIT</div><div class="s-val" id="s_afr">VERİ YOK<span class="s-unit">AFR</span></div></div><div class="sensor-graph"><canvas id="chart_afr"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">OKSİJEN (O2)</div><div class="s-val" id="s_o2">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_o2"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">YAKIT TRİMİ</div><div class="s-val" id="s_stft">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_stft"></canvas></div></div><div class="panel sensor-box c-blue"><div class="sensor-info"><div class="s-title">EMİŞ BASINCI</div><div class="s-val" id="s_map">0<span class="s-unit">kPa</span></div></div><div class="sensor-graph"><canvas id="chart_map"></canvas></div></div>
 </div></div>
 <div id="tab-graph" class="container"><div id="graph-container"><canvas id="liveChart" height="120"></canvas></div></div>
 <div id="tab-dtc" class="container"><div class="panel dtc-panel"><div class="dtc-icon" id="dtc-icon">⚙️</div><h1 id="dtc-title" style="color:#888;letter-spacing:5px">SİSTEM NORMAL</h1><div class="title" id="dtc-msg" style="color:#888;margin-bottom:30px">Taramak için butona basın...</div><div><button class="btn" onclick="scanDTC()">🔍 ARIZA TARA</button><button class="btn" style="color:#00e5ff;border-color:#00e5ff;background:rgba(0,229,255,0.1)" onclick="clearDTC()">🗑 ARIZALARI SİL</button></div><div id="freeze-frame"><strong>🛑 FREEZE FRAME:</strong><pre id="ff-data" style="color:#ffaa00"></pre></div><div class="smart-diag" id="smart-diag" style="display:none;"></div></div></div>
@@ -906,7 +923,7 @@ function updateChart(c,v){c.data.labels.push('');c.data.datasets[0].data.push(v)
 function updateInfo(){socket.emit('update_service_info',{musteri:document.getElementById('musteri').value,plaka:document.getElementById('plaka').value,sikayet:document.getElementById('sikayet').value})}
 function showToast(msg){var container=document.getElementById('toast-container');var toast=document.createElement('div');toast.className='toast';toast.innerText=msg;container.appendChild(toast);setTimeout(()=>{toast.style.opacity='0';setTimeout(()=>toast.remove(),300)},5000)}
 socket.on('alert',d=>{showToast(d.msg)});socket.on('risk_score',d=>{let el=document.getElementById('risk-score');el.innerText=d.score;if(d.score>60)el.style.color='#ff003c';else if(d.score>30)el.style.color='#ffea00';else el.style.color='#00ff00'});
-socket.on('telemetry',d=>{if(d.rpm!==undefined){document.getElementById('rpm').innerText=d.rpm;updateRpmBar(d.rpm)}if(d.speed!==undefined)document.getElementById('speed').innerText=d.speed;if(d.gear!==undefined)document.getElementById('gear').innerText=d.gear;if(d.tps!==undefined){document.getElementById('dash_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(dash_tps,d.tps)}if(d.afr!==undefined){document.getElementById('dash_afr').innerHTML=d.afr+"<span class='s-unit'>AFR</span>";updateChart(dash_afr,d.afr)}if(d.temp!==undefined){document.getElementById('dash_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(dash_temp,d.temp)}if(d.volt!==undefined){document.getElementById('dash_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(dash_volt,d.volt)}if(d.rpm!==undefined){document.getElementById('s_rpm').innerHTML=d.rpm+"<span class='s-unit'>rpm</span>";updateChart(chartRpm,d.rpm)}if(d.temp!==undefined){document.getElementById('s_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(chartTemp,d.temp)}if(d.iat!==undefined){document.getElementById('s_iat').innerHTML=d.iat+"<span class='s-unit'>°C</span>";updateChart(chartIat,d.iat)}if(d.volt!==undefined){document.getElementById('s_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(chartVolt,d.volt)}if(d.tps!==undefined){document.getElementById('s_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(chartTps,d.tps)}if(d.inj!==undefined){document.getElementById('s_inj').innerHTML=d.inj+"<span class='s-unit'>ms</span>";updateChart(chartInj,d.inj)}if(d.afr!==undefined){document.getElementById('s_afr').innerHTML=d.afr+"<span class='s-unit'>AFR</span>";updateChart(chartAfr,d.afr)}if(d.o2!==undefined){document.getElementById('s_o2').innerHTML=d.o2+"<span class='s-unit'>V</span>";updateChart(chartO2,d.o2)}if(d.stft!==undefined){document.getElementById('s_stft').innerHTML=d.stft+"<span class='s-unit'>%</span>";updateChart(chartStft,d.stft)}if(d.map!==undefined){document.getElementById('s_map').innerHTML=d.map+"<span class='s-unit'>kPa</span>";updateChart(chartMap,d.map)}if(d.rpm!==undefined&&d.speed!==undefined){mainChart.data.labels.push('');mainChart.data.datasets[0].data.push(d.rpm);mainChart.data.datasets[1].data.push(d.speed);if(mainChart.data.labels.length>60){mainChart.data.labels.shift();mainChart.data.datasets[0].data.shift();mainChart.data.datasets[1].data.shift()}mainChart.update('none')}});
+socket.on('telemetry',d=>{if(d.rpm!==undefined){document.getElementById('rpm').innerText=d.rpm;updateRpmBar(d.rpm)}if(d.speed!==undefined)document.getElementById('speed').innerText=d.speed;if(d.gear!==undefined)document.getElementById('gear').innerText=d.gear;if(d.tps!==undefined){document.getElementById('dash_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(dash_tps,d.tps)}if(Number.isFinite(Number(d.afr))&&Number(d.afr)>0){document.getElementById('dash_afr').innerHTML=Number(d.afr).toFixed(1)+"<span class='s-unit'>AFR</span>";updateChart(dash_afr,Number(d.afr))}if(d.temp!==undefined){document.getElementById('dash_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(dash_temp,d.temp)}if(d.volt!==undefined){document.getElementById('dash_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(dash_volt,d.volt)}if(d.rpm!==undefined){document.getElementById('s_rpm').innerHTML=d.rpm+"<span class='s-unit'>rpm</span>";updateChart(chartRpm,d.rpm)}if(d.temp!==undefined){document.getElementById('s_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(chartTemp,d.temp)}if(d.iat!==undefined){document.getElementById('s_iat').innerHTML=d.iat+"<span class='s-unit'>°C</span>";updateChart(chartIat,d.iat)}if(d.volt!==undefined){document.getElementById('s_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(chartVolt,d.volt)}if(d.tps!==undefined){document.getElementById('s_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(chartTps,d.tps)}if(d.inj!==undefined){document.getElementById('s_inj').innerHTML=d.inj+"<span class='s-unit'>ms</span>";updateChart(chartInj,d.inj)}if(Number.isFinite(Number(d.afr))&&Number(d.afr)>0){document.getElementById('s_afr').innerHTML=Number(d.afr).toFixed(1)+"<span class='s-unit'>AFR</span>";updateChart(chartAfr,Number(d.afr))}if(d.o2!==undefined){document.getElementById('s_o2').innerHTML=d.o2+"<span class='s-unit'>V</span>";updateChart(chartO2,d.o2)}if(d.stft!==undefined){document.getElementById('s_stft').innerHTML=d.stft+"<span class='s-unit'>%</span>";updateChart(chartStft,d.stft)}if(d.map!==undefined){document.getElementById('s_map').innerHTML=d.map+"<span class='s-unit'>kPa</span>";updateChart(chartMap,d.map)}if(d.rpm!==undefined&&d.speed!==undefined){mainChart.data.labels.push('');mainChart.data.datasets[0].data.push(d.rpm);mainChart.data.datasets[1].data.push(d.speed);if(mainChart.data.labels.length>60){mainChart.data.labels.shift();mainChart.data.datasets[0].data.shift();mainChart.data.datasets[1].data.shift()}mainChart.update('none')}});
 socket.on('status',d=>{let b=document.getElementById('status-bar');b.innerText=d.msg;b.style.color=d.color});
 function scanDTC(){document.getElementById('dtc-icon').innerText="⏳";document.getElementById('dtc-title').innerText="TARANIYOR...";document.getElementById('dtc-title').style.color="#ffaa00";document.getElementById('dtc-msg').innerText="Lütfen bekleyin...";document.getElementById('dtc-msg').style.color="#ffaa00";document.getElementById('freeze-frame').style.display='none';document.getElementById('smart-diag').style.display='none';socket.emit('scan_dtc')}
 function clearDTC(){if(confirm("Motor kontağı AÇIK mı?\n\nTüm arıza kodları silinecek. Devam?")){document.getElementById('dtc-title').innerText="SİLİNİYOR...";document.getElementById('dtc-title').style.color="#ffaa00";socket.emit('clear_dtc')}}
@@ -1136,122 +1153,40 @@ def run_flask(): socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkz
 @app.route('/')
 def index_page(): return render_template_string(HTML_CODE)
 
-# ==================== YEREL AI + SESLİ KARŞILAMA ====================
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-OLLAMA_MODEL = "qwen2.5:1.5b"
+# ==================== CEVRIMDISI SEYFI SES + TESHiS MOTORU ====================
 _speech_queue = queue.Queue()
 _speech_worker_lock = threading.Lock()
 _speech_worker_started = False
-TURKISH_TTS_VOICE = "tr-TR-AhmetNeural"
-
 
 def speak(phrase):
-    """Metni yalnızca Microsoft Türkçe Ahmet Neural ses kuyruğuna ekler."""
     text = str(phrase or "").strip()
     if text:
         _speech_queue.put(text)
 
-
-def _find_vlc_executable():
-    """VLC yürütülebilir dosyasını PATH ve yaygın Windows kurulumlarında bulur."""
-    candidates = [
-        shutil.which("vlc.exe"),
-        shutil.which("vlc"),
-        os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"),
-                     "VideoLAN", "VLC", "vlc.exe"),
-        os.path.join(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"),
-                     "VideoLAN", "VLC", "vlc.exe"),
-        os.path.join(os.environ.get("LOCALAPPDATA", ""),
-                     "Programs", "VideoLAN", "VLC", "vlc.exe"),
-    ]
-    for candidate in candidates:
-        if candidate and os.path.isfile(candidate):
-            return candidate
-    return None
-
-
-def _edge_turkish_speak(phrase):
-    """Türkçe MP3 üretir ve VLC ile tamamlanana kadar oynatır."""
+def _windows_sapi_speak(phrase):
+    """Windows'un yerlesik System.Speech motoru; internet/VLC gerekmez."""
     if os.name != "nt":
-        raise RuntimeError("Bu ses oynatımı yalnızca Windows'ta desteklenir.")
-
-    vlc_path = _find_vlc_executable()
-    if not vlc_path:
-        raise RuntimeError(
-            "VLC bulunamadı. VLC'nin kurulu olduğundan emin olun veya vlc.exe yolunu PATH'e ekleyin."
-        )
-
-    fd, audio_path = tempfile.mkstemp(suffix=".mp3", prefix="seyfi_tr_")
-    os.close(fd)
-
-    try:
-        command = [
-            sys.executable, "-m", "edge_tts",
-            "--voice", TURKISH_TTS_VOICE,
-            "--rate=-5%",
-            "--text", str(phrase),
-            "--write-media", audio_path
-        ]
-        result = subprocess.run(
-            command, capture_output=True, text=True,
-            encoding="utf-8", errors="replace", timeout=45,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        )
-
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "Edge TTS hata verdi").strip()
-            raise RuntimeError(f"{TURKISH_TTS_VOICE}: {detail[:700]}")
-
-        if not os.path.isfile(audio_path) or os.path.getsize(audio_path) < 500:
-            raise RuntimeError("Türkçe ses dosyası üretilemedi veya dosya boş.")
-
-        # --play-and-exit sayesinde VLC ses bitince kapanır; worker sonraki cümleye geçer.
-        vlc_command = [
-            vlc_path,
-            "--intf", "dummy",
-            "--play-and-exit",
-            "--no-video",
-            "--no-one-instance",
-            "--quiet",
-            audio_path
-        ]
-        player = subprocess.Popen(
-            vlc_command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
-        )
-        try:
-            _, player_error = player.communicate(timeout=180)
-        except subprocess.TimeoutExpired:
-            player.kill()
-            player.communicate()
-            raise RuntimeError("VLC ses oynatma zaman aşımına uğradı (180 saniye).")
-
-        if player.returncode != 0:
-            detail = (player_error or b"").decode("utf-8", errors="replace").strip()
-            raise RuntimeError(
-                "VLC ses dosyasını oynatamadı. " + (detail[-700:] if detail else f"Çıkış kodu: {player.returncode}")
-            )
-
-        write_log(
-            "TÜRKÇE SES OK",
-            f"Ses motoru: {TURKISH_TTS_VOICE}\n"
-            f"Oynatıcı: VLC\n"
-            f"VLC yolu: {vlc_path}\n"
-            f"Dosya boyutu: {os.path.getsize(audio_path)} bayt"
-        )
-        return True
-
-    finally:
-        try:
-            os.remove(audio_path)
-        except OSError:
-            pass
-
+        raise RuntimeError("Windows SAPI yalnizca Windows'ta kullanilabilir.")
+    escaped = str(phrase).replace("'", "''")
+    ps_script = (
+        "Add-Type -AssemblyName System.Speech; "
+        "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+        "$v = $s.GetInstalledVoices() | Where-Object { $_.Enabled -and $_.VoiceInfo.Culture.Name -like 'tr-*' } | Select-Object -First 1; "
+        "if ($null -eq $v) { throw 'Etkin Turkce SAPI sesi kurulu degil.' }; "
+        "$s.SelectVoice($v.VoiceInfo.Name); $s.Rate = 0; "
+        "$s.Speak('" + escaped + "'); $s.Dispose()"
+    )
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        timeout=120, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "SAPI konusma hatasi").strip()
+        raise RuntimeError(detail[-700:])
+    return True
 
 def _speech_worker():
-    """Ses kuyruğunu tek Türkçe Neural ses motoruyla işler."""
     while True:
         phrase = _speech_queue.get()
         try:
@@ -1260,46 +1195,22 @@ def _speech_worker():
             phrase = str(phrase).strip()
             if phrase:
                 try:
-                    _edge_turkish_speak(phrase)
+                    _windows_sapi_speak(phrase)
+                    write_log("CEVRIMDISI SES OK", "Windows System.Speech / Turkce SAPI")
                 except Exception as exc:
-                    # Başka bir ses motoruna geçiş kesinlikle yok; VLC hatası loglanır.
-                    write_log(
-                        "TÜRKÇE SES ÜRETİLEMEDİ",
-                        f"İstenen ses: {TURKISH_TTS_VOICE}\n"
-                        f"Hata: {exc}\nYedek ses motoru çalıştırılmadı."
-                    )
+                    write_log("CEVRIMDISI SES KULLANILAMIYOR", str(exc))
         finally:
             _speech_queue.task_done()
 
-
 def start_speech_worker():
-    """Ses iş parçacığını yalnızca bir kez başlatır."""
     global _speech_worker_started
     with _speech_worker_lock:
         if not _speech_worker_started:
-            threading.Thread(
-                target=_speech_worker, daemon=True,
-                name="SeyfiTurkishTTS"
-            ).start()
+            threading.Thread(target=_speech_worker, daemon=True, name="SeyfiOfflineSAPI").start()
             _speech_worker_started = True
 
-
 def local_ai_greeting():
-    """Ollama/Qwen varsa karşılama cümlesini yerel AI üretir; yoksa güvenli metin kullanılır."""
-    prompt = ('Türkçe konuşan, kısa ve profesyonel motosiklet servis asistanısın. '
-              'Seyfi Usta teşhis programını açan ustayı 2 kısa cümleyle karşıla. '
-              'Bağlantı adaptörünü aramaya başlayacağını söyle. Arıza teşhisi uydurma.')
-    payload = json.dumps({'model': OLLAMA_MODEL, 'prompt': prompt, 'stream': False,
-                          'options': {'temperature': 0.4, 'num_predict': 90}}).encode('utf-8')
-    req = urllib.request.Request(OLLAMA_URL, data=payload,
-                                 headers={'Content-Type': 'application/json'}, method='POST')
-    with urllib.request.urlopen(req, timeout=5) as response:
-        data = json.loads(response.read().decode('utf-8'))
-    answer = str(data.get('response', '')).strip()
-    if not answer:
-        raise RuntimeError('Yerel AI boş yanıt verdi.')
-    return answer
-
+    return "Merhaba. Seyfi Usta cevrimdisi teshis sistemi hazir. Simdi baglanti cihazinizi ariyorum."
 
 def discover_adapter_candidates():
     """Önce bilinen Wi-Fi ELM327 uçlarını, sonra görünen seri/USB portlarını bulur.
@@ -1377,28 +1288,18 @@ class App:
     def startup_assistant(self):
         if self._startup_done: return
         self._startup_done = True
-        self.set_status("AI VE SESLİ ASİSTAN BAŞLATILIYOR")
-        self.log("Yerel yapay zeka motoru kontrol ediliyor: Ollama / " + OLLAMA_MODEL)
-        threading.Thread(target=self._check_ai_then_scan, daemon=True).start()
+        self._ai_ready = True
+        self.set_status("ÇEVRİMDIŞI TEŞHİS HAZIR")
+        self.log("Yerel teşhis kuralları hazır; internet veya harici AI servisi kullanılmıyor.")
+        try:
+            start_speech_worker()
+            safe_speak(local_ai_greeting())
+        except Exception as exc:
+            self.log("ÇEVRİMDIŞI SES BAŞLATILAMADI: " + str(exc)[:180])
+        self.root.after(0, self.begin_adapter_search)
 
     def _check_ai_then_scan(self):
-        try:
-            greeting = local_ai_greeting()
-            self._ai_ready = True
-            self.root.after(0, lambda: self.log("YEREL AI BAĞLANDI: " + OLLAMA_MODEL))
-            self.root.after(0, lambda: self.set_status("YEREL AI BAĞLI · ADAPTÖR ARANIYOR"))
-            self.root.after(0, lambda: self.log("AI karşılama metni üretildi."))
-            safe_speak(greeting)
-        except Exception as exc:
-            self._ai_ready = False
-            self.root.after(0, lambda e=str(exc): self.log("YEREL AI BAĞLI DEĞİL: " + e[:180]))
-            self.root.after(0, lambda: self.log("Yerel AI bağlı değil; sabit Türkçe karşılama kullanılacak. Türkçe Neural ses motoru ayrıca çalışır."))
-            safe_speak("Merhaba. Seyfi Usta akıllı motosiklet teşhis sistemine hoş geldiniz. Yerel yapay zeka şu an bağlı değil. Önce bağlantı cihazınızı arıyorum.")
-        # Ses veya AI tarafında hata olsa bile adaptör taraması mutlaka başlar.
-        try:
-            self.root.after(0, self.begin_adapter_search)
-        except Exception as exc:
-            write_log("BAŞLANGIÇ TARAMA HATASI", str(exc))
+        self.startup_assistant()
 
     def begin_adapter_search(self):
         if self._searching or self._active_run_id is not None: return
