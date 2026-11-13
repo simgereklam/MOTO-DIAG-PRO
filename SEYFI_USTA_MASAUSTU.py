@@ -1209,11 +1209,29 @@ def index_page(): return render_template_string(HTML_CODE)
 # ==================== SEYFI USTA YEREL SES SISTEMI ====================
 # TTS + Vosk ASR ayrı, tamamen yerel modellerle çalışır.
 VOICE_ENGINE = None
+_VOICE_UNAVAILABLE_REPORTED = False
 
 def speak(phrase):
+    """Konuşma isteğini yerel SeyfiVoice motoruna aktar; motor yoksa logla."""
+    global _VOICE_UNAVAILABLE_REPORTED
     engine = VOICE_ENGINE
-    if engine is not None:
+    if engine is None:
+        if not _VOICE_UNAVAILABLE_REPORTED:
+            _VOICE_UNAVAILABLE_REPORTED = True
+            try:
+                write_log("SEYFİ SES MOTORU", "Ses motoru başlatılmadı; çevrimdışı konuşma kullanılamıyor.")
+            except Exception:
+                print("SEYFİ SES MOTORU: Ses motoru başlatılmadı.")
+        return False
+    try:
         engine.speak(phrase)
+        return True
+    except Exception as exc:
+        try:
+            write_log("SEYFİ SES MOTORU HATASI", str(exc))
+        except Exception:
+            print("SEYFİ SES MOTORU HATASI:", exc)
+        return False
 
 def start_speech_worker():
     # Geriye dönük uyumluluk: ses işçileri SeyfiVoice tarafından başlatılır.
@@ -1326,6 +1344,8 @@ class App:
         self.log("SES KOMUTU: " + raw)
         if any(x in normalized for x in ("yardim", "komutlar")):
             safe_speak("Şu komutları anlayabiliyorum: bağlan, bağlantıyı kes, arıza tara, arızaları oku, arızaları sil, canlı verileri oku, test yap ve durumu söyle.")
+        elif normalized in ("seyfi", "seyfi usta", "usta"):
+            safe_speak("Dinliyorum. Buyurun.")
         elif "baglantiyi kes" in normalized or "baglantiyi durdur" in normalized:
             if self._active_run_id is not None: self._stop_real()
             else: safe_speak("Şu anda aktif ECU bağlantısı yok.")
