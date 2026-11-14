@@ -17,7 +17,6 @@ enum class SeyfiAction {
     START_SCAN,
     READ_FAULTS,
     EXPLAIN_FAULTS,
-    CLEAR_FAULTS,
     SHOW_LIVE_DATA,
     SHOW_RPM,
     SHOW_TEMPERATURE,
@@ -27,12 +26,11 @@ enum class SeyfiAction {
     SHOW_CONNECTION_STATUS,
     SHOW_LOGS,
     SHOW_FAULT_SEARCH,
-    SHOW_SEYFI_CHAT,
+    SHOW_VOICE_STATUS,
     SHOW_COMMUNICATION_REPORT,
     SHOW_HELP,
     GO_HOME,
     SHOW_TESTS,
-    ANALYZE_ENGINE_DATA,
     EXPORT_REPORT,
     STOP,
     UNKNOWN
@@ -107,7 +105,7 @@ class SeyfiUstaCommandHandler {
         // "Seyfi ekranını aç" ifadesindeki Seyfi sözcüğü uyandırma kelimesi
         // olarak temizlenmeden önce ekran komutu olarak değerlendirilir.
         if (text.contains("seyfi ekranini ac") || text.contains("seyfi usta ekranini ac")) {
-            return command(SeyfiAction.SHOW_SEYFI_CHAT, original, "Seyfi Usta ekranını açıyorum.")
+            return command(SeyfiAction.SHOW_VOICE_STATUS, original, "Seyfi Usta sesli komut durumunu açıyorum.")
         }
 
         val commandText = text
@@ -236,26 +234,6 @@ class SeyfiUstaCommandHandler {
 
         if (containsAny(
                 commandText,
-                "arizalari sil",
-                "arizayi sil",
-                "ariza kodlarini temizle",
-                "ariza sil",
-                "arizalari temizle",
-                "hatalari sil",
-                "hata kodlarini sil",
-                "dtc sil",
-                "kodlari temizle"
-            )
-        ) {
-            return command(
-                SeyfiAction.CLEAR_FAULTS,
-                original,
-                "Arıza silme işlemi başlatılıyor. Sonucu ECU üzerinden kontrol edeceğim."
-            )
-        }
-
-        if (containsAny(
-                commandText,
                 "arizalari oku",
                 "arizayi oku",
                 "ariza kodu oku",
@@ -324,25 +302,13 @@ class SeyfiUstaCommandHandler {
         // Uygulamadaki ana bölümler ve butonlar: sesli isimleri doğrudan ekrana bağla.
         if (containsAny(
                 commandText,
-                "seyfi ekrani",
-                "seyfi usta ekrani",
-                "seyfi ustayi ac",
-                "sohbet ekrani",
-                "sohbet bolumunu ac",
-                "yapay zeka ekrani",
-                "sesli asistan ekrani",
-                "asistan ekranini ac",
-                "yerel yapay zeka",
-                "seyfi usta yerel yapay zeka",
-                "yamaha teshis ekrani",
-                "yamaha teshis ekranini ac",
-                "seyfi usta sesli sohbet",
-                "sesli cevabi test et",
-                "durumu yenile",
-                "seyfi durumunu yenile"
+                "sesli komut durumu",
+                "seyfi sesli komut durumu",
+                "sesli komut ekranini ac",
+                "seyfi usta sesli komutlari"
             )
         ) {
-            return command(SeyfiAction.SHOW_SEYFI_CHAT, original, "Seyfi Usta ekranını açıyorum.")
+            return command(SeyfiAction.SHOW_VOICE_STATUS, original, "Seyfi Usta sesli komut durumunu açıyorum.")
         }
 
         if (containsAny(
@@ -403,19 +369,15 @@ class SeyfiUstaCommandHandler {
 
         if (containsAny(
                 commandText,
-                "motor verilerini yorumla",
-                "motor verisini yorumla",
-                "sensorleri yorumla",
-                "sensor verilerini degerlendir",
-                "motor verilerini analiz et",
-                "verileri yapay zeka ile yorumla",
-                "motor analizi yap"
+                "motor verilerini goster",
+                "motor verisini goster",
+                "sensorleri goster"
             )
         ) {
             return command(
-                SeyfiAction.ANALYZE_ENGINE_DATA,
+                SeyfiAction.SHOW_LIVE_DATA,
                 original,
-                "Gerçek ECU verilerini yerel yapay zekâ ile yorumluyorum."
+                "Gerçek ECU canlı verilerini açıyorum."
             )
         }
 
@@ -570,7 +532,7 @@ class SeyfiUstaCommandHandler {
             return command(
                 SeyfiAction.SHOW_HELP,
                 original,
-                "Gerçek ECU arıza taraması yapabilir, arıza kodlarını okuyup açıklayabilir, onayınızla silebilir, canlı sensör verilerini gösterebilir, hata dökümünü açabilir, bağlantıyı kontrol edebilir ve sistem testlerini çalıştırabilirim. ECU bağlı değilse ölçüm uydurmam."
+                "Gerçek ECU arıza taraması yapabilir, arıza kodlarını okuyup açıklayabilir, canlı sensör verilerini gösterebilir, hata dökümünü açabilir, bağlantıyı kontrol edebilir ve sistem testlerini çalıştırabilirim. Arıza silme yalnızca ekrandaki düğmeyle yapılır. ECU bağlı değilse ölçüm uydurmam."
             )
         }
 
@@ -612,8 +574,6 @@ class SeyfiUstaCommandHandler {
                 "sistem testi yap",
                 "ses testi",
                 "mikrofon testi",
-                "yapay zeka testi",
-                "yapay zekayi test et",
                 "komut testi",
                 "komutlari test et",
                 "ses sistemini test et",
@@ -723,7 +683,6 @@ class SeyfiUstaCommandHandler {
             "ses fonksu" to SeyfiAction.SHOW_HELP,
             "ses fonksiyonu" to SeyfiAction.SHOW_HELP,
             "arızaları açıkla" to SeyfiAction.EXPLAIN_FAULTS,
-            "arızaları sil" to SeyfiAction.CLEAR_FAULTS,
             "canlı verileri göster" to SeyfiAction.SHOW_LIVE_DATA,
             "hata dökümü" to SeyfiAction.SHOW_LOGS,
             "hatta dökümü" to SeyfiAction.SHOW_LOGS,
@@ -734,8 +693,8 @@ class SeyfiUstaCommandHandler {
             "son işlemleri göster" to SeyfiAction.SHOW_LOGS,
             "arıza kodu ara" to SeyfiAction.SHOW_FAULT_SEARCH,
             "hata kodu ara" to SeyfiAction.SHOW_FAULT_SEARCH,
-            "Seyfi ekranını aç" to SeyfiAction.SHOW_SEYFI_CHAT,
-            "sohbet ekranı" to SeyfiAction.SHOW_SEYFI_CHAT,
+            "Seyfi ekranını aç" to SeyfiAction.SHOW_VOICE_STATUS,
+            "sesli komut durumunu aç" to SeyfiAction.SHOW_VOICE_STATUS,
             "iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
             "tam Viecar ECU iletişim raporu" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
             "adaptörü test et" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
@@ -748,7 +707,6 @@ class SeyfiUstaCommandHandler {
             "servis kaydını aç" to SeyfiAction.SHOW_LOGS,
             "sistem testleri ekranını aç" to SeyfiAction.SHOW_TESTS,
             "sensör verilerini göster" to SeyfiAction.SHOW_LIVE_DATA,
-            "Yamaha teşhis ekranını aç" to SeyfiAction.SHOW_SEYFI_CHAT,
             "adaptörü test et" to SeyfiAction.SHOW_COMMUNICATION_REPORT,
             "servis bilgisi kaydet" to SeyfiAction.SHOW_LOGS,
             "servis kaydı" to SeyfiAction.SHOW_LOGS,
@@ -762,10 +720,9 @@ class SeyfiUstaCommandHandler {
             "hata raporlarını aç" to SeyfiAction.SHOW_LOGS,
             "sistem testleri ekranını aç" to SeyfiAction.SHOW_TESTS,
             "sensör verilerini göster" to SeyfiAction.SHOW_LIVE_DATA,
-            "Yamaha teşhis ekranını aç" to SeyfiAction.SHOW_SEYFI_CHAT,
             "başka ne yapabiliyorsun" to SeyfiAction.SHOW_HELP,
             "ana sayfa" to SeyfiAction.GO_HOME,
-            "motor verilerini yorumla" to SeyfiAction.ANALYZE_ENGINE_DATA
+            "motor verilerini göster" to SeyfiAction.SHOW_LIVE_DATA
         )
         return cases.mapNotNull { (phrase, expected) ->
             val actual = handle(phrase).action
