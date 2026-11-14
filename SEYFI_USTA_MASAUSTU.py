@@ -73,7 +73,13 @@ DTC_TR = {
 }
 def dtc_desc(code): return DTC_TR.get(code.upper().strip(), "Bilinmeyen arıza kodu")
 
-from abs_diagnostics import (\n    ABS_PROFILE_SCHEMA_VERSION, ABS_PROFILE_REGISTRY, ABS_DTC_DATABASE,\n    ABS_BRANDS, ABS_PROTOCOL_FAMILIES, ABS_SAFETY_CAPABILITIES,\n    normalize_abs_text, abs_profile_key, evaluate_abs_profile, decode_abs_dtc,\n)\n\n# ==================== SERVİS LOG VE AKILLI TEŞHİS ====================
+from abs_diagnostics import (
+    ABS_PROFILE_SCHEMA_VERSION, ABS_PROFILE_REGISTRY, ABS_DTC_DATABASE,
+    ABS_BRANDS, ABS_PROTOCOL_FAMILIES, ABS_SAFETY_CAPABILITIES,
+    normalize_abs_text, abs_profile_key, evaluate_abs_profile, decode_abs_dtc,
+)
+
+# ==================== SERVİS LOG VE AKILLI TEŞHİS ====================
 SERVICE_INFO = {"musteri": "", "plaka": "", "sikayet": ""}
 LOG_FILE = "Servis_Loglari.txt"
 
