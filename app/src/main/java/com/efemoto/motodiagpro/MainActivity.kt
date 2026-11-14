@@ -1456,76 +1456,113 @@ class MainActivity : ComponentActivity() {
         if (!busy.compareAndSet(false, true)) return
         io.execute {
             val attempts = mutableListOf<String>()
+            var clearAcknowledged = false
             try {
                 ensureConnected()
-                for (i in 1..3) {
-                    mainHandler.post { statusLine?.text = "● STANDART ARIZA SİLME $i/3 • YANIT BEKLENİYOR" }
+
+                // Mode 04 is sent once. Repeating it after a dropped socket can
+                // create another ECU reset/adapter disconnect and is not proof of success.
+                mainHandler.post {
+                    statusLine?.text = "● STANDART ARIZA SİLME • ECU YANITI BEKLENİYOR"
+                }
+                try {
                     val response = elm("04", 8000)
                     val compact = response.filter { it in "0123456789ABCDEF" }
-                    val accepted = compact.contains("44")
-                    attempts.add("Standart silme $i/3 • 04 → ${response.ifBlank { "YANIT YOK" }}")
-                    if (accepted) break
-                    if (i < 3) Thread.sleep(2000)
+                    clearAcknowledged = compact.contains("44")
+                    attempts.add("Standart silme • 04 → ${response.ifBlank { "YANIT YOK" }}")
+                } catch (transportError: Exception) {
+                    attempts.add("Standart silme • 04 yanıt/bağlantı hatası: ${transportError.message}")
+                    closeAdapter()
                 }
 
-                mainHandler.post { statusLine?.text = "● SİLME SONRASI DOĞRULAMA OKUMALARI" }
-                Thread.sleep(2500)
+                // If the adapter closed after Mode 04, reconnect only for read-back.
+                if (!connected || !viecarConnection.isConnected()) {
+                    mainHandler.post {
+                        statusLine?.text = "● ADAPTÖR YENİDEN BAĞLANIYOR • SADECE OKUMA"
+                    }
+                    ensureConnected()
+                }
+
+                mainHandler.post {
+                    statusLine?.text = "● SİLME SONRASI DOĞRULAMA • SADECE OKUMA"
+                }
+                Thread.sleep(1800)
                 val storedRaw = elm("03", 8000)
                 val storedHex = storedRaw.filter { it in "0123456789ABCDEF" }
                 if (!storedHex.contains("43")) {
                     throw IllegalStateException(
-                        "Silme denemeleri tamamlandı ancak ECU'dan doğrulama için geçerli Mode 03 / 43 yanıtı alınamadı.\n" +
+                        "ECU'dan geçerli Mode 03 / 43 doğrulama yanıtı alınamadı. " +
+                            "Adaptör yeniden bağlanmış olsa bile silme sonucu doğrulanamadı.\n" +
                             attempts.joinToString("\n") + "\nYeniden okuma: ${storedRaw.ifBlank { "YANIT YOK" }}"
                     )
                 }
+
                 val afterClear = mutableListOf<String>()
-                val storedLeft = decodeDtcs(storedRaw, "43")
-                storedLeft.forEach { afterClear.add("$it • KAYITLI") }
+                decodeDtcs(storedRaw, "43").forEach { afterClear.add("$it • KAYITLI") }
                 try {
-                    val pendingRaw = elm("07", 3000)
+                    val pendingRaw = elm("07", 4000)
                     if (pendingRaw.filter { it in "0123456789ABCDEF" }.contains("47")) {
                         decodeDtcs(pendingRaw, "47").forEach { afterClear.add("$it • BEKLEYEN") }
                     }
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    attempts.add("Mode 07 bekleyen kodlar okunamadı: ${e.message}")
+                }
                 try {
-                    val permanentRaw = elm("0A", 3000)
+                    val permanentRaw = elm("0A", 4000)
                     if (permanentRaw.filter { it in "0123456789ABCDEF" }.contains("4A")) {
                         decodeDtcs(permanentRaw, "4A").forEach { afterClear.add("$it • KALICI") }
                     }
-                } catch (_: Exception) { }
+                } catch (e: Exception) {
+                    attempts.add("Mode 0A kalıcı kodlar okunamadı: ${e.message}")
+                }
+
                 val activeRemaining = afterClear.filter { !it.endsWith("• KALICI") }
                 val permanentRemaining = afterClear.filter { it.endsWith("• KALICI") }
                 mainHandler.post {
                     faults = afterClear.distinct().toMutableList()
                     when {
+                        !clearAcknowledged -> {
+                            val resultText = if (afterClear.isEmpty()) {
+                                "ECU yeniden sorgulandığında kayıtlı/bekleyen/kalıcı kod bildirmedi; ancak silme komutuna olumlu 44 yanıtı alınamadı. Bu nedenle silme işlemi kesin başarılı olarak işaretlenmedi."
+                            } else {
+                                "ECU silme komutunu 44 yanıtıyla onaylamadı. Yeniden okumada kalan kodlar:\n${afterClear.joinToString("\n")}"
+                            }
+                            log("Arıza silme doğrulanamadı • ECU 44 olumlu yanıtı vermedi")
+                            AlertDialog.Builder(this).setTitle("SİLME KOMUTU ONAYLANMADI")
+                                .setMessage(resultText + "\n\n" + attempts.joinToString("\n"))
+                                .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
+                        }
                         activeRemaining.isEmpty() && permanentRemaining.isEmpty() -> {
-                            log("Arıza silme doğrulandı • Mode 03/07/0A yeniden okundu • kod kalmadı")
+                            log("Arıza silme doğrulandı • ECU 44 yanıtı ve Mode 03/07/0A kontrolü başarılı")
                             AlertDialog.Builder(this).setTitle("✓  SİLME DOĞRULANDI")
-                                .setMessage("ECU tekrar sorgulandı. Kayıtlı, bekleyen ve kalıcı arıza yanıtlarında kod bulunmadı.\n\n" + attempts.joinToString("\n"))
+                                .setMessage("ECU 04 komutunu 44 yanıtıyla kabul etti. Kayıtlı, bekleyen ve kalıcı arıza okumalarında kod bulunmadı.\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
                         }
                         activeRemaining.isEmpty() -> {
                             log("Kayıtlı/bekleyen DTC temizlendi; kalıcı kodlar ECU tarafından tutuluyor: ${permanentRemaining.joinToString()}")
                             AlertDialog.Builder(this).setTitle("✓  AKTİF ARIZALAR TEMİZLENDİ")
-                                .setMessage("Kayıtlı ve bekleyen kodlar silinmiş görünüyor. ECU'nun kalıcı (Mode 0A) kodları normal Mode 04 komutuyla zorla silinemez; ECU kendi izleme koşulları tamamlandığında kaldırabilir.\n\nKalan kalıcı kodlar:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setMessage("ECU silme komutunu kabul etti. Kayıtlı ve bekleyen kodlar kalmadı; ECU'nun kalıcı kodları tutuluyor:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("KALICI KODLARI GÖR") { _, _ -> showFaults() }.show()
                         }
                         else -> {
                             log("Silme sonrası kalan arızalar: ${afterClear.joinToString()}")
                             AlertDialog.Builder(this).setTitle("BAZI ARIZALAR KALDI")
-                                .setMessage("ECU tekrar okundu. Kalan kodlar:\n${afterClear.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setMessage("ECU silme komutunu kabul etti ancak yeniden okumada kodlar kaldı:\n${afterClear.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("GÖRÜNTÜLE") { _, _ -> showFaults() }.show()
                         }
                     }
                 }
             } catch (e: Exception) {
                 mainHandler.post {
-                    log("Arıza silme başarısız: ${e.message}")
+                    log("Arıza silme doğrulanamadı: ${e.message}")
                     AlertDialog.Builder(this).setTitle("SİLME DOĞRULANAMADI")
-                        .setMessage((e.message ?: "Bilinmeyen hata") + if (attempts.isNotEmpty()) "\n\n" + attempts.joinToString("\n") else "")
+                        .setMessage((e.message ?: "Bilinmeyen hata") +
+                            if (attempts.isNotEmpty()) "\n\n" + attempts.joinToString("\n") else "")
                         .setPositiveButton("TAMAM", null).show()
                 }
-            } finally { busy.set(false) }
+            } finally {
+                busy.set(false)
+            }
         }
     }
 
@@ -1700,6 +1737,12 @@ class MainActivity : ComponentActivity() {
             "Göstergeler yalnızca ECU'nun desteklediği standart PID yanıtlarından oluşturulur. Veri gelmezse değerler boş kalır; sahte değer üretilmez. ABS, fan komutu, enjektör aktif testi ve bobin testi için marka / model / yıl bazlı ECU protokolü gerekir.",
             11, muted
         ))
+
+        // Alt menüden veya ana sayfadan bu ekrana gelindiğinde bağlı ECU'nun
+        // canlı verisini otomatik başlat; mevcut sesli komut akışına dokunma.
+        if (connected && viecarConnection.isConnected() && !liveLoop && !busy.get()) {
+            startLiveRead()
+        }
     }
 
     private fun updateLiveDisplay(values: Map<String, Double>) {
@@ -1755,10 +1798,11 @@ class MainActivity : ComponentActivity() {
             return
         }
         io.execute {
+            var liveCycle = 0
             try {
                 ensureConnected()
                 while (liveLoop && currentScreen == "LIVE") {
-                    val values = readLivePids(stopIfNotLive = true)
+                    val values = readLivePids(stopIfNotLive = true, includeOptional = (liveCycle++ % 5 == 0))
                     EcuSessionRecorder.append(
                         applicationContext,
                         currentEcuSessionId,
@@ -1850,7 +1894,10 @@ class MainActivity : ComponentActivity() {
         append("Not: Tanımı bulunmayan PID'ler ham veri olarak saklanır; üreticiye özel değerlerin birimi tahmin edilmez.")
     }
 
-    private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
+    private fun readLivePids(
+        stopIfNotLive: Boolean = false,
+        includeOptional: Boolean = true
+    ): Map<String, Double> {
         val out = mutableMapOf<String, Double>()
         if (supportedPidSet.isEmpty()) {
             supportedPidSet = try { readSupportedPids() } catch (_: Exception) { mutableSetOf() }
@@ -1858,7 +1905,7 @@ class MainActivity : ComponentActivity() {
         val core = listOf(0x0C, 0x11, 0x05, 0x0B, 0x42)
         val optional = listOf(0x04, 0x06, 0x07, 0x0D, 0x0E, 0x0F, 0x10, 0x14,
             0x45, 0x49, 0x4C, 0x5C)
-        val candidates = (core + optional.filter { it in supportedPidSet }).distinct()
+        val candidates = (core + if (includeOptional) optional.filter { it in supportedPidSet } else emptyList()).distinct()
         fun bytes(pid: Int): List<Int>? {
             if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
             return try { pidBytes("%02X".format(Locale.US, pid), 1400) } catch (_: Exception) { null }
@@ -1869,7 +1916,7 @@ class MainActivity : ComponentActivity() {
         bytes(0x0B)?.firstOrNull()?.let { out["map"] = it.toDouble() }
         bytes(0x42)?.takeIf { it.size >= 2 }?.let { out["voltage"] = (it[0] * 256 + it[1]) / 1000.0 }
         if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return out
-        for (pid in candidates.filter { it !in core }) {
+        for (pid in candidates.filter { includeOptional && it !in core }) {
             val data = bytes(pid) ?: continue
             when (pid) {
                 0x04 -> data.firstOrNull()?.let { out["load"] = it * 100.0 / 255.0 }
@@ -1892,7 +1939,7 @@ class MainActivity : ComponentActivity() {
         val remaining = supportedPidSet
             .filter { it in 0x01..0xE0 && it !in alreadyPolled && !EcuPidCatalog.isSupportBitmap(it) }
             .sorted()
-        if (remaining.isNotEmpty() && !(stopIfNotLive && (!liveLoop || currentScreen != "LIVE"))) {
+        if (includeOptional && remaining.isNotEmpty() && !(stopIfNotLive && (!liveLoop || currentScreen != "LIVE"))) {
             val start = livePidCursor % remaining.size
             val count = minOf(6, remaining.size)
             repeat(count) { offset ->
