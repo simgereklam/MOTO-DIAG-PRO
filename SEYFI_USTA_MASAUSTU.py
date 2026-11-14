@@ -79,6 +79,48 @@ def dtc_desc(code): return DTC_TR.get(code.upper().strip(), "Bilinmeyen arıza k
 ABS_PROFILE_SCHEMA_VERSION = 1
 ABS_PROFILE_REGISTRY = {}  # (marka, normalize_model, yil) -> doğrulanmış profil
 ABS_DTC_DATABASE = {}      # (marka, normalize_model, yil, DTC) -> doğrulanmış açıklama
+
+# Kaynak: Yamaha XMAX 300 CZD300-A (2019) servis el kitabı,
+# ABS arıza teşhis bölümü, sayfa 8-85–8-110. Bu kodlar başka model/yıllara
+# genellenmez. Haberleşme/ECU erişim profili değildir; yalnızca kod açıklamasıdır.
+_XMAX300_2019_ABS_CODES = {
+    "11": "Ön tekerlek hız sensörü sinyalinde anormallik.",
+    "12": "Arka tekerlek hız sensörü sinyalinde anormallik.",
+    "13": "Ön tekerlek sensörü darbe periyodu anormal.",
+    "14": "Arka tekerlek sensörü darbe periyodu anormal.",
+    "15": "Ön tekerlek hız sensörü devresinde açık devre veya kısa devre.",
+    "16": "Arka tekerlek hız sensörü devresinde açık devre veya kısa devre.",
+    "17": "Ön tekerlek sensöründen beklenen darbe sinyali alınamıyor.",
+    "18": "Arka tekerlek sensöründen beklenen darbe sinyali alınamıyor.",
+    "21": "ABS solenoid sürücü devresinde anormallik.",
+    "24": "Fren müşürü / fren lambası sinyalinde anormallik.",
+    "25": "Ön tekerlek hız sensörü sinyalinde anormallik.",
+    "31": "Solenoid besleme devresinde anormallik.",
+    "32": "Solenoid besleme devresinde anormallik.",
+    "33": "ABS motor besleme devresinde anormallik.",
+    "34": "ABS motor besleme devresinde anormallik.",
+    "41": "Ön tekerlek ABS kontrol davranışında anormallik.",
+    "42": "Arka tekerlek ABS kontrol davranışında anormallik.",
+    "43": "Ön tekerlek sensöründe eksik darbe algılandı.",
+    "44": "Arka tekerlek sensöründe eksik darbe algılandı.",
+    "45": "Ön tekerlek sensöründe düşük hızda eksik darbe algılandı.",
+    "46": "Arka tekerlek sensöründe düşük hızda eksik darbe algılandı.",
+    "47": "Arka tekerlek ABS kontrol davranışında anormallik.",
+    "51": "ABS ECU besleme gerilimi yüksek.",
+    "52": "Tekerlek sensörü besleme gerilimi yüksek.",
+    "53": "ABS ECU besleme gerilimi düşük.",
+    "54": "Solenoid / ABS motor beslemesinde anormallik.",
+    "55": "ABS hidrolik ünitesinden gelen veride anormallik.",
+    "56": "ABS hidrolik ünitesi iç besleme devresinde anormallik.",
+    "63": "Ön tekerlek sensörü besleme gerilimi düşük.",
+    "64": "Arka tekerlek sensörü besleme gerilimi düşük.",
+}
+for _code, _description in _XMAX300_2019_ABS_CODES.items():
+    ABS_DTC_DATABASE[("yamaha", "xmax 300", 2019, _code)] = {
+        "verified": True,
+        "description_tr": _description,
+        "source": "Yamaha XMAX 300 CZD300-A 2019 servis el kitabı, ABS teşhis bölümü (8-85–8-110)",
+    }
 ABS_BRANDS = ("yamaha", "honda", "kawasaki", "suzuki", "bmw motorrad", "ktm",
               "ducati", "triumph", "bajaj", "tvs", "cf moto", "aprilia",
               "benelli", "royal enfield", "harley-davidson", "diğer")
@@ -967,6 +1009,11 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    </div>
    <div class="module-actions"><button class="btn test-btn" onclick="absCheckProfile()">🧭 ABS PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="Araç ve adaptör için doğrulanmış ABS iletişim profili gerekli">🔌 ABS ECU'YA BAĞLAN</button><button class="btn test-btn" disabled title="Gerçek ABS ECU bağlantısı ve doğrulanmış okuma servisi gerekli">🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled title="Model özelinde silme servisi doğrulanmadan kapalı">🗑 ABS ARIZALARINI SİL</button></div>
    <pre id="abs_profile_result" style="color:#00e5ff;min-height:55px;white-space:pre-wrap">Marka, model ve yılı seçip profil kontrolü yapın. Bu işlem motosiklete komut göndermez.</pre>
+   <div class="module-grid" style="grid-template-columns:minmax(180px,1fr) auto;align-items:end;margin-top:12px">
+    <div><label class="title">ABS arıza kodu (manuel açıklama)</label><input class="module-field" id="abs_dtc_code" placeholder="Örn. 11 / 25 / 53" maxlength="12"></div>
+    <button class="btn test-btn" onclick="absDecodeDtc()">📖 KOD AÇIKLAMASINI BUL</button>
+   </div>
+   <pre id="abs_dtc_result" style="color:#ffcc80;white-space:pre-wrap;min-height:42px">Yalnızca veri tabanında doğrulanmış araç profilleri için açıklama gösterilir. ECU'dan kod okunmaz.</pre>
   </div>
   <div class="module-note"><b>Güvenlik kilidi:</b> Profil kontrolü yalnızca yerel veri tabanına bakar. Doğrulanmış OEM dokümanı, pinout, protokol/adresleme, adaptör uyumluluğu ve gerçek ECU yanıtı olmadan ABS'ye bağlantı, arıza silme veya pompa/valf komutu gönderilmez.</div>
   <h3 style="color:#ff8c96">ABS canlı veri ekranı</h3>
@@ -1052,6 +1099,8 @@ function testGetInfo(){document.getElementById('test_info').innerText='Yükleniy
 socket.on('test_info_result',d=>{document.getElementById('test_info').innerText=JSON.stringify(d,null,2)});socket.on('test_ecu_result',d=>{document.getElementById('test_ecu').innerText=d.ok?JSON.stringify(d.data,null,2):('HATA: '+d.msg)});socket.on('test_raw_result',d=>{document.getElementById('test_raw_out').innerText=(d.ok?'✓ OK:\n':'✗ HATA:\n')+(d.msg||d.raw||'')});
 function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanıyor...';socket.emit('gkbus_connect')}function gkTest(code){document.getElementById('gk_test_out').innerText='Komut gönderiliyor...';socket.emit('gkbus_test',{code:code})}function gkD07(){document.getElementById('gk_d07_out').innerText='Okunuyor...';socket.emit('gkbus_d07')}
  function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
+ function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
+ socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
  socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+' | '+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80'});
 
 socket.on('gkbus_result',d=>{var el=document.getElementById('gk_conn_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_test_result',d=>{var el=document.getElementById('gk_test_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_d07_result',d=>{var el=document.getElementById('gk_d07_out');if(el)el.innerText=d.ok?('Pulse: '+d.data):('❌ '+d.msg)});
@@ -1079,6 +1128,35 @@ def handle_arac_sec(data):
         msg = f"✅ ARAÇ: {ARAC_CONFIG['marka'].upper()} {ARAC_CONFIG['model'].upper()} ({ARAC_CONFIG['yil']})\nProtokol: {ARAC_CONFIG['protokol'].upper()}\nPin Şeması: {ARAC_CONFIG['pin_sema']}\nNot: {ARAC_CONFIG['notlar']}"
         socketio.emit('arac_sec_result', {'ok': True, 'msg': msg})
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
+
+@socketio.on('abs_decode_dtc')
+def handle_abs_decode_dtc(data):
+    """Yalnızca yerel, araç özel ABS DTC sözlüğünde arama yapar; ECU'ya erişmez."""
+    try:
+        payload = data or {}
+        brand = str(payload.get('brand', '')).strip()
+        model = str(payload.get('model', '')).strip()
+        year = payload.get('year', '')
+        code = str(payload.get('code', '')).strip().upper()
+        if not code:
+            raise ValueError("ABS arıza kodunu girin.")
+        key = abs_profile_key(brand, model, year)
+        entry = ABS_DTC_DATABASE.get(key + (code,))
+        found = bool(entry and entry.get('verified') is True)
+        result = {
+            'ok': True, 'found': found, 'code': code,
+            'description': (entry.get('description_tr') if found else
+                "Bu marka / model / yıl için doğrulanmış ABS kod açıklaması bulunamadı."),
+            'source': entry.get('source') if found else None,
+        }
+        socketio.emit('abs_decode_dtc_result', result)
+        write_log("ABS DTC SÖZLÜK SORGUSU",
+                  f"{brand} {model} {year} kod {code}: {'bulundu' if found else 'kayıt yok'}")
+    except Exception as exc:
+        socketio.emit('abs_decode_dtc_result', {
+            'ok': False, 'found': False, 'code': '',
+            'description': str(exc), 'source': None
+        })
 
 @socketio.on('abs_profile_check')
 def handle_abs_profile_check(data):
