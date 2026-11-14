@@ -1430,7 +1430,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
-            .setMessage("Kontak açık, motor kapalı olmalı. Standart OBD Mode 04 komutu bir kez gönderilir. Ardından kayıtlı, bekleyen ve kalıcı arıza hafızaları yeniden okunarak sonuç doğrulanır. ECU yanıtı doğrulanmadan işlem başarılı sayılmaz. Devam edilsin mi?")
+            .setMessage("Kontak açık, motor kapalı olmalı. Önce standart OBD Mode 04 silme komutu en fazla 3 kez denenir. Yanıt alınamazsa Python/Viecar dosyasındaki yedek RAW 14 komutu denenir. Sonrasında ECU yeniden okunur; doğrulama olmadan işlem başarılı sayılmaz. Devam edilsin mi?")
             .setNegativeButton("VAZGEÇ", null)
             .setPositiveButton("SİL VE DOĞRULA") { _, _ -> clearFaults() }.show()
     }
