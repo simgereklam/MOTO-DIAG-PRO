@@ -1508,9 +1508,13 @@ class MainActivity : ComponentActivity() {
         ))
     }
 
-    private fun updateLiveDisplay(values: Map<String, Double>) {
-        // Eski ölçümü canlıymış gibi göstermemek için her turda yalnızca yeni yanıtları tut.
-        liveValues.clear()
+    private fun updateLiveDisplay(values: Map<String, Double>, refreshOptional: Boolean = true) {
+        // Temel göstergeler her turda yenilenir; yavaş değişen ek PID'ler yalnızca sorgulandıkları turda yenilenir.
+        listOf("rpm", "tps", "coolant", "map", "voltage").forEach { liveValues.remove(it) }
+        if (refreshOptional) {
+            listOf("load", "stft", "ltft", "speed", "timing", "iat", "maf", "o2",
+                "relativeThrottle", "pedal", "commandedThrottle", "oilTemp").forEach { liveValues.remove(it) }
+        }
         liveValues.putAll(values)
         rpm = values["rpm"]?.toInt() ?: -1
         tps = values["tps"] ?: -1.0
@@ -1564,12 +1568,19 @@ class MainActivity : ComponentActivity() {
         io.execute {
             try {
                 ensureConnected()
+                var liveCycle = 0
                 while (liveLoop && currentScreen == "LIVE") {
-                    val values = readLivePids(stopIfNotLive = true)
+                    liveCycle++
+                    // Önce temel göstergeleri hızlı güncelle; ek PID'leri her beş turda bir sorgula.
+                    val refreshOptional = liveCycle % 5 == 0
+                    val values = readLivePids(
+                        stopIfNotLive = true,
+                        includeOptional = refreshOptional
+                    )
                     mainHandler.post {
-                        if (currentScreen == "LIVE") updateLiveDisplay(values)
+                        if (currentScreen == "LIVE") updateLiveDisplay(values, refreshOptional)
                     }
-                    Thread.sleep(1100)
+                    Thread.sleep(350)
                 }
             } catch (e: Exception) {
                 mainHandler.post {
@@ -1604,15 +1615,19 @@ class MainActivity : ComponentActivity() {
         return supported
     }
 
-    private fun readLivePids(stopIfNotLive: Boolean = false): Map<String, Double> {
+    private fun readLivePids(
+        stopIfNotLive: Boolean = false,
+        includeOptional: Boolean = true
+    ): Map<String, Double> {
         val out = mutableMapOf<String, Double>()
-        if (supportedPidSet.isEmpty()) {
-            supportedPidSet = try { readSupportedPids() } catch (_: Exception) { mutableSetOf() }
-        }
         val core = listOf(0x0C, 0x11, 0x05, 0x0B, 0x42)
         val optional = listOf(0x04, 0x06, 0x07, 0x0D, 0x0E, 0x0F, 0x10, 0x14,
             0x45, 0x49, 0x4C, 0x5C)
-        val candidates = (core + optional.filter { it in supportedPidSet }).distinct()
+        // İlk canlı turda bitmap sorgusu yapıp göstergeleri geciktirme.
+        if (includeOptional && supportedPidSet.isEmpty()) {
+            supportedPidSet = try { readSupportedPids() } catch (_: Exception) { mutableSetOf() }
+        }
+        val candidates = if (includeOptional) optional.filter { it in supportedPidSet } else emptyList()
         fun bytes(pid: Int): List<Int>? {
             if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return null
             val commandPid = "%02X".format(Locale.US, pid)
@@ -1636,7 +1651,7 @@ class MainActivity : ComponentActivity() {
         bytes(0x0B)?.firstOrNull()?.let { out["map"] = it.toDouble() }
         bytes(0x42)?.takeIf { it.size >= 2 }?.let { out["voltage"] = (it[0] * 256 + it[1]) / 1000.0 }
         if (stopIfNotLive && (!liveLoop || currentScreen != "LIVE")) return out
-        for (pid in candidates.filter { it !in core }) {
+        for (pid in candidates) {
             val data = bytes(pid) ?: continue
             when (pid) {
                 0x04 -> data.firstOrNull()?.let { out["load"] = it * 100.0 / 255.0 }
