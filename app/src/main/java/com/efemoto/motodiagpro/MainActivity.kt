@@ -1978,36 +1978,6 @@ class MainActivity : ComponentActivity() {
         ))
         c.addView(intro)
 
-        val voiceCard = neonCard("SEYFİ USTA • ÇEVRİMDIŞI SES", cyan)
-        val voiceStatusText = text("", 12, white)
-        val commandStatusText = text("", 12, muted)
-        fun refreshAssistantStatuses() {
-            val assistant = seyfiUstaAI
-            voiceStatusText.text = "SES TANIMA: " +
-                if (assistant?.isRecognitionAvailable() == true) "HAZIR" else "KULLANILAMIYOR"
-            commandStatusText.text = "TÜRKÇE KOMUT SÖZLÜĞÜ: " +
-                if (seyfiCommandHandler.selfTest().isEmpty()) "HAZIR" else "UYARI VAR"
-        }
-        refreshAssistantStatuses()
-        voiceCard.addView(voiceStatusText)
-        voiceCard.addView(text("METİN OKUMA / SESLENDİRME", 12, cyan, true))
-        voiceCard.addView(text(
-            if (seyfiUstaAI?.isTtsReady() == true) "TÜRKÇE TTS: HAZIR" else "TÜRKÇE TTS: HAZIR DEĞİL",
-            12, white
-        ))
-        voiceCard.addView(commandStatusText)
-        addGap(voiceCard, 7)
-        voiceCard.addView(actionButton("DURUMLARI YENİLE", blue) { refreshAssistantStatuses() })
-        voiceCard.addView(actionButton("KOMUT SÖZLÜĞÜNÜ TEST ET", cyan) {
-            val failures = seyfiCommandHandler.selfTest()
-            commandStatusText.text = if (failures.isEmpty()) "BAŞARILI • Tüm çevrimdışı komut eşleşmeleri doğru."
-                else "HATALAR: " + failures.joinToString(" | ")
-            log("SEYFİ KOMUT TESTİ: " + if (failures.isEmpty()) "BAŞARILI" else failures.joinToString(" | "))
-        })
-        voiceCard.addView(actionButton("SESLİ YANIT TESTİ", green) {
-            seyfiUstaAI?.speak("Ses testi. Ben Seyfi Usta. Çevrimdışı komut sistemim hazır.")
-        })
-        c.addView(voiceCard)
 
         fun testCard(title: String, detail: String, button: String, color: Int, action: () -> Unit) {
             val card = neonCard(null, color)
