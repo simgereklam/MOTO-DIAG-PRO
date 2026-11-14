@@ -156,8 +156,6 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
         loadPersistentState()
         showHome()
-        setupSeyfiAssistant()
-        startAutoConnectionMonitor()
     }
 
     private fun setupSeyfiAssistant() {
@@ -336,7 +334,6 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
         when (currentScreen) {
             "HOME" -> showHome()
-            "SEYFI" -> showSeyfiVoiceStatus()
             "LIVE" -> showLiveData()
             "TESTS" -> showTests()
             "LOGS" -> showLogs()
@@ -904,7 +901,6 @@ class MainActivity : ComponentActivity() {
             Triple("LIVE", "◉", "Canlı Veri"),
             Triple("TESTS", "⚒", "Test"),
             Triple("LOGS", "▤", "Hata Dökümü"),
-            Triple("SEYFI", "✦", "Sesli Komut")
         )
         entries.forEach { (key, symbol, label) ->
             val selected = active == key || (key == "HOME" && active in listOf("FAULTS", "DETAIL", "SCAN"))
@@ -926,7 +922,6 @@ class MainActivity : ComponentActivity() {
                         "LIVE" -> showLiveData()
                         "TESTS" -> showTests()
                         "LOGS" -> showLogs()
-                        "SEYFI" -> showSeyfiVoiceStatus()
                     }
                 }
             }
@@ -1075,8 +1070,6 @@ class MainActivity : ComponentActivity() {
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
             side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
-            side.addView(actionButton("✦  SEYFİ USTA / SESLİ KOMUTLAR", cyan) { showSeyfiVoiceStatus() },
-                LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
 
             val sideScroll = ScrollView(this).apply {
                 isFillViewport = false
@@ -1108,16 +1101,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startDiagnosis() {
-        // Tarama boyunca ses tanımayı kapat: ECU yanıtları ve Seyfi'nin TTS'i
-        // yeni bir komut gibi algılanmasın.
-        seyfiUstaAI?.stopListening()
         if (!scanRunning.compareAndSet(false, true)) {
-            seyfiUstaAI?.speak("Usta, ECU taraması zaten devam ediyor.")
             return
         }
         if (!busy.compareAndSet(false, true)) {
             scanRunning.set(false)
-            seyfiUstaAI?.speak("Başka bir ECU işlemi devam ediyor. İşlem bitince tekrar tarama yapabilirsin.")
             return
         }
         val c = baseScreen("SCAN", true)
@@ -1448,54 +1436,93 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun clearFaults() {
-        if (!busy.compareAndSet(false, true)) return
+        if (!busy.compareAndSet(false, true)) {
+            Toast.makeText(this, "Başka bir ECU işlemi sürüyor. İşlem bitince tekrar deneyin.", Toast.LENGTH_SHORT).show()
+            return
+        }
         io.execute {
             val attempts = mutableListOf<String>()
             var clearAcknowledged = false
             try {
                 ensureConnected()
 
-                // Mode 04 is sent once. Repeating it after a dropped socket can
-                // create another ECU reset/adapter disconnect and is not proof of success.
-                mainHandler.post {
-                    statusLine?.text = "● STANDART ARIZA SİLME • ECU YANITI BEKLENİYOR"
-                }
-                try {
-                    val response = elm("04", 8000)
-                    val compact = response.filter { it in "0123456789ABCDEF" }
-                    clearAcknowledged = compact.contains("44")
-                    attempts.add("Standart silme • 04 → ${response.ifBlank { "YANIT YOK" }}")
-                } catch (transportError: Exception) {
-                    attempts.add("Standart silme • 04 yanıt/bağlantı hatası: ${transportError.message}")
-                    closeAdapter()
+                // Python/Viecar uygulamasındaki gerçek silme sırası:
+                // 1) Standart OBD CLEAR_DTC (Mode 04) en fazla üç kez.
+                // 2) Standart yanıt alınamazsa aynı adaptör oturumunda ham "14" denemesi.
+                // Her iki durumda da sonuç yalnızca ECU yeniden okunarak doğrulanır.
+                for (attempt in 1..3) {
+                    mainHandler.post {
+                        statusLine?.text = "● STANDART ARIZA SİLME • DENEME $attempt/3"
+                    }
+                    try {
+                        val response = elm("04", 8000)
+                        val compact = response.filter { it in "0123456789ABCDEF" }
+                        val positive = compact.contains("44")
+                        attempts.add("Standart CLEAR_DTC $attempt/3 • 04 → ${response.ifBlank { "YANIT YOK" }}")
+                        if (positive) {
+                            clearAcknowledged = true
+                            break
+                        }
+                    } catch (e: Exception) {
+                        attempts.add("Standart CLEAR_DTC $attempt/3 • HATA: ${e.message}")
+                        if (!viecarConnection.isConnected()) {
+                            closeAdapter()
+                            if (attempt < 3) {
+                                Thread.sleep(1200)
+                                ensureConnected()
+                            }
+                        }
+                    }
+                    if (attempt < 3 && !clearAcknowledged) Thread.sleep(2000)
                 }
 
-                // If the adapter closed after Mode 04, reconnect only for read-back.
-                if (!connected || !viecarConnection.isConnected()) {
-                    mainHandler.post {
-                        statusLine?.text = "● ADAPTÖR YENİDEN BAĞLANIYOR • SADECE OKUMA"
+                if (!clearAcknowledged) {
+                    if (!viecarConnection.isConnected()) {
+                        mainHandler.post { statusLine?.text = "● VIECAR YENİDEN BAĞLANIYOR" }
+                        closeAdapter()
+                        ensureConnected()
                     }
+                    mainHandler.post {
+                        statusLine?.text = "● YEDEK SİLME YÖNTEMİ • RAW 14"
+                    }
+                    try {
+                        val rawResponse = elm("14", 8000)
+                        val normalized = rawResponse.uppercase(Locale.US)
+                        val compact = normalized.filter { it in "0123456789ABCDEF" }
+                        val rejected = normalized.contains("NO DATA") ||
+                            normalized.contains("ERROR") ||
+                            normalized.contains("UNABLE TO CONNECT") ||
+                            normalized.contains("BUS INIT") ||
+                            normalized.contains("STOPPED")
+                        attempts.add("Yedek RAW KWP/UDS 14 → ${rawResponse.ifBlank { "YANIT YOK" }}")
+                        // RAW response is not treated as proof by itself; final ECU read-back is mandatory.
+                        clearAcknowledged = compact.contains("54") || (rawResponse.isNotBlank() && !rejected)
+                    } catch (e: Exception) {
+                        attempts.add("Yedek RAW 14 • HATA: ${e.message}")
+                    }
+                }
+
+                if (!viecarConnection.isConnected()) {
+                    closeAdapter()
                     ensureConnected()
                 }
 
-                mainHandler.post {
-                    statusLine?.text = "● SİLME SONRASI DOĞRULAMA • SADECE OKUMA"
-                }
-                Thread.sleep(1800)
+                mainHandler.post { statusLine?.text = "● SİLME SONRASI ECU DOĞRULAMASI" }
+                Thread.sleep(2000)
+
+                val afterClear = mutableListOf<String>()
                 val storedRaw = elm("03", 8000)
                 val storedHex = storedRaw.filter { it in "0123456789ABCDEF" }
                 if (!storedHex.contains("43")) {
                     throw IllegalStateException(
-                        "ECU'dan geçerli Mode 03 / 43 doğrulama yanıtı alınamadı. " +
-                            "Adaptör yeniden bağlanmış olsa bile silme sonucu doğrulanamadı.\n" +
-                            attempts.joinToString("\n") + "\nYeniden okuma: ${storedRaw.ifBlank { "YANIT YOK" }}"
+                        "Kayıtlı arıza hafızası için geçerli 43 yanıtı alınamadı. Sonuç doğrulanamadı.\n" +
+                            attempts.joinToString("\n") + "\nMode 03: ${storedRaw.ifBlank { "YANIT YOK" }}"
                     )
                 }
-
-                val afterClear = mutableListOf<String>()
                 decodeDtcs(storedRaw, "43").forEach { afterClear.add("$it • KAYITLI") }
+
                 try {
-                    val pendingRaw = elm("07", 4000)
+                    val pendingRaw = elm("07", 5000)
                     if (pendingRaw.filter { it in "0123456789ABCDEF" }.contains("47")) {
                         decodeDtcs(pendingRaw, "47").forEach { afterClear.add("$it • BEKLEYEN") }
                     }
@@ -1503,7 +1530,7 @@ class MainActivity : ComponentActivity() {
                     attempts.add("Mode 07 bekleyen kodlar okunamadı: ${e.message}")
                 }
                 try {
-                    val permanentRaw = elm("0A", 4000)
+                    val permanentRaw = elm("0A", 5000)
                     if (permanentRaw.filter { it in "0123456789ABCDEF" }.contains("4A")) {
                         decodeDtcs(permanentRaw, "4A").forEach { afterClear.add("$it • KALICI") }
                     }
@@ -1511,38 +1538,39 @@ class MainActivity : ComponentActivity() {
                     attempts.add("Mode 0A kalıcı kodlar okunamadı: ${e.message}")
                 }
 
-                val activeRemaining = afterClear.filter { !it.endsWith("• KALICI") }
-                val permanentRemaining = afterClear.filter { it.endsWith("• KALICI") }
+                val distinctRemaining = afterClear.distinct()
+                val activeRemaining = distinctRemaining.filter { !it.endsWith("• KALICI") }
+                val permanentRemaining = distinctRemaining.filter { it.endsWith("• KALICI") }
                 mainHandler.post {
-                    faults = afterClear.distinct().toMutableList()
+                    faults = distinctRemaining.toMutableList()
                     when {
                         !clearAcknowledged -> {
-                            val resultText = if (afterClear.isEmpty()) {
-                                "ECU yeniden sorgulandığında kayıtlı/bekleyen/kalıcı kod bildirmedi; ancak silme komutuna olumlu 44 yanıtı alınamadı. Bu nedenle silme işlemi kesin başarılı olarak işaretlenmedi."
+                            val detail = if (distinctRemaining.isEmpty()) {
+                                "Yeniden okumada aktif arıza kodu görülmedi; ancak hiçbir silme yöntemi ECU tarafından açıkça onaylanmadı. İşlem kesin başarılı sayılmadı."
                             } else {
-                                "ECU silme komutunu 44 yanıtıyla onaylamadı. Yeniden okumada kalan kodlar:\n${afterClear.joinToString("\n")}"
+                                "ECU silme işlemini onaylamadı. Yeniden okumada kalan kodlar:\n${distinctRemaining.joinToString("\n")}"
                             }
-                            log("Arıza silme doğrulanamadı • ECU 44 olumlu yanıtı vermedi")
-                            AlertDialog.Builder(this).setTitle("SİLME KOMUTU ONAYLANMADI")
-                                .setMessage(resultText + "\n\n" + attempts.joinToString("\n"))
+                            log("Arıza silme doğrulanamadı • Mode 04 ve RAW 14 onayı alınamadı")
+                            AlertDialog.Builder(this).setTitle("SİLME ONAYLANMADI")
+                                .setMessage(detail + "\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
                         }
                         activeRemaining.isEmpty() && permanentRemaining.isEmpty() -> {
-                            log("Arıza silme doğrulandı • ECU 44 yanıtı ve Mode 03/07/0A kontrolü başarılı")
-                            AlertDialog.Builder(this).setTitle("✓  SİLME DOĞRULANDI")
-                                .setMessage("ECU 04 komutunu 44 yanıtıyla kabul etti. Kayıtlı, bekleyen ve kalıcı arıza okumalarında kod bulunmadı.\n\n" + attempts.joinToString("\n"))
+                            log("Arıza silme doğrulandı • Mode 04/RAW 14 denemesi ve ECU yeniden okuması başarılı")
+                            AlertDialog.Builder(this).setTitle("✓ ARIZALAR SİLİNDİ")
+                                .setMessage("ECU yeniden okundu. Kayıtlı, bekleyen ve kalıcı arıza kodu kalmadı.\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
                         }
                         activeRemaining.isEmpty() -> {
-                            log("Kayıtlı/bekleyen DTC temizlendi; kalıcı kodlar ECU tarafından tutuluyor: ${permanentRemaining.joinToString()}")
-                            AlertDialog.Builder(this).setTitle("✓  AKTİF ARIZALAR TEMİZLENDİ")
-                                .setMessage("ECU silme komutunu kabul etti. Kayıtlı ve bekleyen kodlar kalmadı; ECU'nun kalıcı kodları tutuluyor:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                            log("Kayıtlı/bekleyen arızalar temizlendi; kalıcı DTC'ler ECU'da tutuluyor.")
+                            AlertDialog.Builder(this).setTitle("AKTİF ARIZALAR TEMİZLENDİ")
+                                .setMessage("Kayıtlı ve bekleyen kod kalmadı. ECU'nun kalıcı hafızada tuttuğu kodlar:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("KALICI KODLARI GÖR") { _, _ -> showFaults() }.show()
                         }
                         else -> {
-                            log("Silme sonrası kalan arızalar: ${afterClear.joinToString()}")
+                            log("Silme sonrası kalan arızalar: ${distinctRemaining.joinToString()}")
                             AlertDialog.Builder(this).setTitle("BAZI ARIZALAR KALDI")
-                                .setMessage("ECU silme komutunu kabul etti ancak yeniden okumada kodlar kaldı:\n${afterClear.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setMessage("Silme denemelerinden sonra ECU'da kalan kodlar:\n${distinctRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("GÖRÜNTÜLE") { _, _ -> showFaults() }.show()
                         }
                     }
@@ -1560,15 +1588,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    private data class LiveMetricDef(
-        val key: String,
-        val label: String,
-        val unit: String,
-        val color: Int,
-        val section: String
-    )
-
     private fun liveMetricDefinitions(): List<LiveMetricDef> = listOf(
         LiveMetricDef("speed", "ARAÇ HIZI", "km/h", yellow, "MOTOR / SÜRÜŞ"),
         LiveMetricDef("tps", "GAZ KELEBEĞİ (TPS)", "%", green, "MOTOR / SÜRÜŞ"),
@@ -2308,84 +2327,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun showSeyfiVoiceStatus() {
-        val c = baseScreen("SEYFI")
-        c.addView(header("SEYFİ USTA • ÇEVRİMDIŞI SESLİ KOMUTLAR"))
-        val voiceCard = neonCard("SES / MİKROFON DURUMU", cyan)
-        val voiceStatus = text(seyfiUstaAI?.getVoiceStatus() ?: "Sesli asistan hazırlanıyor.", 13, white)
-        voiceStatus.setPadding(dp(4), dp(8), dp(4), dp(8))
-        voiceCard.addView(voiceStatus)
-        voiceCard.addView(actionButton("↻  SES DURUMUNU YENİLE", blue) {
-            voiceStatus.text = seyfiUstaAI?.getVoiceStatus() ?: "Sesli asistan hazır değil."
-        })
-        voiceCard.addView(actionButton("🎙  DİNLEMEYİ BAŞLAT", green) {
-            val assistant = seyfiUstaAI
-            if (assistant == null || !assistant.isRecognitionAvailable()) {
-                voiceStatus.text = "Çevrimdışı Türkçe konuşma tanıma hazır değil. Mikrofon iznini ve Vosk dil modelini kontrol edin."
-            } else {
-                seyfiAwaitingCommand = true
-                assistant.startListening()
-                voiceStatus.text = "Dinliyorum. Seyfi Usta diyerek komut verebilirsiniz."
-            }
-        })
-        voiceCard.addView(actionButton("■  DİNLEMEYİ DURDUR", red) {
-            seyfiUstaAI?.stopListening()
-            voiceStatus.text = seyfiUstaAI?.getVoiceStatus() ?: "Dinleme durduruldu."
-        })
-        voiceCard.addView(actionButton("♪  SES TESTİ", cyan) {
-            seyfiUstaAI?.speak("Ses testi. Ben Seyfi Usta. Çevrimdışı sesli komut sistemi hazır.")
-        })
-        addGap(voiceCard, 8)
-        voiceCard.addView(text(
-            "Komut örnekleri: “Seyfi Usta”, “taramayı başlat”, “canlı veri”, “arıza kodlarını incele”, “hata dökümü”, “test yap”, “ana sayfa”. Arıza silme yalnızca ekrandaki düğmeyle yapılır.",
-            12, muted
-        ))
-        c.addView(voiceCard)
-        val analysisCard = neonCard("YAMAHA UZMAN TEŞHİS MOTORU • ÇEVRİMDIŞI", purpleColor())
-        analysisCard.addView(text(
-            "Bu teşhis katmanı sohbet mantığından ayrıdır. Doğrulanmış Yamaha model/yıl servis prosedürlerini ve gerçek ECU kodlarını kullanır; doğrulanmamış değerleri başka modellere taşımaz.",
-            13, white
-        ))
-        addGap(analysisCard, 8)
-        val yamahaModelInput = EditText(this).apply {
-            hint = "Yamaha model ve yıl (ör. NMAX 155 2022)"
-            setSingleLine()
-            setText(persistentPrefs().getString("yamaha_model_year", "").orEmpty())
-            setTextColor(white)
-            setHintTextColor(muted)
-            setPadding(dp(10), dp(9), dp(10), dp(9))
-            background = rounded(panel2, blue, 10)
-        }
-        analysisCard.addView(yamahaModelInput)
-        addGap(analysisCard, 6)
-        val yamahaReportView = text(
-            "İlk doğrulanmış model/yıl prosedürleri: NMAX 155 2022, MT-125 2023 ve MT-09 2021 için P0335.",
-            12, white
-        )
-        yamahaReportView.setPadding(dp(4), dp(8), dp(4), dp(8))
-        analysisCard.addView(yamahaReportView)
-        analysisCard.addView(actionButton("YAMAHA TEŞHİSİNİ ÇALIŞTIR", purpleColor()) {
-            if (!hasCompletedScan) {
-                val message = "Önce gerçek ECU taramasını tamamlayın. Teşhis motoru yalnızca okunan kodları ve canlı verileri değerlendirir."
-                yamahaReportView.text = message
-                seyfiUstaAI?.speak(message)
-            } else {
-                val selectedModel = yamahaModelInput.text.toString().trim()
-                persistentPrefs().edit().putString("yamaha_model_year", selectedModel).apply()
-                val report = YamahaExpertEngine.analyze(
-                    rawCodes = faults,
-                    modelAndYear = selectedModel,
-                    liveValues = liveValues,
-                    scanCompleted = hasCompletedScan
-                )
-                yamahaReportView.text = report.displayText
-                log("Yamaha çevrimdışı uzman teşhisi: " + report.displayText)
-                seyfiUstaAI?.speak(report.speechText)
-            }
-        })
-        c.addView(analysisCard)
-    }
-
+    
     private fun saveMotorcycleFaultRecord(foundCodes: List<String>, result: String = "ECU taraması") {
         val prefs = persistentPrefs()
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("tr", "TR")).format(Date())
