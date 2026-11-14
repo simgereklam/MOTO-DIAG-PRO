@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "brand": "Yamaha",
+  "subsystem": "ABS",
+  "language": "tr-TR",
+  "scope": [
+    {
+      "model": "XMAX 300 (CZD300-A)",
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "serviceManual": "B74-F8197-EA (2019), ABS section 8-85–8-110",
+      "verification": "OEM_MANUAL_VERIFIED"
+    }
+  ],
+  "transport": {
+    "documented": "CAN bus between ABS ECU and Yamaha Diagnostic Tool (YDT) coupler",
+    "canLines": "CAN-H / CAN-L",
+    "source": "Yamaha XMAX 300 CZD300-A Service Manual, ABS troubleshooting section 8-87",
+    "rawCanIdentifiersPublished": false,
+    "bitrate": null,
+    "addressing": null,
+    "sessionBytes": null,
+    "note": "Servis kılavuzu CAN fiziksel hattını ve YDT ile fonksiyonel teşhisi doğrular; CAN bitrate, arbitration ID, ISO-TP adresleri ve uygulama isteği baytlarını yayımlamaz. Bu alanlar tahmin edilmemiştir."
+  },
+  "adapterCompatibility": {
+    "viecarVp002": "NOT_VERIFIED_FOR_YAMAHA_ABS",
+    "elm327AtCommands": "ADAPTER_CONFIGURATION_ONLY_NOT_ABS_ECU_COMMANDS",
+    "note": "ATI, ATDP, ATDPN gibi ELM tanılama sorguları adaptörü tanımlar; ABS ECU DTC komutu değildir."
+  },
+  "commands": [
+    {
+      "id": "ABS_CONNECT_YDT",
+      "label": "ABS ECU teşhis oturumu aç",
+      "purpose": "YDT üzerinden ABS ECU ile fonksiyonel teşhis bağlantısı kurmak",
+      "transport": "YDT_CAN",
+      "requestBytesHex": null,
+      "responsePattern": null,
+      "implementationStatus": "RAW_FRAME_NOT_PUBLISHED",
+      "safeToImplement": false,
+      "notes": "Önce seçili model/yıl/ECU profili ve YDT haberleşme katmanı doğrulanmalıdır."
+    },
+    {
+      "id": "ABS_READ_DTC",
+      "label": "ABS arıza kodlarını oku",
+      "purpose": "Mevcut ABS arızalarını YDT ekranında görüntülemek",
+      "transport": "YDT_CAN",
+      "requestBytesHex": null,
+      "responsePattern": null,
+      "implementationStatus": "OEM_WORKFLOW_DOCUMENTED_RAW_FRAME_UNKNOWN",
+      "safeToImplement": false,
+      "notes": "2019 XMAX 300 servis kılavuzu, YDT bağlandığında kayıtlı ABS hata kodlarının ekranda görüntülendiğini belirtir. Ham CAN isteği yayımlanmamıştır."
+    },
+    {
+      "id": "ABS_READ_DTC_HISTORY",
+      "label": "ABS geçmiş arıza kayıtlarını oku",
+      "purpose": "ABS ECU belleğinde tutulan geçmiş arızaları görüntülemek",
+      "transport": "YDT_CAN",
+      "requestBytesHex": null,
+      "responsePattern": null,
+      "implementationStatus": "HISTORY_STORAGE_DOCUMENTED_READ_SERVICE_UNKNOWN",
+      "safeToImplement": false,
+      "notes": "Kılavuz ABS ECU'nun geçmiş arızaları sakladığını doğrular; geçmiş kayıtlarını çağıran ayrı ham komut tanımlanmamıştır."
+    },
+    {
+      "id": "ABS_READ_LIVE_WHEEL_SPEEDS",
+      "label": "ABS canlı teker hız verilerini oku",
+      "purpose": "Ön/arka teker sensör hız/darbe verilerini YDT monitoring function üzerinden izlemek",
+      "transport": "YDT_CAN",
+      "requestBytesHex": null,
+      "responsePattern": null,
+      "implementationStatus": "MONITORING_FUNCTION_DOCUMENTED_DATA_IDS_UNKNOWN",
+      "safeToImplement": false,
+      "notes": "Servis prosedürlerinde monitoring function ile ön/arka teker hız darbesi kontrolü geçer; DID/parametre kimlikleri ve ham istekler yayımlanmamıştır."
+    },
+    {
+      "id": "ABS_CLEAR_DTC",
+      "label": "ABS arıza kodlarını sil",
+      "purpose": "Onarım ve doğrulama sonrasında ABS ECU belleğindeki arıza kodlarını silmek",
+      "transport": "YDT_CAN",
+      "requestBytesHex": null,
+      "responsePattern": null,
+      "implementationStatus": "OEM_WORKFLOW_DOCUMENTED_RAW_FRAME_UNKNOWN",
+      "safeToImplement": false,
+      "requiresExplicitUserConfirmation": true,
+      "preconditions": [
+        "Önce tüm mevcut ve geçmiş kodlar rapora kaydedilir.",
+        "Arızanın nedeni giderilir ve servis kontrolleri tamamlanır.",
+        "Akü ve besleme durumu servis prosedürüne uygun doğrulanır."
+      ],
+      "postconditions": [
+        "Silme yanıtı doğrulanır.",
+        "ABS kodları tekrar okunur ve temiz olduğu teyit edilir.",
+        "ABS uyarı lambası ve nihai fren/ABS kontrolü yapılır."
+      ],
+      "notes": "Kılavuz kod silme işleminin Yamaha Diagnostic Tool ile yapılmasını söyler. Genel OBD Mode 04 veya varsayılan UDS ClearDiagnosticInformation komutu olarak uygulanmaz."
+    },
+    {
+      "id": "ABS_HYDRAULIC_ACTUATOR_TEST",
+      "label": "ABS pompa/solenoid aktif testi",
+      "purpose": "Hidrolik üniteyi aktif olarak sürmek",
+      "transport": "YDT_CAN",
+      "requestBytesHex": null,
+      "responsePattern": null,
+      "implementationStatus": "DISABLED_UNTIL_MODEL_SPECIFIC_PROCEDURE_VERIFIED",
+      "safeToImplement": false,
+      "notes": "Fren hidrolik sisteminde basınç oluşturabileceği için ham komut eklenmedi ve çalıştırma kapalı. Yalnızca model servis kılavuzundaki kontrollü test prosedürü ve güvenlik koşulları doğrulanınca ele alınabilir."
+    }
+  ],
+  "globalSafetyRules": [
+    "ABS DTC'leri motor ECU P-kodlarından ayrı tutulur.",
+    "Genel OBD Mode 03/04 komutları ABS ECU'ya otomatik uygulanmaz.",
+    "KWP2000 0x17/0x14 veya UDS 0x19/0x14 istekleri bu XMAX profili için doğrulanmış değildir; gönderilmez.",
+    "Bilinmeyen CAN ID, bitrate, ECU adresi veya ham veri baytı tahmin edilmez.",
+    "ABS pompa/solenoid aktif sürme komutları varsayılan olarak kapalıdır."
+  ],
+  "sources": [
+    "Yamaha X-MAX 300 CZD300-A 2019 Service Manual B74-F8197-EA, ABS section 8-85–8-110: https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+    "Yamaha XMAX 300 2020 Owner's Manual, diagnostic connector identification: https://tr-yamaha-motor.com/user_manual/2020/XMAX-300-KULLANICI-EL-KITABI-%282020%29.pdf"
+  ]
+}
