@@ -851,9 +851,9 @@ class MainActivity : ComponentActivity() {
         root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         if (showNav) {
             val navHeight = when {
-                screenHeightDp() < 480 -> 66
-                screenWidthDp() >= 840 -> 98
-                else -> 88
+                screenHeightDp() < 480 -> 54
+                screenWidthDp() >= 840 -> 76
+                else -> 66
             }
             root.addView(bottomNav(title), LinearLayout.LayoutParams(-1, dp(navHeight)))
         }
@@ -904,7 +904,7 @@ class MainActivity : ComponentActivity() {
             val item = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                minimumHeight = dp(if (short) 58 else if (wide) 86 else 76)
+                minimumHeight = dp(if (short) 48 else if (wide) 66 else 58)
                 setPadding(dp(5), dp(4), dp(5), dp(4))
                 background = rounded(
                     if (selected) Color.rgb(0, 40, 100) else Color.rgb(3, 16, 37),
@@ -922,8 +922,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            val iconSize = if (short) 24 else if (wide) 34 else 30
-            val labelSize = if (short) 10 else if (wide) 14 else 12
+            val iconSize = if (short) 21 else if (wide) 28 else 24
+            val labelSize = if (short) 9 else if (wide) 12 else 10
             item.addView(text(symbol, iconSize, if (selected) cyan else muted, true).apply { gravity = Gravity.CENTER })
             item.addView(text(label, labelSize, if (selected) cyan else white, true).apply { gravity = Gravity.CENTER; maxLines = 1 })
             bar.addView(item, LinearLayout.LayoutParams(0, -1, 1f).apply {
@@ -1019,7 +1019,7 @@ class MainActivity : ComponentActivity() {
         }
         val artwork = ImageView(this).apply {
             setImageBitmap(homeScreenBitmap)
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = if (wide) ImageView.ScaleType.FIT_CENTER else ImageView.ScaleType.CENTER_CROP
             adjustViewBounds = false
             contentDescription = "EFE MOTO arıza teşhis açılış ekranı"
         }
@@ -1028,7 +1028,7 @@ class MainActivity : ComponentActivity() {
             if (event.action == android.view.MotionEvent.ACTION_UP) {
                 val vw = view.width.toFloat().coerceAtLeast(1f)
                 val vh = view.height.toFloat().coerceAtLeast(1f)
-                val scale = minOf(vw / 403f, vh / 728f)
+                val scale = if (wide) minOf(vw / 403f, vh / 728f) else maxOf(vw / 403f, vh / 728f)
                 val drawW = 403f * scale
                 val drawH = 728f * scale
                 val offX = (vw - drawW) / 2f
@@ -1083,9 +1083,9 @@ class MainActivity : ComponentActivity() {
 
         root.addView(content, LinearLayout.LayoutParams(-1, 0, 1f))
         val navHeight = when {
-            screenHeightDp() < 480 -> 70
-            screenWidthDp() >= 840 -> 98
-            else -> 88
+            screenHeightDp() < 480 -> 54
+            screenWidthDp() >= 840 -> 76
+            else -> 66
         }
         root.addView(bottomNav("HOME"), LinearLayout.LayoutParams(-1, dp(navHeight)))
         setContentView(root)
@@ -1658,11 +1658,11 @@ class MainActivity : ComponentActivity() {
         val gaugeCard = neonCard("ANLIK MOTOR DEVİR GÖSTERGESİ", cyan)
         liveGauge = RpmGaugeView(this).apply { value = rpm }
         val gaugeHeight = when {
-            screenHeightDp() < 480 -> 180
-            screenWidthDp() >= 1200 -> 300
-            screenWidthDp() >= 840 -> 270
-            screenWidthDp() >= 600 -> 245
-            else -> 220
+            screenHeightDp() < 480 -> 140
+            screenWidthDp() >= 1200 -> 220
+            screenWidthDp() >= 840 -> 200
+            screenWidthDp() >= 600 -> 180
+            else -> 190
         }
         gaugeCard.addView(liveGauge, LinearLayout.LayoutParams(-1, dp(gaugeHeight)))
         c.addView(gaugeCard)
@@ -1671,7 +1671,7 @@ class MainActivity : ComponentActivity() {
         liveMetricCards.clear()
         liveSectionGrids.clear()
         liveSectionHeaders.clear()
-        val columns = liveColumns().coerceAtMost(3)
+        val columns = liveColumns()
         val sectionNames = listOf("MOTOR / SÜRÜŞ", "ENJEKSİYON / YAKIT", "ATEŞLEME / DİĞER SENSÖRLER")
         sectionNames.forEach { section ->
             val sectionHeader = text(section, 14, cyan, true).apply {
@@ -1693,7 +1693,7 @@ class MainActivity : ComponentActivity() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(11), dp(10), dp(9), dp(10))
-                minimumHeight = dp(if (screenWidthDp() >= 840) 92 else 82)
+                minimumHeight = dp(if (screenWidthDp() >= 840) 84 else 74)
                 background = rounded(panel2, def.color, 13)
                 elevation = dp(3).toFloat()
                 addView(text(def.label, 10, muted, true).apply { maxLines = 2 })
