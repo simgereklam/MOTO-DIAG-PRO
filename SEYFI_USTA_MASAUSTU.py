@@ -1035,7 +1035,6 @@ def handle_scan():
         write_log("GERÇEK ECU ARIZA TARAMASI", log_details)
         socketio.emit('dtc_result', {'codes': codes, 'ok': True, 'diagnostic_guidance': diagnostic_guidance,
             'live_data_used': sorted(live_snapshot.keys())})
-        if codes:
     except Exception as exc:
         socketio.emit('dtc_result', {'codes': [], 'ok': False, 'error': f"ECU arıza okuma hatası: {exc}"})
 
@@ -1239,7 +1238,7 @@ class App:
         self.lbl_status.config(text="DURUM: " + text, fg=color)
 
     def startup_diagnostics(self):
-        """Ses veya yapay zekâ yüklemeden çevrimdışı teşhis altyapısını hazırla."""
+        """Ses motoru yüklemeden çevrimdışı teşhis altyapısını hazırla."""
         self.set_status("ÇEVRİMDIŞI TEŞHİS HAZIR")
         self.log("Kural tabanlı arıza açıklamaları ve gerçek ECU teşhis altyapısı hazır.")
         self.root.after(0, self.begin_adapter_search)
@@ -1273,7 +1272,7 @@ class App:
         self._start_real(target)
 
     def ask_device_connected(self):
-        answer = messagebox.askyesno("Seyfi Usta - Bağlantı cihazı", "Bağlantı cihazı bulunamadı.\n\nLütfen adaptörünüzü bilgisayara ve motosiklete bağlayın.\n\nBağladınız mı?", parent=self.root)
+        answer = messagebox.askyesno("MOTO DIAG PRO - Bağlantı cihazı", "Bağlantı cihazı bulunamadı.\n\nLütfen adaptörünüzü bilgisayara ve motosiklete bağlayın.\n\nBağladınız mı?", parent=self.root)
         if answer:
             self.log("Kullanıcı adaptörü bağladığını belirtti. Yeniden tarama başlıyor.")
             self.begin_adapter_search()
