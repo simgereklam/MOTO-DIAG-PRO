@@ -3,7 +3,7 @@ package com.efemoto.motodiagpro
 import android.app.Activity
 import android.util.Log
 
-/** Seyfi Usta'nın tek uygulama giriş noktası: kendi yerel teşhis çekirdeği ve Android ses katmanı. */
+/** Seyfi Usta'nın çevrimdışı ses tanıma, TTS ve hızlı komut yönlendirme katmanı. */
 class SeyfiUstaAI(
     private val activity: Activity,
     private val onCommandRecognized: (String) -> Unit,
@@ -13,20 +13,14 @@ class SeyfiUstaAI(
     private val voice = OfflineVoiceAssistant(
         activity = activity,
         onRecognized = { text ->
-            // Vosk sonuçları kendi ses iş parçacığında bildirir. Ekran değiştirme,
-            // Toast ve teşhis komutları Android ana UI iş parçacığında yürümelidir.
-            // Aksi halde mikrofon metni gösterir ama komut ekranı açılmaz.
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed) return@runOnUiThread
-                try {
-                    onCommandRecognized(text)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Sesli komut ana arayüzde çalıştırılamadı: $text", e)
-                    android.widget.Toast.makeText(
-                        activity,
+                try { onCommandRecognized(text) }
+                catch (e: Exception) {
+                    Log.e(TAG, "Sesli komut çalıştırılamadı: $text", e)
+                    android.widget.Toast.makeText(activity,
                         "Seyfi komutu çalıştıramadı: ${e.message ?: "beklenmeyen hata"}",
-                        android.widget.Toast.LENGTH_LONG
-                    ).show()
+                        android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         },
@@ -37,7 +31,6 @@ class SeyfiUstaAI(
             }
         }
     )
-    val brain = SeyfiBrain(activity.applicationContext)
     @Volatile private var initialized = false
 
     fun initializeVoiceOnly(onReady: () -> Unit) {
@@ -57,15 +50,12 @@ class SeyfiUstaAI(
     fun isTtsReady(): Boolean = voice.isTtsReady()
     fun isRecognitionAvailable(): Boolean = voice.isRecognitionAvailable()
     fun getVoiceStatus(): String = voice.getStatus()
-    fun getModelStatus(): String =
-        "Hazır dil modeli kullanılmıyor. Bağımsız yerel teşhis çekirdeği etkin; öğrenilmiş sinir ağı henüz eğitilmedi."
-
+    fun startListening() = voice.startListening()
     fun listenDirectAudio(onAnswer: (String) -> Unit = {}) {
         voice.startListening()
         onAnswer("Seyfi Usta dinlemeye hazır.")
     }
     fun speak(text: String, onDone: (() -> Unit)? = null) = voice.speak(text, onDone)
-    fun startListening() = voice.startListening()
     fun listenForDtcCode(onResult: (List<String>) -> Unit) = voice.listenForDtcCode { phrases ->
         activity.runOnUiThread {
             if (!activity.isFinishing && !activity.isDestroyed) onResult(phrases)
@@ -74,7 +64,6 @@ class SeyfiUstaAI(
     fun pauseForProcessing() = voice.pauseForProcessing()
     fun stopListening() = voice.stopListening()
     fun isListening(): Boolean = voice.isListening()
-
     fun runCompatibilitySelfTest(): List<String> {
         val failures = mutableListOf<String>()
         if (!voice.isRecognitionAvailable()) failures += "Cihaz içi konuşma tanıma servisi bulunamadı."
@@ -82,40 +71,15 @@ class SeyfiUstaAI(
         failures += SeyfiUstaCommandHandler().selfTest()
         return failures
     }
-
-    fun runModelSelfTest(onResult: (Boolean, String) -> Unit) {
-        val errors = SeyfiUstaCommandHandler().selfTest()
-        val ok = errors.isEmpty() && brain.isReady()
-        onResult(ok, if (ok) "Bağımsız yerel teşhis çekirdeği ve komut sözlüğü hazır." else errors.joinToString())
-    }
-    fun analyzeCurrentEngineData(onResult: (Boolean, String) -> Unit) {
-        brain.analyzeCurrentEngineData { answer ->
-            val failed = answer.contains("ECU bağlantısı yok", true) ||
-                answer.contains("geçerli canlı ölçüm alınmamış", true)
-            onResult(!failed, answer)
-            if (!failed) speak(answer)
-        }
-    }
-    fun chat(message: String, onAnswer: (String) -> Unit) {
-        pauseForProcessing()
-        brain.chat(message) { answer ->
-            activity.runOnUiThread {
-                try { onAnswer(answer) } finally { speak(answer) }
-            }
-        }
-    }
-    fun updateVehicleProfile(modelYear: String) = brain.updateVehicleProfile(modelYear)
-    fun updateDiagnosticTestResult(result: String) = brain.updateDiagnosticTestResult(result)
-    fun updateDiagnosticPlan(planContext: String) = brain.updateDiagnosticPlan(planContext)
-    fun updateEcuData(
-        rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>
-    ) = brain.updateEcuData(rpm, tps.toInt(), ect, map.toInt(), voltage.toDouble(), dtcs, true)
-    fun updateEcuDataSnapshot(values: Map<String, Double>, dtcs: List<String>) =
-        brain.updateEcuDataSnapshot(values, dtcs, connected = true)
+    // Eski teşhis ekranı çağrılarıyla kaynak uyumluluğu; burada yapay zekâ çalıştırılmaz.
+    fun updateVehicleProfile(modelYear: String) = Unit
+    fun updateDiagnosticTestResult(result: String) = Unit
+    fun updateDiagnosticPlan(planContext: String) = Unit
+    fun updateEcuData(rpm: Int, tps: Float, ect: Int, map: Float, voltage: Float, dtcs: List<String>) = Unit
+    fun updateEcuDataSnapshot(values: Map<String, Double>, dtcs: List<String>) = Unit
     fun processVoiceCommand(spokenText: String) = onCommandRecognized(spokenText)
     fun release() {
         voice.release()
-        brain.close()
         initialized = false
     }
 }
