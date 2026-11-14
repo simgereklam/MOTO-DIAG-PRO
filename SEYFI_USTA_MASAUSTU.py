@@ -8,14 +8,13 @@ import os
 import re
 import queue
 import json
-import urllib.request
-import urllib.error
 import subprocess
 import shutil
 import sys
 import tempfile
 from datetime import datetime
-from flask import Flask, render_template_string
+from pathlib import Path
+from flask import Flask, render_template_string, send_from_directory
 from flask_socketio import SocketIO
 
 # --- Kütüphane Yüklemeleri ---
@@ -197,6 +196,16 @@ def arac_konfigurasyonu_hesapla(marka, model, yil, konnektor, manuel_model=""):
 
 # ==================== FLASK & SOCKETIO ====================
 app = Flask(__name__); app.config['SECRET_KEY'] = 'efe_moto_r25'
+if getattr(sys, "frozen", False):
+    APP_ROOT = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+else:
+    APP_ROOT = Path(__file__).resolve().parent
+WEB_ASSET_DIR = APP_ROOT / "assets" / "web"
+
+@app.route('/assets/<path:filename>')
+def serve_web_asset(filename):
+    return send_from_directory(str(WEB_ASSET_DIR), filename)
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 _connection = None; _mode = 'idle'; _conn_lock = threading.Lock(); _query_lock = threading.Lock()
 _live_data_lock = threading.Lock(); _last_live_data = {}
@@ -699,8 +708,8 @@ def can_d07_oku():
 # ==================== HTML ARAYÜZÜ ====================
 HTML_CODE = r"""
 <!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Efe Moto Diag</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/assets/socket.io.min.js"></script>
+<script src="/assets/chart.umd.min.js"></script>
 <style>
 body{background:#0a0a0a;color:#fff;font-family:'Segoe UI',sans-serif;margin:0;padding-bottom:30px}
 .top-bar{display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:2px solid #ff003c;background:#000}
