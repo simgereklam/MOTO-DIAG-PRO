@@ -745,7 +745,14 @@ body{background:#0a0a0a;color:#fff;font-family:'Segoe UI',sans-serif;margin:0;pa
 .c-yellow{border-color:#ffea00}.c-yellow .s-val{color:#ffea00}
 .c-purple{border-color:#d500ff}.c-purple .s-val{color:#d500ff}
 .c-blue{border-color:#007bff}.c-blue .s-val{color:#007bff}
-.dtc-panel{text-align:center;border:2px solid #ff003c;max-width:800px;margin:0 auto}
+.dtc-panel{text-align:center;border:2px solid #ff003c;max-width:1100px;margin:0 auto}
+.dtc-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:20px;text-align:left}
+.fault-card{background:#101419;border:1px solid #4b5663;border-left:4px solid #ff5252;border-radius:8px;padding:15px}
+.fault-head{display:flex;gap:10px;align-items:flex-start;justify-content:space-between}
+.fault-code{font:800 20px Consolas,monospace;color:#ff737d}
+.fault-description{color:#f1f5f9;font-weight:700;line-height:1.45}
+.fault-detail-btn{width:100%;margin-top:12px;padding:10px;background:#15232c;border:1px solid #00e5ff;color:#00e5ff;font-weight:800;cursor:pointer}
+.fault-details{display:none;margin-top:12px;padding:12px;background:#090d12;border:1px solid #35414d;color:#d7e3ef;white-space:pre-wrap;line-height:1.6;font-size:13px}
 .dtc-icon{font-size:100px;margin:20px}
 .btn{background:rgba(255,0,60,0.1);color:#ff003c;padding:15px 40px;font-size:20px;border:2px solid #ff003c;cursor:pointer;font-weight:bold;margin:10px}
 .btn:hover{background:#ff003c;color:#000}
@@ -868,7 +875,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">DEVİR</div><div class="s-val" id="s_rpm">0<span class="s-unit">rpm</span></div></div><div class="sensor-graph"><canvas id="chart_rpm"></canvas></div></div><div class="panel sensor-box c-orange"><div class="sensor-info"><div class="s-title">MOTOR SICAKLIĞI</div><div class="s-val" id="s_temp">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_temp"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">HAVA SICAKLIĞI</div><div class="s-val" id="s_iat">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_iat"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">AKÜ VOLTAJI</div><div class="s-val" id="s_volt">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_volt"></canvas></div></div><div class="panel sensor-box c-yellow"><div class="sensor-info"><div class="s-title">GAZ KELEBEĞİ</div><div class="s-val" id="s_tps">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_tps"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">ENJEKTÖR</div><div class="s-val" id="s_inj">0<span class="s-unit">ms</span></div></div><div class="sensor-graph"><canvas id="chart_inj"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">HAVA/YAKIT</div><div class="s-val" id="s_afr"><span class="s-unit">AFR</span></div></div><div class="sensor-graph"><canvas id="chart_afr"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">OKSİJEN (O2)</div><div class="s-val" id="s_o2">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_o2"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">YAKIT TRİMİ</div><div class="s-val" id="s_stft">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_stft"></canvas></div></div><div class="panel sensor-box c-blue"><div class="sensor-info"><div class="s-title">EMİŞ BASINCI</div><div class="s-val" id="s_map">0<span class="s-unit">kPa</span></div></div><div class="sensor-graph"><canvas id="chart_map"></canvas></div></div>
 </div></div>
 <div id="tab-graph" class="container"><div id="graph-container"><canvas id="liveChart" height="120"></canvas></div></div>
-<div id="tab-dtc" class="container"><div class="panel dtc-panel"><div class="dtc-icon" id="dtc-icon">⚙️</div><h1 id="dtc-title" style="color:#888;letter-spacing:5px">SİSTEM NORMAL</h1><div class="title" id="dtc-msg" style="color:#888;margin-bottom:30px">Taramak için butona basın...</div><div><button class="btn" onclick="scanDTC()">🔍 ARIZA TARA</button><button class="btn" style="color:#00e5ff;border-color:#00e5ff;background:rgba(0,229,255,0.1)" onclick="clearDTC()">🗑 ARIZALARI SİL</button></div><div id="freeze-frame"><strong>🛑 FREEZE FRAME:</strong><pre id="ff-data" style="color:#ffaa00"></pre></div><div class="diagnostic-guidance" id="diagnostic-guidance" style="display:none;"></div></div></div>
+<div id="tab-dtc" class="container"><div class="panel dtc-panel"><div class="dtc-icon" id="dtc-icon">⚙️</div><h1 id="dtc-title" style="color:#888;letter-spacing:5px">SİSTEM NORMAL</h1><div class="title" id="dtc-msg" style="color:#888;margin-bottom:30px">Taramak için butona basın...</div><div><button class="btn" onclick="scanDTC()">🔍 ARIZA TARA</button><button class="btn" style="color:#00e5ff;border-color:#00e5ff;background:rgba(0,229,255,0.1)" onclick="clearDTC()">🗑 ARIZALARI SİL</button></div><div id="freeze-frame"><strong>🛑 FREEZE FRAME:</strong><pre id="ff-data" style="color:#ffaa00"></pre></div><div id="dtc-cards" class="dtc-cards"></div></div></div>
 <div id="tab-test" class="container"><div class="panel"><h3 style="color:#00e5ff;margin-top:0">🧪 TEST / SERVİS</h3><div class="title" style="margin-top:15px; color:#fff;">MÜŞTERİ VE LOG BİLGİLERİ</div><div class="service-box"><input id="musteri" placeholder="Müşteri Adı" onchange="updateInfo()"><input id="plaka" placeholder="Plaka / Şase No" onchange="updateInfo()"><input id="sikayet" placeholder="Servis Şikayeti" onchange="updateInfo()"></div><div class="test-block"><div class="title">BAĞLANTI BİLGİSİ</div><pre id="test_info">-</pre><button class="btn test-btn" onclick="testGetInfo()">🔄 YENİLE</button><button class="btn test-btn" style="border-color:#00ff00;color:#00ff00" onclick="window.open('/log', '_blank')">📄 SERVİS LOGLARINI AÇ</button></div><div class="test-block"><div class="title">ECU BİLGİSİ</div><pre id="test_ecu" style="color:#ffea00;min-height:40px">-</pre><button class="btn test-btn" onclick="testGetEcu()">📋 ECU SORGULA</button></div><div class="test-block"><div class="title">RAW OBD KOMUTU</div><input id="test_cmd_input" class="test-input" placeholder="örn: 0100"><button class="btn test-btn" onclick="testSendRaw()">▶ GÖNDER</button><pre id="test_raw_out" style="min-height:40px">-</pre></div></div></div>
 <div id="tab-abs" class="container">
  <div class="panel">
@@ -963,10 +970,36 @@ function showToast(msg){var container=document.getElementById('toast-container')
 socket.on('alert',d=>{showToast(d.msg)});socket.on('risk_score',d=>{let el=document.getElementById('risk-score');el.innerText=d.score;if(d.score>60)el.style.color='#ff003c';else if(d.score>30)el.style.color='#ffea00';else el.style.color='#00ff00'});
 socket.on('telemetry',d=>{if(d.rpm!==undefined){document.getElementById('rpm').innerText=d.rpm;updateRpmBar(d.rpm)}if(d.speed!==undefined)document.getElementById('speed').innerText=d.speed;if(d.gear!==undefined)document.getElementById('gear').innerText=d.gear;if(d.tps!==undefined){document.getElementById('dash_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(dash_tps,d.tps)}if(Number.isFinite(Number(d.afr))&&Number(d.afr)>0){document.getElementById('dash_afr').innerHTML=Number(d.afr).toFixed(1)+"<span class='s-unit'>AFR</span>";updateChart(dash_afr,Number(d.afr))}if(d.temp!==undefined){document.getElementById('dash_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(dash_temp,d.temp)}if(d.volt!==undefined){document.getElementById('dash_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(dash_volt,d.volt)}if(d.rpm!==undefined){document.getElementById('s_rpm').innerHTML=d.rpm+"<span class='s-unit'>rpm</span>";updateChart(chartRpm,d.rpm)}if(d.temp!==undefined){document.getElementById('s_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(chartTemp,d.temp)}if(d.iat!==undefined){document.getElementById('s_iat').innerHTML=d.iat+"<span class='s-unit'>°C</span>";updateChart(chartIat,d.iat)}if(d.volt!==undefined){document.getElementById('s_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(chartVolt,d.volt)}if(d.tps!==undefined){document.getElementById('s_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(chartTps,d.tps)}if(d.inj!==undefined){document.getElementById('s_inj').innerHTML=d.inj+"<span class='s-unit'>ms</span>";updateChart(chartInj,d.inj)}if(Number.isFinite(Number(d.afr))&&Number(d.afr)>0){document.getElementById('s_afr').innerHTML=Number(d.afr).toFixed(1)+"<span class='s-unit'>AFR</span>";updateChart(chartAfr,Number(d.afr))}if(d.o2!==undefined){document.getElementById('s_o2').innerHTML=d.o2+"<span class='s-unit'>V</span>";updateChart(chartO2,d.o2)}if(d.stft!==undefined){document.getElementById('s_stft').innerHTML=d.stft+"<span class='s-unit'>%</span>";updateChart(chartStft,d.stft)}if(d.map!==undefined){document.getElementById('s_map').innerHTML=d.map+"<span class='s-unit'>kPa</span>";updateChart(chartMap,d.map)}if(d.rpm!==undefined&&d.speed!==undefined){mainChart.data.labels.push('');mainChart.data.datasets[0].data.push(d.rpm);mainChart.data.datasets[1].data.push(d.speed);if(mainChart.data.labels.length>60){mainChart.data.labels.shift();mainChart.data.datasets[0].data.shift();mainChart.data.datasets[1].data.shift()}mainChart.update('none')}});
 socket.on('status',d=>{let b=document.getElementById('status-bar');b.innerText=d.msg;b.style.color=d.color});
-function scanDTC(){document.getElementById('dtc-icon').innerText="⏳";document.getElementById('dtc-title').innerText="TARANIYOR...";document.getElementById('dtc-title').style.color="#ffaa00";document.getElementById('dtc-msg').innerText="Lütfen bekleyin...";document.getElementById('dtc-msg').style.color="#ffaa00";document.getElementById('freeze-frame').style.display='none';document.getElementById('diagnostic-guidance').style.display='none';socket.emit('scan_dtc')}
+function clearFaultCards(){document.getElementById('dtc-cards').replaceChildren()}
+function renderFaultCards(faults){
+ const host=document.getElementById('dtc-cards');host.replaceChildren();
+ (faults||[]).forEach(fault=>{
+  const card=document.createElement('section');card.className='fault-card';
+  const head=document.createElement('div');head.className='fault-head';
+  const code=document.createElement('div');code.className='fault-code';code.textContent=fault.code||'DTC';
+  const description=document.createElement('div');description.className='fault-description';description.textContent=fault.description||'Açıklama bulunamadı';
+  head.append(code,description);card.appendChild(head);
+  const button=document.createElement('button');button.className='fault-detail-btn';button.textContent='ARIZA AÇIKLAMASI VE KONTROLLERİ GÖSTER';
+  const details=document.createElement('div');details.className='fault-details';
+  const guidance=Array.isArray(fault.guidance)&&fault.guidance.length?fault.guidance:['Bu kod için doğrulanmış model-özel kontrol prosedürü henüz eklenmedi. Parça değiştirmeden önce motosikletin üretici servis dokümanını ve elektrik şemasını kontrol edin.'];
+  details.textContent=guidance.map((item,index)=>(index+1)+'. '+item).join('\n');
+  button.addEventListener('click',()=>{const open=details.style.display==='block';details.style.display=open?'none':'block';button.textContent=open?'ARIZA AÇIKLAMASI VE KONTROLLERİ GÖSTER':'AÇIKLAMAYI GİZLE'});
+  card.append(button,details);host.appendChild(card);
+ });
+}
+function scanDTC(){document.getElementById('dtc-icon').innerText="⏳";document.getElementById('dtc-title').innerText="TARANIYOR...";document.getElementById('dtc-title').style.color="#ffaa00";document.getElementById('dtc-msg').innerText="Lütfen bekleyin...";document.getElementById('dtc-msg').style.color="#ffaa00";document.getElementById('freeze-frame').style.display='none';clearFaultCards();socket.emit('scan_dtc')}
 function clearDTC(){if(confirm("Motor kontağı AÇIK mı?\n\nTüm arıza kodları silinecek. Devam?")){document.getElementById('dtc-title').innerText="SİLİNİYOR...";document.getElementById('dtc-title').style.color="#ffaa00";socket.emit('clear_dtc')}}
-socket.on('dtc_result',d=>{if(d.ok===false){document.getElementById('dtc-icon').innerText="❌";document.getElementById('dtc-title').innerText="TARAMA BAŞARISIZ";document.getElementById('dtc-title').style.color="#ff5252";document.getElementById('dtc-msg').innerText=d.error||"Bilinmeyen hata";document.getElementById('dtc-msg').style.color="#ff5252";document.getElementById('dtc-msg').style.whiteSpace="pre-line";return}if(d.codes.length===0){document.getElementById('dtc-icon').innerText="⚙️";document.getElementById('dtc-title').innerText="SİSTEM NORMAL";document.getElementById('dtc-title').style.color="#00ff00";document.getElementById('dtc-msg').innerText="ARIZA BULUNAMADI";document.getElementById('dtc-msg').style.color="#00ff00"}else{document.getElementById('dtc-icon').innerText="⚠️";document.getElementById('dtc-title').innerText="ARIZA VAR!";document.getElementById('dtc-title').style.color="#ff003c";document.getElementById('dtc-msg').innerText="Kodlar:\n"+d.codes.join("\n");document.getElementById('dtc-msg').style.color="#ff003c";document.getElementById('dtc-msg').style.whiteSpace="pre-line";if(d.freeze_frame){document.getElementById('freeze-frame').style.display='block';document.getElementById('ff-data').innerText=d.freeze_frame}if(d.diagnostic_guidance&&d.diagnostic_guidance.length>0){document.getElementById('diagnostic-guidance').style.display='block';document.getElementById('diagnostic-guidance').innerText="TEKNİK KONTROL ÖNERİLERİ:\n"+d.diagnostic_guidance.join("\n")}}});
-socket.on('dtc_cleared',d=>{if(d.ok){document.getElementById('dtc-icon').innerText="✅";document.getElementById('dtc-title').innerText="SİLİNDİ";document.getElementById('dtc-title').style.color="#00e5ff";document.getElementById('dtc-msg').innerText="Arıza hafızası temiz."+(d.msg?("\n\n"+d.msg):"");document.getElementById('dtc-msg').style.color="#00e5ff";document.getElementById('dtc-msg').style.whiteSpace="pre-line"}else{document.getElementById('dtc-icon').innerText="❌";document.getElementById('dtc-title').innerText="SİLME BAŞARISIZ";document.getElementById('dtc-title').style.color="#ff5252";document.getElementById('dtc-msg').innerText=d.msg||'Bilinmeyen hata';document.getElementById('dtc-msg').style.color="#ff5252";document.getElementById('dtc-msg').style.whiteSpace="pre-line"}});
+socket.on('dtc_result',d=>{
+ const title=document.getElementById('dtc-title'),msg=document.getElementById('dtc-msg'),icon=document.getElementById('dtc-icon');
+ if(d.ok===false){clearFaultCards();icon.innerText="❌";title.innerText="TARAMA BAŞARISIZ";title.style.color="#ff5252";msg.innerText=d.error||"Bilinmeyen hata";msg.style.color="#ff5252";msg.style.whiteSpace="pre-line";return}
+ if(!d.codes||d.codes.length===0){clearFaultCards();icon.innerText="⚙️";title.innerText="SİSTEM NORMAL";title.style.color="#00ff00";msg.innerText="ECU yanıt verdi. Kayıtlı arıza kodu bulunmadı.";msg.style.color="#00ff00";return}
+ icon.innerText="⚠️";title.innerText="ARIZA TESPİT EDİLDİ";title.style.color="#ff003c";
+ msg.innerText=d.codes.length+" arıza kodu ECU tarafından bildirildi. Her kodun açıklaması ve kontrol adımları aşağıdadır.";
+ msg.style.color="#ff003c";msg.style.whiteSpace="pre-line";
+ if(d.freeze_frame){document.getElementById('freeze-frame').style.display='block';document.getElementById('ff-data').innerText=d.freeze_frame}
+ renderFaultCards(d.faults||[]);
+});
+socket.on('dtc_cleared',d=>{if(d.ok){document.getElementById('dtc-icon').innerText="✅";clearFaultCards();document.getElementById('dtc-title').innerText="SİLİNDİ";document.getElementById('dtc-title').style.color="#00e5ff";document.getElementById('dtc-msg').innerText="Arıza hafızası temiz."+(d.msg?("\n\n"+d.msg):"");document.getElementById('dtc-msg').style.color="#00e5ff";document.getElementById('dtc-msg').style.whiteSpace="pre-line"}else{document.getElementById('dtc-icon').innerText="❌";document.getElementById('dtc-title').innerText="SİLME BAŞARISIZ";document.getElementById('dtc-title').style.color="#ff5252";document.getElementById('dtc-msg').innerText=d.msg||'Bilinmeyen hata';document.getElementById('dtc-msg').style.color="#ff5252";document.getElementById('dtc-msg').style.whiteSpace="pre-line"}});
 function testGetInfo(){document.getElementById('test_info').innerText='Yükleniyor...';socket.emit('test_info')}function testGetEcu(){document.getElementById('test_ecu').innerText='Sorgulanıyor...';socket.emit('test_ecu_info')}function testSendRaw(){var c=document.getElementById('test_cmd_input').value;if(!c)return;document.getElementById('test_raw_out').innerText='Gönderiliyor...';socket.emit('test_raw',{cmd:c})}
 socket.on('test_info_result',d=>{document.getElementById('test_info').innerText=JSON.stringify(d,null,2)});socket.on('test_ecu_result',d=>{document.getElementById('test_ecu').innerText=d.ok?JSON.stringify(d.data,null,2):('HATA: '+d.msg)});socket.on('test_raw_result',d=>{document.getElementById('test_raw_out').innerText=(d.ok?'✓ OK:\n':'✗ HATA:\n')+(d.msg||d.raw||'')});
 function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanıyor...';socket.emit('gkbus_connect')}function gkTest(code){document.getElementById('gk_test_out').innerText='Komut gönderiliyor...';socket.emit('gkbus_test',{code:code})}function gkD07(){document.getElementById('gk_d07_out').innerText='Okunuyor...';socket.emit('gkbus_d07')}
@@ -1019,8 +1052,10 @@ def handle_scan():
                 return
             raw_codes = response.value or []
         codes = []
+        normalized_codes = []
         for code, description in raw_codes:
             code = str(code).upper().strip()
+            normalized_codes.append((code, description))
             # OBD decoder açıklaması varsa sakla; yerel Türkçe sözlük yalnızca eşleşen kodlarda kullanılır.
             tr = dtc_desc(code)
             if tr == 'Bilinmeyen arıza kodu' and description:
@@ -1028,13 +1063,23 @@ def handle_scan():
             codes.append(f"{code}: {tr}")
         with _live_data_lock:
             live_snapshot = dict(_last_live_data)
-        diagnostic_guidance = kural_tabanli_teshis([str(code) for code, _ in raw_codes], live_snapshot) if raw_codes else []
+        diagnostic_guidance = kural_tabanli_teshis([code for code, _ in normalized_codes], live_snapshot) if normalized_codes else []
+        faults = []
+        for code, description in normalized_codes:
+            translated = dtc_desc(code)
+            if translated == 'Bilinmeyen arıza kodu' and description:
+                translated = f"Üretici/OBD açıklaması: {description} (Türkçe karşılığı henüz tanımlı değil)"
+            faults.append({
+                'code': code,
+                'description': translated,
+                'guidance': kural_tabanli_teshis([code], live_snapshot),
+            })
         log_details = "\n".join(codes) if codes else "ECU yanıt verdi; kayıtlı DTC bulunmadı."
         if diagnostic_guidance:
             log_details += "\n\nKURAL TABANLI TEŞHİS DEĞERLENDİRMESİ:\n" + "\n".join(diagnostic_guidance)
         write_log("GERÇEK ECU ARIZA TARAMASI", log_details)
-        socketio.emit('dtc_result', {'codes': codes, 'ok': True, 'diagnostic_guidance': diagnostic_guidance,
-            'live_data_used': sorted(live_snapshot.keys())})
+        socketio.emit('dtc_result', {'codes': codes, 'faults': faults, 'ok': True,
+            'diagnostic_guidance': diagnostic_guidance, 'live_data_used': sorted(live_snapshot.keys())})
     except Exception as exc:
         socketio.emit('dtc_result', {'codes': [], 'ok': False, 'error': f"ECU arıza okuma hatası: {exc}"})
 
