@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - remove-voice-ai-diagnostics
     paths:
       - SEYFI_USTA_MASAUSTU.py
       - desktop_requirements.txt
