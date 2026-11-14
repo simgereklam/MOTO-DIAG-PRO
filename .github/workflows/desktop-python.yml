@@ -5,10 +5,9 @@ on:
     branches:
       - main
       - desktop-seyfi-live-data-stage1
+      - remove-voice-ai-diagnostics
     paths:
       - "SEYFI_USTA_MASAUSTU.py"
-      - "seyfi_voice.py"
-      - "scripts/prepare_desktop_assets.py"
       - ".github/workflows/desktop-python.yml"
   pull_request:
     paths:
@@ -26,4 +25,4 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check Python syntax
-        run: python -m py_compile SEYFI_USTA_MASAUSTU.py seyfi_voice.py scripts/prepare_desktop_assets.py
+        run: python -m py_compile SEYFI_USTA_MASAUSTU.py
