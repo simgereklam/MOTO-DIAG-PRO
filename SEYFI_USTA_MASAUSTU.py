@@ -85,7 +85,7 @@ def write_log(action, details):
         with open(LOG_FILE, "a", encoding="utf-8") as f: f.write(header + details + "\n")
     except: pass
 
-def akilli_teshis(dtc_codes, live_data):
+def kural_tabanli_teshis(dtc_codes, live_data):
     """Yalnizca bilinen DTC anlamlarini ve mevcut canli veriyi kullanir."""
     live_data = live_data if isinstance(live_data, dict) else {}
     codes = {str(code).strip().upper() for code in (dtc_codes or []) if str(code).strip()}
@@ -201,7 +201,6 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 _connection = None; _mode = 'idle'; _conn_lock = threading.Lock(); _query_lock = threading.Lock()
 _live_data_lock = threading.Lock(); _last_live_data = {}
 _run_id = 0; _run_lock = threading.Lock(); _last_alert_time = 0
-_last_spoken_alert = {'text': '', 'time': 0.0}
 
 def _is_current_run(rid):
     with _run_lock: return rid == _run_id
@@ -638,11 +637,6 @@ def real_data_loop(target, run_id):
                         if alerts:
                             _last_alert_time = now
                             socketio.emit('alert', {'msg': alerts[0]})
-                            # Aynı arıza uyarısını her ölçüm turunda tekrarlama.
-                            if (alerts[0] != _last_spoken_alert['text'] or
-                                    now - _last_spoken_alert['time'] >= 60):
-                                _last_spoken_alert.update({'text': alerts[0], 'time': now})
-                                safe_speak(alerts[0])
                 else:
                     empty_cycles += 1
                     if empty_cycles >= 5:
@@ -764,7 +758,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 .service-box{display:flex;gap:10px;margin-bottom:15px}
 .service-box input{flex:1;padding:8px;background:#222;border:1px solid #555;color:#fff}
 #freeze-frame{display:none;background:#222;border:1px solid #ffaa00;padding:15px;margin-top:15px;text-align:left;}
-.smart-diag{background:rgba(0,229,255,0.1);border-left:4px solid #00e5ff;padding:10px;margin-top:15px;text-align:left;font-family:monospace;color:#00e5ff;white-space:pre-wrap;font-size:14px;}
+.diagnostic-guidance{background:rgba(0,229,255,0.1);border-left:4px solid #00e5ff;padding:10px;margin-top:15px;text-align:left;font-family:monospace;color:#00e5ff;white-space:pre-wrap;font-size:14px;}
 #toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px;}
 .toast{background:rgba(255,0,60,0.9);color:white;padding:15px 25px;border-radius:5px;font-weight:bold;box-shadow:0 4px 12px rgba(0,0,0,0.5);animation:slideIn 0.3s ease-out;max-width:350px;}
 @keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -874,7 +868,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">DEVİR</div><div class="s-val" id="s_rpm">0<span class="s-unit">rpm</span></div></div><div class="sensor-graph"><canvas id="chart_rpm"></canvas></div></div><div class="panel sensor-box c-orange"><div class="sensor-info"><div class="s-title">MOTOR SICAKLIĞI</div><div class="s-val" id="s_temp">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_temp"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">HAVA SICAKLIĞI</div><div class="s-val" id="s_iat">0<span class="s-unit">°C</span></div></div><div class="sensor-graph"><canvas id="chart_iat"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">AKÜ VOLTAJI</div><div class="s-val" id="s_volt">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_volt"></canvas></div></div><div class="panel sensor-box c-yellow"><div class="sensor-info"><div class="s-title">GAZ KELEBEĞİ</div><div class="s-val" id="s_tps">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_tps"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">ENJEKTÖR</div><div class="s-val" id="s_inj">0<span class="s-unit">ms</span></div></div><div class="sensor-graph"><canvas id="chart_inj"></canvas></div></div><div class="panel sensor-box c-green"><div class="sensor-info"><div class="s-title">HAVA/YAKIT</div><div class="s-val" id="s_afr"><span class="s-unit">AFR</span></div></div><div class="sensor-graph"><canvas id="chart_afr"></canvas></div></div><div class="panel sensor-box c-cyan"><div class="sensor-info"><div class="s-title">OKSİJEN (O2)</div><div class="s-val" id="s_o2">0<span class="s-unit">V</span></div></div><div class="sensor-graph"><canvas id="chart_o2"></canvas></div></div><div class="panel sensor-box c-purple"><div class="sensor-info"><div class="s-title">YAKIT TRİMİ</div><div class="s-val" id="s_stft">0<span class="s-unit">%</span></div></div><div class="sensor-graph"><canvas id="chart_stft"></canvas></div></div><div class="panel sensor-box c-blue"><div class="sensor-info"><div class="s-title">EMİŞ BASINCI</div><div class="s-val" id="s_map">0<span class="s-unit">kPa</span></div></div><div class="sensor-graph"><canvas id="chart_map"></canvas></div></div>
 </div></div>
 <div id="tab-graph" class="container"><div id="graph-container"><canvas id="liveChart" height="120"></canvas></div></div>
-<div id="tab-dtc" class="container"><div class="panel dtc-panel"><div class="dtc-icon" id="dtc-icon">⚙️</div><h1 id="dtc-title" style="color:#888;letter-spacing:5px">SİSTEM NORMAL</h1><div class="title" id="dtc-msg" style="color:#888;margin-bottom:30px">Taramak için butona basın...</div><div><button class="btn" onclick="scanDTC()">🔍 ARIZA TARA</button><button class="btn" style="color:#00e5ff;border-color:#00e5ff;background:rgba(0,229,255,0.1)" onclick="clearDTC()">🗑 ARIZALARI SİL</button></div><div id="freeze-frame"><strong>🛑 FREEZE FRAME:</strong><pre id="ff-data" style="color:#ffaa00"></pre></div><div class="smart-diag" id="smart-diag" style="display:none;"></div></div></div>
+<div id="tab-dtc" class="container"><div class="panel dtc-panel"><div class="dtc-icon" id="dtc-icon">⚙️</div><h1 id="dtc-title" style="color:#888;letter-spacing:5px">SİSTEM NORMAL</h1><div class="title" id="dtc-msg" style="color:#888;margin-bottom:30px">Taramak için butona basın...</div><div><button class="btn" onclick="scanDTC()">🔍 ARIZA TARA</button><button class="btn" style="color:#00e5ff;border-color:#00e5ff;background:rgba(0,229,255,0.1)" onclick="clearDTC()">🗑 ARIZALARI SİL</button></div><div id="freeze-frame"><strong>🛑 FREEZE FRAME:</strong><pre id="ff-data" style="color:#ffaa00"></pre></div><div class="diagnostic-guidance" id="diagnostic-guidance" style="display:none;"></div></div></div>
 <div id="tab-test" class="container"><div class="panel"><h3 style="color:#00e5ff;margin-top:0">🧪 TEST / SERVİS</h3><div class="title" style="margin-top:15px; color:#fff;">MÜŞTERİ VE LOG BİLGİLERİ</div><div class="service-box"><input id="musteri" placeholder="Müşteri Adı" onchange="updateInfo()"><input id="plaka" placeholder="Plaka / Şase No" onchange="updateInfo()"><input id="sikayet" placeholder="Servis Şikayeti" onchange="updateInfo()"></div><div class="test-block"><div class="title">BAĞLANTI BİLGİSİ</div><pre id="test_info">-</pre><button class="btn test-btn" onclick="testGetInfo()">🔄 YENİLE</button><button class="btn test-btn" style="border-color:#00ff00;color:#00ff00" onclick="window.open('/log', '_blank')">📄 SERVİS LOGLARINI AÇ</button></div><div class="test-block"><div class="title">ECU BİLGİSİ</div><pre id="test_ecu" style="color:#ffea00;min-height:40px">-</pre><button class="btn test-btn" onclick="testGetEcu()">📋 ECU SORGULA</button></div><div class="test-block"><div class="title">RAW OBD KOMUTU</div><input id="test_cmd_input" class="test-input" placeholder="örn: 0100"><button class="btn test-btn" onclick="testSendRaw()">▶ GÖNDER</button><pre id="test_raw_out" style="min-height:40px">-</pre></div></div></div>
 <div id="tab-abs" class="container">
  <div class="panel">
@@ -969,9 +963,9 @@ function showToast(msg){var container=document.getElementById('toast-container')
 socket.on('alert',d=>{showToast(d.msg)});socket.on('risk_score',d=>{let el=document.getElementById('risk-score');el.innerText=d.score;if(d.score>60)el.style.color='#ff003c';else if(d.score>30)el.style.color='#ffea00';else el.style.color='#00ff00'});
 socket.on('telemetry',d=>{if(d.rpm!==undefined){document.getElementById('rpm').innerText=d.rpm;updateRpmBar(d.rpm)}if(d.speed!==undefined)document.getElementById('speed').innerText=d.speed;if(d.gear!==undefined)document.getElementById('gear').innerText=d.gear;if(d.tps!==undefined){document.getElementById('dash_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(dash_tps,d.tps)}if(Number.isFinite(Number(d.afr))&&Number(d.afr)>0){document.getElementById('dash_afr').innerHTML=Number(d.afr).toFixed(1)+"<span class='s-unit'>AFR</span>";updateChart(dash_afr,Number(d.afr))}if(d.temp!==undefined){document.getElementById('dash_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(dash_temp,d.temp)}if(d.volt!==undefined){document.getElementById('dash_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(dash_volt,d.volt)}if(d.rpm!==undefined){document.getElementById('s_rpm').innerHTML=d.rpm+"<span class='s-unit'>rpm</span>";updateChart(chartRpm,d.rpm)}if(d.temp!==undefined){document.getElementById('s_temp').innerHTML=d.temp+"<span class='s-unit'>°C</span>";updateChart(chartTemp,d.temp)}if(d.iat!==undefined){document.getElementById('s_iat').innerHTML=d.iat+"<span class='s-unit'>°C</span>";updateChart(chartIat,d.iat)}if(d.volt!==undefined){document.getElementById('s_volt').innerHTML=d.volt+"<span class='s-unit'>V</span>";updateChart(chartVolt,d.volt)}if(d.tps!==undefined){document.getElementById('s_tps').innerHTML=d.tps+"<span class='s-unit'>%</span>";updateChart(chartTps,d.tps)}if(d.inj!==undefined){document.getElementById('s_inj').innerHTML=d.inj+"<span class='s-unit'>ms</span>";updateChart(chartInj,d.inj)}if(Number.isFinite(Number(d.afr))&&Number(d.afr)>0){document.getElementById('s_afr').innerHTML=Number(d.afr).toFixed(1)+"<span class='s-unit'>AFR</span>";updateChart(chartAfr,Number(d.afr))}if(d.o2!==undefined){document.getElementById('s_o2').innerHTML=d.o2+"<span class='s-unit'>V</span>";updateChart(chartO2,d.o2)}if(d.stft!==undefined){document.getElementById('s_stft').innerHTML=d.stft+"<span class='s-unit'>%</span>";updateChart(chartStft,d.stft)}if(d.map!==undefined){document.getElementById('s_map').innerHTML=d.map+"<span class='s-unit'>kPa</span>";updateChart(chartMap,d.map)}if(d.rpm!==undefined&&d.speed!==undefined){mainChart.data.labels.push('');mainChart.data.datasets[0].data.push(d.rpm);mainChart.data.datasets[1].data.push(d.speed);if(mainChart.data.labels.length>60){mainChart.data.labels.shift();mainChart.data.datasets[0].data.shift();mainChart.data.datasets[1].data.shift()}mainChart.update('none')}});
 socket.on('status',d=>{let b=document.getElementById('status-bar');b.innerText=d.msg;b.style.color=d.color});
-function scanDTC(){document.getElementById('dtc-icon').innerText="⏳";document.getElementById('dtc-title').innerText="TARANIYOR...";document.getElementById('dtc-title').style.color="#ffaa00";document.getElementById('dtc-msg').innerText="Lütfen bekleyin...";document.getElementById('dtc-msg').style.color="#ffaa00";document.getElementById('freeze-frame').style.display='none';document.getElementById('smart-diag').style.display='none';socket.emit('scan_dtc')}
+function scanDTC(){document.getElementById('dtc-icon').innerText="⏳";document.getElementById('dtc-title').innerText="TARANIYOR...";document.getElementById('dtc-title').style.color="#ffaa00";document.getElementById('dtc-msg').innerText="Lütfen bekleyin...";document.getElementById('dtc-msg').style.color="#ffaa00";document.getElementById('freeze-frame').style.display='none';document.getElementById('diagnostic-guidance').style.display='none';socket.emit('scan_dtc')}
 function clearDTC(){if(confirm("Motor kontağı AÇIK mı?\n\nTüm arıza kodları silinecek. Devam?")){document.getElementById('dtc-title').innerText="SİLİNİYOR...";document.getElementById('dtc-title').style.color="#ffaa00";socket.emit('clear_dtc')}}
-socket.on('dtc_result',d=>{if(d.ok===false){document.getElementById('dtc-icon').innerText="❌";document.getElementById('dtc-title').innerText="TARAMA BAŞARISIZ";document.getElementById('dtc-title').style.color="#ff5252";document.getElementById('dtc-msg').innerText=d.error||"Bilinmeyen hata";document.getElementById('dtc-msg').style.color="#ff5252";document.getElementById('dtc-msg').style.whiteSpace="pre-line";return}if(d.codes.length===0){document.getElementById('dtc-icon').innerText="⚙️";document.getElementById('dtc-title').innerText="SİSTEM NORMAL";document.getElementById('dtc-title').style.color="#00ff00";document.getElementById('dtc-msg').innerText="ARIZA BULUNAMADI";document.getElementById('dtc-msg').style.color="#00ff00"}else{document.getElementById('dtc-icon').innerText="⚠️";document.getElementById('dtc-title').innerText="ARIZA VAR!";document.getElementById('dtc-title').style.color="#ff003c";document.getElementById('dtc-msg').innerText="Kodlar:\n"+d.codes.join("\n");document.getElementById('dtc-msg').style.color="#ff003c";document.getElementById('dtc-msg').style.whiteSpace="pre-line";if(d.freeze_frame){document.getElementById('freeze-frame').style.display='block';document.getElementById('ff-data').innerText=d.freeze_frame}if(d.smart_diag&&d.smart_diag.length>0){document.getElementById('smart-diag').style.display='block';document.getElementById('smart-diag').innerText="🧠 AKILLI TEŞHİS YORUMU:\n"+d.smart_diag.join("\n")}}});
+socket.on('dtc_result',d=>{if(d.ok===false){document.getElementById('dtc-icon').innerText="❌";document.getElementById('dtc-title').innerText="TARAMA BAŞARISIZ";document.getElementById('dtc-title').style.color="#ff5252";document.getElementById('dtc-msg').innerText=d.error||"Bilinmeyen hata";document.getElementById('dtc-msg').style.color="#ff5252";document.getElementById('dtc-msg').style.whiteSpace="pre-line";return}if(d.codes.length===0){document.getElementById('dtc-icon').innerText="⚙️";document.getElementById('dtc-title').innerText="SİSTEM NORMAL";document.getElementById('dtc-title').style.color="#00ff00";document.getElementById('dtc-msg').innerText="ARIZA BULUNAMADI";document.getElementById('dtc-msg').style.color="#00ff00"}else{document.getElementById('dtc-icon').innerText="⚠️";document.getElementById('dtc-title').innerText="ARIZA VAR!";document.getElementById('dtc-title').style.color="#ff003c";document.getElementById('dtc-msg').innerText="Kodlar:\n"+d.codes.join("\n");document.getElementById('dtc-msg').style.color="#ff003c";document.getElementById('dtc-msg').style.whiteSpace="pre-line";if(d.freeze_frame){document.getElementById('freeze-frame').style.display='block';document.getElementById('ff-data').innerText=d.freeze_frame}if(d.diagnostic_guidance&&d.diagnostic_guidance.length>0){document.getElementById('diagnostic-guidance').style.display='block';document.getElementById('diagnostic-guidance').innerText="TEKNİK KONTROL ÖNERİLERİ:\n"+d.diagnostic_guidance.join("\n")}}});
 socket.on('dtc_cleared',d=>{if(d.ok){document.getElementById('dtc-icon').innerText="✅";document.getElementById('dtc-title').innerText="SİLİNDİ";document.getElementById('dtc-title').style.color="#00e5ff";document.getElementById('dtc-msg').innerText="Arıza hafızası temiz."+(d.msg?("\n\n"+d.msg):"");document.getElementById('dtc-msg').style.color="#00e5ff";document.getElementById('dtc-msg').style.whiteSpace="pre-line"}else{document.getElementById('dtc-icon').innerText="❌";document.getElementById('dtc-title').innerText="SİLME BAŞARISIZ";document.getElementById('dtc-title').style.color="#ff5252";document.getElementById('dtc-msg').innerText=d.msg||'Bilinmeyen hata';document.getElementById('dtc-msg').style.color="#ff5252";document.getElementById('dtc-msg').style.whiteSpace="pre-line"}});
 function testGetInfo(){document.getElementById('test_info').innerText='Yükleniyor...';socket.emit('test_info')}function testGetEcu(){document.getElementById('test_ecu').innerText='Sorgulanıyor...';socket.emit('test_ecu_info')}function testSendRaw(){var c=document.getElementById('test_cmd_input').value;if(!c)return;document.getElementById('test_raw_out').innerText='Gönderiliyor...';socket.emit('test_raw',{cmd:c})}
 socket.on('test_info_result',d=>{document.getElementById('test_info').innerText=JSON.stringify(d,null,2)});socket.on('test_ecu_result',d=>{document.getElementById('test_ecu').innerText=d.ok?JSON.stringify(d.data,null,2):('HATA: '+d.msg)});socket.on('test_raw_result',d=>{document.getElementById('test_raw_out').innerText=(d.ok?'✓ OK:\n':'✗ HATA:\n')+(d.msg||d.raw||'')});
@@ -1034,19 +1028,14 @@ def handle_scan():
             codes.append(f"{code}: {tr}")
         with _live_data_lock:
             live_snapshot = dict(_last_live_data)
-        smart_diag = akilli_teshis([str(code) for code, _ in raw_codes], live_snapshot) if raw_codes else []
+        diagnostic_guidance = kural_tabanli_teshis([str(code) for code, _ in raw_codes], live_snapshot) if raw_codes else []
         log_details = "\n".join(codes) if codes else "ECU yanıt verdi; kayıtlı DTC bulunmadı."
-        if smart_diag:
-            log_details += "\n\nAKILLI TEŞHİS ÖN DEĞERLENDİRMESİ:\n" + "\n".join(smart_diag)
+        if diagnostic_guidance:
+            log_details += "\n\nKURAL TABANLI TEŞHİS DEĞERLENDİRMESİ:\n" + "\n".join(diagnostic_guidance)
         write_log("GERÇEK ECU ARIZA TARAMASI", log_details)
-        socketio.emit('dtc_result', {'codes': codes, 'ok': True, 'smart_diag': smart_diag,
+        socketio.emit('dtc_result', {'codes': codes, 'ok': True, 'diagnostic_guidance': diagnostic_guidance,
             'live_data_used': sorted(live_snapshot.keys())})
         if codes:
-            spoken = "ECU arıza taraması tamamlandı. " + ". ".join(codes[:4])
-            if smart_diag: spoken += ". Akıllı değerlendirme: " + ". ".join(smart_diag[:2])
-            safe_speak(spoken)
-        else:
-            safe_speak("ECU yanıt verdi. Kayıtlı arıza kodu bulunmadı.")
     except Exception as exc:
         socketio.emit('dtc_result', {'codes': [], 'ok': False, 'error': f"ECU arıza okuma hatası: {exc}"})
 
@@ -1099,14 +1088,11 @@ def handle_clear():
         if not after_codes:
             write_log("DTC SİLME DOĞRULANDI", f"Önce: {before_codes}\nSonra: boş")
             socketio.emit('dtc_cleared', {'ok': True, 'msg': 'ECU yeniden okundu; kayıtlı arıza kodu kalmadı.'})
-            safe_speak("Arıza silme işlemi tamamlandı. ECU yeniden okundu ve kayıtlı arıza kodu kalmadığı doğrulandı.")
         else:
             write_log("DTC SİLME SONRASI KOD KALDI", f"Önce: {before_codes}\nSonra: {after_codes}")
             socketio.emit('dtc_cleared', {'ok': False, 'msg': 'ECU yeniden okundu; bazı kodlar hâlâ mevcut: ' + ', '.join(after_codes)})
-            safe_speak("Silme işleminden sonra ECU tekrar okundu. Bazı arıza kodları hâlâ mevcut: " + ", ".join(after_codes))
     except Exception as exc:
         socketio.emit('dtc_cleared', {'ok': False, 'msg': f"Silme işlemi başarısız: {exc}"})
-        safe_speak("Arıza silme işlemi başarısız oldu: " + str(exc)[:180])
 
 
 @socketio.on('test_info')
@@ -1206,42 +1192,7 @@ def run_flask(): socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkz
 @app.route('/')
 def index_page(): return render_template_string(HTML_CODE)
 
-# ==================== SEYFI USTA YEREL SES SISTEMI ====================
-# TTS + Vosk ASR ayrı, tamamen yerel modellerle çalışır.
-VOICE_ENGINE = None
-_VOICE_UNAVAILABLE_REPORTED = False
-
-def speak(phrase):
-    """Konuşma isteğini yerel SeyfiVoice motoruna aktar; motor yoksa logla."""
-    global _VOICE_UNAVAILABLE_REPORTED
-    engine = VOICE_ENGINE
-    if engine is None:
-        if not _VOICE_UNAVAILABLE_REPORTED:
-            _VOICE_UNAVAILABLE_REPORTED = True
-            try:
-                write_log("SEYFİ SES MOTORU", "Ses motoru başlatılmadı; çevrimdışı konuşma kullanılamıyor.")
-            except Exception:
-                print("SEYFİ SES MOTORU: Ses motoru başlatılmadı.")
-        return False
-    try:
-        engine.speak(phrase)
-        return True
-    except Exception as exc:
-        try:
-            write_log("SEYFİ SES MOTORU HATASI", str(exc))
-        except Exception:
-            print("SEYFİ SES MOTORU HATASI:", exc)
-        return False
-
-def start_speech_worker():
-    # Geriye dönük uyumluluk: ses işçileri SeyfiVoice tarafından başlatılır.
-    return True
-
-def local_ai_greeting():
-    return ("Merhaba, ben Seyfi Usta. MOTO DIAG PRO çevrimdışı teşhis sistemine hoş geldiniz. "
-            "Şimdi bağlantı cihazınızı kontrol ediyorum. Bana seslenerek arıza taraması "
-            "yapmamı, canlı verileri yorumlamamı veya test ekranını açmamı söyleyebilirsiniz.")
-
+# ==================== ADAPTÖR KEŞFİ ====================
 def discover_adapter_candidates():
     """Önce bilinen Wi-Fi ELM327 uçlarını, sonra görünen seri/USB portlarını bulur.
     Bulunma, ECU'nun cevap verdiği anlamına gelmez; ECU bağlantısı ayrıca doğrulanır.
@@ -1262,44 +1213,23 @@ def discover_adapter_candidates():
     return found
 
 
-def safe_speak(phrase):
-    """Ses fonksiyonu herhangi bir nedenle yüklenemese bile uygulamanın akışını durdurmaz."""
-    try:
-        speaker = globals().get("speak")
-        if callable(speaker):
-            speaker(phrase)
-            return
-        q = globals().get("_speech_queue")
-        if q is not None:
-            q.put(str(phrase or ""))
-        else:
-            write_log("SES MOTORU", "Ses kuyruğu henüz hazır değil.")
-    except Exception as exc:
-        try:
-            write_log("SES MOTORU HATASI", str(exc))
-        except Exception:
-            pass
-
-
 # ==================== LAUNCHER (TKINTER) ====================
 class App:
     def __init__(self, root):
-        self.root = root; root.title("Seyfi Usta - Akıllı Motosiklet Teşhis"); root.geometry("1050x650"); root.configure(bg="#121212")
+        self.root = root; root.title("MOTO DIAG PRO - Motosiklet Teşhis"); root.geometry("1050x650"); root.configure(bg="#121212")
         self.running = True; self.log_buffer = []; self._active_run_id = None; self._searching = False
-        self._candidate_queue = []; self._ai_ready = False; self._startup_done = False
+        self._candidate_queue = []
         frm_top = tk.Frame(root, bg="#1e1e1e", pady=10); frm_top.pack(fill="x")
         tk.Label(frm_top, text="ADAPTÖR:", bg="#1e1e1e", fg="#ccc", font=("Arial", 10, "bold")).pack(side="left", padx=(15, 3))
         self.addr_var = tk.StringVar(value="192.168.0.10:35000")
         tk.Entry(frm_top, textvariable=self.addr_var, width=20, bg="#2a2a2a", fg="#00e5ff", insertbackground="#00e5ff").pack(side="left")
         self.btn_real = tk.Button(frm_top, text="🔌 BAĞLAN", bg="#00e5ff", fg="black", font=("Arial", 10, "bold"), command=self.toggle_real); self.btn_real.pack(side="left", padx=10)
-        tk.Button(frm_top, text="🤖 AI / SESİ TEKRARLA", bg="#673ab7", fg="white", font=("Arial", 9, "bold"), command=self.repeat_greeting).pack(side="left", padx=5)
         tk.Button(frm_top, text="🌐 WEB ARAYÜZÜ", bg="#00ff00", fg="black", font=("Arial", 10, "bold"), command=lambda: webbrowser.open("http://localhost:5000")).pack(side="left", padx=10)
         tk.Button(frm_top, text="💾 LOG KAYDET", bg="#ffaa00", fg="black", font=("Arial", 10, "bold"), command=self.save_log).pack(side="left", padx=10)
         self.lbl_status = tk.Label(frm_top, text="DURUM: BAĞLANTI ARANIYOR", bg="#1e1e1e", fg="#ffaa00", font=("Arial", 10, "bold")); self.lbl_status.pack(side="right", padx=15)
         self.txt_log = scrolledtext.ScrolledText(root, height=20, bg="#000000", fg="#00ff00", font=("Consolas", 10)); self.txt_log.pack(fill="both", expand=True, padx=20, pady=10)
-        self.log("Seyfi Usta hazır. Sesli asistan ve yerel AI kontrolü başlatılıyor.")
-        start_speech_worker()
-        self.root.after(500, self.startup_assistant)
+        self.log("MOTO DIAG PRO hazır. Çevrimdışı kural tabanlı teşhis sistemi başlatılıyor.")
+        self.root.after(500, self.startup_diagnostics)
 
     def log(self, msg):
         entry = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
@@ -1308,107 +1238,11 @@ class App:
     def set_status(self, text, color="#ffaa00"):
         self.lbl_status.config(text="DURUM: " + text, fg=color)
 
-    def repeat_greeting(self):
-        if self._ai_ready:
-            phrase = "Seyfi Usta akıllı teşhis asistanı hazır. Adaptör bağlantısını kontrol ediyorum."
-        else:
-            phrase = "Merhaba, Seyfi Usta akıllı motosiklet teşhis sistemine hoş geldiniz. Ses ve komut motorları hazırlanıyor."
-        safe_speak(phrase)
-
-    def _handle_voice_status(self, message):
-        self.log(message)
-        if message.startswith("Türkçe çevrimdışı ses motoru hazır"):
-            self._voice_tts_ready = True
-        elif message.startswith("MİKROFON/KOMUT TANIMA HATASI"):
-            self._voice_asr_ready = False
-        elif message.startswith("Seyfi Usta mikrofonu dinliyor"):
-            self._voice_asr_ready = True
-        elif message.startswith("SES MOTORU HATASI"):
-            self._voice_tts_ready = False
-        self._ai_ready = self._voice_tts_ready and self._voice_asr_ready
-
-    def startup_assistant(self):
-        if self._startup_done: return
-        self._startup_done = True
-        self._voice_tts_ready = False
-        self._voice_asr_ready = False
-        self._ai_ready = False
+    def startup_diagnostics(self):
+        """Ses veya yapay zekâ yüklemeden çevrimdışı teşhis altyapısını hazırla."""
         self.set_status("ÇEVRİMDIŞI TEŞHİS HAZIR")
-        self.log("Yerel teşhis kuralları hazır; internet veya harici AI servisi kullanılmıyor.")
-        try:
-            global VOICE_ENGINE
-            from seyfi_voice import SeyfiVoice
-            VOICE_ENGINE = SeyfiVoice(
-                on_command=lambda phrase: self.root.after(0, lambda p=phrase: self.handle_voice_command(p)),
-                on_status=lambda message: self.root.after(0, lambda m=message: self._handle_voice_status(m)),
-            )
-            VOICE_ENGINE.start(local_ai_greeting())
-            self.log("Seyfi Usta yerel ses ve Türkçe komut motorları başlatılıyor.")
-        except Exception as exc:
-            self.log("SEYFİ SES/KOMUT MOTORU BAŞLATILAMADI: " + str(exc)[:220])
+        self.log("Kural tabanlı arıza açıklamaları ve gerçek ECU teşhis altyapısı hazır.")
         self.root.after(0, self.begin_adapter_search)
-
-    def handle_voice_command(self, phrase):
-        """Türkçe çevrimdışı ses komutlarını güvenli uygulama işlemlerine yönlendirir."""
-        import unicodedata
-        raw = str(phrase or "").strip().lower()
-        normalized = "".join(ch for ch in unicodedata.normalize("NFKD", raw)
-                             if not unicodedata.combining(ch))
-        normalized = normalized.replace("ı", "i")
-        self.log("SES KOMUTU: " + raw)
-        if any(x in normalized for x in ("yardim", "komutlar")):
-            safe_speak("Şu komutları anlayabiliyorum: bağlan, bağlantıyı kes, arıza tara, arızaları oku, arızaları sil, canlı verileri oku, test yap ve durumu söyle.")
-        elif normalized in ("seyfi", "seyfi usta", "usta"):
-            safe_speak("Dinliyorum. Buyurun.")
-        elif "baglantiyi kes" in normalized or "baglantiyi durdur" in normalized:
-            if self._active_run_id is not None: self._stop_real()
-            else: safe_speak("Şu anda aktif ECU bağlantısı yok.")
-        elif "baglan" in normalized or "tekrar baglan" in normalized or "yeniden baglan" in normalized:
-            if self._active_run_id is None: self.begin_adapter_search()
-            else: safe_speak("Adaptör bağlantısı zaten aktif.")
-        elif any(x in normalized for x in ("arizalari sil", "ariza kodlarini sil")):
-            if _get_mode() != "real":
-                safe_speak("Arıza silebilmem için önce gerçek ECU bağlantısı kurulmalı.")
-            elif messagebox.askyesno("Seyfi Usta", "ECU arıza hafızasını silmek istiyor musunuz?", parent=self.root):
-                safe_speak("Arıza silme isteğini gönderiyorum ve sonucu ECU'dan doğrulayacağım.")
-                threading.Thread(target=handle_clear, daemon=True).start()
-            else:
-                safe_speak("Arıza silme işlemi iptal edildi.")
-        elif any(x in normalized for x in ("tara", "arizalari oku", "ariza kodlarini oku")):
-            if _get_mode() == "real":
-                safe_speak("Gerçek ECU arıza hafızasını okuyorum.")
-                threading.Thread(target=handle_scan, daemon=True).start()
-            else:
-                safe_speak("Henüz ECU bağlantısı yok. Önce adaptöre bağlanıyorum.")
-                self.begin_adapter_search()
-        elif "canli verileri oku" in normalized or "motor verilerini oku" in normalized:
-            with _live_data_lock: snapshot = dict(_last_live_data)
-            if not snapshot:
-                safe_speak("Henüz ECU'dan canlı veri gelmedi. Önce gerçek bağlantı kurulmalı.")
-            else:
-                parts = []
-                labels = (("rpm", "motor devri", "devir"), ("tps", "gaz kelebeği", "yüzde"),
-                          ("temp", "motor sıcaklığı", "derece"), ("map", "emme basıncı", "kilopaskal"),
-                          ("volt", "akü voltajı", "volt"), ("stft", "kısa dönem yakıt düzeltmesi", "yüzde"))
-                for key, label, unit in labels:
-                    if key in snapshot: parts.append(f"{label} {snapshot[key]} {unit}")
-                safe_speak("Canlı ECU ölçümleri: " + ". ".join(parts))
-        elif "rapor olustur" in normalized:
-            self.save_log()
-            safe_speak("Servis kayıt raporunu kaydetme işlemini başlattım.")
-        elif "test yap" in normalized or "testleri ac" in normalized:
-            safe_speak("Test ve servis ekranını açıyorum.")
-            webbrowser.open("http://localhost:5000")
-        elif "durumu soyle" in normalized or "seyfi" == normalized or "seyfi usta" == normalized:
-            if _get_mode() == "real":
-                safe_speak("ECU bağlantısı aktif. Canlı veri akışını izliyorum.")
-            else:
-                safe_speak("Teşhis sistemi hazır, ancak ECU bağlantısı henüz doğrulanmadı.")
-        else:
-            safe_speak("Komutu tam anlayamadım. Yardım veya komutlar diyerek kullanabileceğiniz komutları dinleyebilirsiniz.")
-
-    def _check_ai_then_scan(self):
-        self.startup_assistant()
 
     def begin_adapter_search(self):
         if self._searching or self._active_run_id is not None: return
@@ -1416,7 +1250,6 @@ class App:
         self.btn_real.config(text="🔍 ARANIYOR...", state="disabled")
         self.set_status("BAĞLANTI CİHAZI ARANIYOR")
         self.log("Wi-Fi ELM327 ve USB/COM adaptörleri taranıyor...")
-        safe_speak("Bağlantı cihazı aranıyor.")
         threading.Thread(target=self._search_and_connect, daemon=True).start()
 
     def _search_and_connect(self):
@@ -1431,14 +1264,12 @@ class App:
             self.addr_var.set("otomatik")
             self.set_status("BAĞLANTI BULUNAMADI", "#ff5252")
             self.log("BAĞLANTI BULUNAMADI. Wi-Fi ELM327 veya USB/COM adaptörü tespit edilemedi.")
-            safe_speak("Bağlantı cihazı bulunamadı. Lütfen bağlantı cihazınızı bilgisayara ve motosiklete bağlayın. Bağladınız mı?")
             self.root.after(1200, self.ask_device_connected)
             return
         kind, target, desc = candidates[0]
         self.addr_var.set(target)
         self.log(f"ADAPTÖR TESPİT EDİLDİ: {desc} ({target}). Şimdi ECU yanıtı doğrulanacak.")
         self.set_status("ADAPTÖR BULUNDU · ECU BAĞLANTISI SINANIYOR")
-        safe_speak("Bağlantı cihazı bulundu. Şimdi motosiklet kontrol ünitesiyle haberleşmeyi deniyorum.")
         self._start_real(target)
 
     def ask_device_connected(self):
@@ -1449,7 +1280,6 @@ class App:
         else:
             self.log("Kullanıcı henüz adaptörü bağlamadı. Program beklemede.")
             self.set_status("ADAPTÖR BEKLENİYOR", "#ffaa00")
-            safe_speak("Tamam. Adaptörünüzü bağladığınızda Bağlan düğmesine basın. Hazır bekliyorum.")
             self.btn_real.config(text="🔍 TEKRAR ARA", state="normal")
 
     def save_log(self):
@@ -1479,21 +1309,18 @@ class App:
         self.btn_real.config(text="🔌 BAĞLAN", bg="#00e5ff", fg="black")
         self.set_status("BAĞLANTI KESİLDİ", "#ff5252")
         socketio.emit('status', {'msg': 'KESİLDİ', 'color': '#ff5252'})
-        safe_speak("Bağlantı kesildi.")
 
     def _watch_connection(self, run_id, tries=30):
         if not _is_current_run(run_id) or self._active_run_id != run_id: return
         if _get_mode() == 'real':
             self.set_status("ECU ONLINE", "#00ff00")
             self.log("GERÇEK ECU YANITI ALINDI. Bağlantı doğrulandı.")
-            safe_speak("Motosiklet kontrol ünitesiyle bağlantı kuruldu. Teşhise hazırım.")
             return
         if tries == 0:
             _cancel_runs(); self._active_run_id = None
             self.btn_real.config(text="🔌 BAĞLAN", bg="#00e5ff", fg="black")
             self.set_status("ECU YANIT VERMEDİ", "#ff5252")
             self.log("Adaptör/port görüldü ancak ECU yanıtı doğrulanamadı. Kontak, kablo, soket ve doğru adaptör kontrol edilmeli.")
-            safe_speak("Adaptör bulundu ancak motosiklet kontrol ünitesi yanıt vermedi. Kontak açık mı ve bağlantı kablosu takılı mı? Kontrol edip tekrar deneyelim.")
             self.root.after(500, lambda: messagebox.askyesno("ECU yanıt vermedi", "Adaptör bulundu fakat ECU yanıt vermedi.\n\nMotosiklet kontağı açık mı ve adaptör motosiklete takılı mı?\n\nKontrol ettiniz mi?", parent=self.root) and self.begin_adapter_search())
             return
         self.root.after(1000, lambda: self._watch_connection(run_id, tries - 1))
@@ -1506,7 +1333,5 @@ if __name__ == "__main__":
     def on_closing():
         app_gui.running = False
         _cancel_runs()
-        if VOICE_ENGINE is not None:
-            VOICE_ENGINE.stop()
         root.after(200, lambda: (close_obd(), root.destroy()))
     root.protocol("WM_DELETE_WINDOW", on_closing); root.mainloop()
