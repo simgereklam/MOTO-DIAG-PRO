@@ -1992,6 +1992,68 @@ class MainActivity : ComponentActivity() {
         return out
     }
 
+    private fun showAbsDiagnostics() {
+        val c = baseScreen("ABS DIAGNOSTICS")
+        c.addView(header("YAMAHA ABS TEŞHİSİ"))
+        val info = neonCard("XMAX 250 / 300 • 2020 VE ÜZERİ", cyan)
+        info.addView(text(
+            "Yamaha kullanıcı kılavuzlarında ABS teşhis soketi, motor enjeksiyon teşhis soketinden ayrı gösterilir. " +
+                "Bu ekran önce Viecar adaptörünün ELM kimliğini ve protokol bilgisini okur. " +
+                "Bu sonuç ABS beynine bağlanıldığı anlamına gelmez.",
+            13, white
+        ))
+        c.addView(info)
+        val safety = neonCard("GÜVENLİK / PROTOKOL DURUMU", yellow)
+        safety.addView(text(
+            "2020+ XMAX 250/300 için 5 pinli ABS soketinin kesin pin dizilimi, CAN hızı ve ECU adresi doğrulanmadan " +
+                "ABS'ye ham komut gönderilmez. Arıza silme ve pompa/valf aktivasyonu bu sürümde kapalıdır. " +
+                "Önce yalnızca adaptör tanımlaması yapılır.",
+            13, white
+        ))
+        c.addView(safety)
+        c.addView(actionButton("VIECAR / ABS ADAPTÖRÜNÜ KONTROL ET", green) { runAbsAdapterCheck() })
+        addGap(c, 6)
+        c.addView(actionButton("←  SİSTEM TESTLERİNE DÖN", blue) { showTests() })
+    }
+
+    private fun runAbsAdapterCheck() {
+        if (!busy.compareAndSet(false, true)) {
+            Toast.makeText(this, "Başka bir test çalışıyor.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val c = baseScreen("ABS ADAPTER CHECK")
+        c.addView(header("ABS ADAPTÖR KONTROLÜ"))
+        val output = text("Viecar bağlantısı bekleniyor…", 13, white)
+        c.addView(neonCard("GERÇEK ADAPTÖR YANITLARI", cyan).apply { addView(output) })
+        io.execute {
+            val rows = mutableListOf<String>()
+            try {
+                closeAdapter()
+                viecarConnection.connect(7000)
+                val commands = listOf("ATZ", "ATE0", "ATL0", "ATS0", "ATI", "ATDP", "ATDPN", "ATRV")
+                commands.forEach { command ->
+                    val response = viecarConnection.sendCommand(command, if (command == "ATZ") 5000 else 3000)
+                        .replace("\\r", " ").replace("\\n", " ").trim()
+                    rows.add("$command  →  ${response.ifBlank { "(yanıt boş)" }}")
+                }
+                rows.add("")
+                rows.add("SONUÇ: Adaptörle haberleşildi. ABS ECU bağlantısı henüz doğrulanmadı.")
+            } catch (e: Exception) {
+                rows.add("HATA: ${e.message}")
+                rows.add("Kontrol: Viecar Wi-Fi ağı, 192.168.0.10:35000 ve kablo bağlantısı.")
+            } finally {
+                viecarConnection.disconnect()
+                connected = false
+                busy.set(false)
+            }
+            mainHandler.post {
+                output.text = rows.joinToString("\\n")
+                c.addView(actionButton("TEKRAR DENE", blue) { runAbsAdapterCheck() })
+                c.addView(actionButton("SİSTEM TESTLERİNE DÖN", blue) { showTests() })
+            }
+        }
+    }
+
     private fun showTests() {
         val c = baseScreen("TESTS")
         c.addView(header("SİSTEM TESTLERİ"))
@@ -2095,7 +2157,7 @@ class MainActivity : ComponentActivity() {
             ))
         }
 
-        val future = neonCard("PROFESYONEL SERVİS TESTLERİ", yellow)
+        c.addView(actionButton("◎  YAMAHA ABS TEŞHİSİ (XMAX 250 / 300)", cyan) { showAbsDiagnostics() })\n        addGap(c, 5)\n\n        val future = neonCard("PROFESYONEL SERVİS TESTLERİ", yellow)
         future.addView(text(
             "Fan, yakıt pompası, enjektör, ateşleme bobini, ABS ve TPS adaptasyonu telefon sürümünde çalıştırılmaz. " +
                 "Bu aktif üretici testleri daha sonra bilgisayar sürümünde, uygun K-Line / CANBUS arayüzü ve doğrulanmış motosiklet-ECU profiliyle ele alınacak.",
