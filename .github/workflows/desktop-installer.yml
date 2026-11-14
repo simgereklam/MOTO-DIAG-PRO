@@ -34,6 +34,17 @@ jobs:
         run: |
           python -m pip install -r desktop_requirements.txt
 
+      - name: Prepare offline dashboard libraries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force assets/web | Out-Null
+          npm install --prefix web-assets --no-save --ignore-scripts socket.io-client@4.8.4 chart.js@4.6.1
+          Copy-Item "web-assets/node_modules/socket.io-client/dist/socket.io.min.js" "assets/web/socket.io.min.js"
+          Copy-Item "web-assets/node_modules/chart.js/dist/chart.umd.min.js" "assets/web/chart.umd.min.js"
+          Get-ChildItem "web-assets/node_modules/socket.io-client" -Filter "LICENSE*" -File | Copy-Item -Destination "assets/web"
+          Get-ChildItem "web-assets/node_modules/chart.js" -Filter "LICENSE*" -File | Copy-Item -Destination "assets/web"
+          if (!(Test-Path "assets/web/socket.io.min.js") -or !(Test-Path "assets/web/chart.umd.min.js")) { throw "Offline dashboard libraries were not prepared." }
+
       - name: Verify Python source
         shell: pwsh
         run: |
@@ -42,7 +53,7 @@ jobs:
       - name: Build self-contained Windows application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
 
       - name: Download Microsoft Visual C++ runtime
         shell: pwsh
