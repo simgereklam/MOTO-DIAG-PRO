@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "brand": "Yamaha",
   "language": "tr-TR",
-  "note": "Genel SAE/J1979 P-kodları ile Yamaha model/yıl doğrulamalı üretici DTC'leri ayrı namespace ve doğrulama alanlarında tutulur. Model uyumu doğrulanmayan kayıtlar genel açıklama olarak kalır.",
+  "note": "Genel SAE/J1979 P-kodları ile Yamaha model/yıl doğrulamalı üretici DTC'leri ayrı namespace ve doğrulama alanlarında tutulur. Model uyumu doğrulanmayan kayıtlar genel açıklama olarak kalır. XMAX 300 CZD300-A 2017-2019 ABS kayıtları ilgili servis kılavuzu ile ayrı model/yıl kapsamında eklenmiştir; 2020+ XMAX 250/300 kapsamı ayrıca doğrulanmalıdır.",
   "records": [
     {
       "code": "P0030",
@@ -2895,6 +2895,875 @@
       ],
       "codeStandard": "YAMAHA_ABS_DTC",
       "source": "Yamaha NMAX GPD155-A 2022 Service Manual, DTC table 9-37 and troubleshooting 9-138. https://www.manualslib.com/manual/4649544/Yamaha-Nmax-2022.html",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "11_ABS",
+      "title": "Ön teker hız sensörü sinyali aralıklı veya yok",
+      "description": "ABS ECU ön teker hız sensöründen düzenli darbe alamıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor çevresinde metal parçacık veya kir",
+        "Ön teker veya sensör rotorunun yanlış montajı ya da hasarı",
+        "Ön teker hız sensörü arızası"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini temizleyip hasar kontrolü yapın.",
+        "Ön teker ve sensör montajını kontrol edin.",
+        "Sensör tesisatını ve ABS canlı teker hızını servis prosedürüne göre kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "25_ABS",
+      "title": "Ön teker hız sensörü sinyali aralıklı veya yok (düşük hız koşulu)",
+      "description": "Ön teker sensör darbesi beklenen şekilde alınmıyor; kılavuz bu kodu düşük hız/uzun süreli teker dönüşü koşuluyla ilişkilendiriyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor kirlenmesi",
+        "Sensör veya rotor montajı/hasarı"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini kontrol edin.",
+        "Teker ve sensör montajını kontrol edin.",
+        "Yol testi ve YDT ile tekrar kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "12_ABS",
+      "title": "Arka teker hız sensörü sinyali aralıklı veya yok",
+      "description": "ABS ECU arka teker hız sensöründen düzenli darbe alamıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor çevresinde metal parçacık veya kir",
+        "Arka teker veya sensör rotorunun yanlış montajı ya da hasarı",
+        "Arka teker hız sensörü arızası"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini kontrol edin.",
+        "Arka teker ve sensör montajını kontrol edin.",
+        "Sensör tesisatını ve ABS canlı teker hızını servis prosedürüne göre kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "13_ABS",
+      "title": "Ön teker hız sensörü darbe periyodu anormal",
+      "description": "Ön teker hız sensörünün darbe aralığı sürüş sırasında normal değil.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor kirlenmesi veya hasarı",
+        "Teker/sensör yanlış montajı",
+        "Sensör sinyalinde kesinti"
+      ],
+      "checks": [
+        "Ön sensör ve rotor yüzeyini inceleyin.",
+        "Tekerin serbest döndüğünü ve sensör aralığı/montajını servis verisine göre kontrol edin.",
+        "YDT izleme verisinde ön teker hızını karşılaştırın."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "26_ABS",
+      "title": "Ön teker hız sensörü darbe periyodu anormal (eşlik eden kod)",
+      "description": "Ön teker hız sensörü darbe periyodu anormal; kılavuzda ABS müdahale süresiyle ilişkili eş kod olarak geçer.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Uzun süreli ABS müdahalesi",
+        "Sensör/rotor sinyal düzensizliği"
+      ],
+      "checks": [
+        "13 kodu ile birlikte değerlendirip sensör/rotor ve teker montajını kontrol edin.",
+        "Kodun oluştuğu sürüş koşullarını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "14_ABS",
+      "title": "Arka teker hız sensörü darbe periyodu anormal",
+      "description": "Arka teker hız sensörünün darbe aralığı sürüş sırasında normal değil.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor kirlenmesi veya hasarı",
+        "Teker/sensör yanlış montajı",
+        "Sensör sinyalinde kesinti"
+      ],
+      "checks": [
+        "Arka sensör ve rotor yüzeyini inceleyin.",
+        "Arka tekerin serbest döndüğünü ve sensör montajını kontrol edin.",
+        "YDT izleme verisinde arka teker hızını karşılaştırın."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "27_ABS",
+      "title": "Arka teker hız sensörü darbe periyodu anormal (eşlik eden kod)",
+      "description": "Arka teker hız sensörü darbe periyodu anormal; kılavuzda ABS müdahale süresiyle ilişkili eş kod olarak geçer.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Uzun süreli ABS müdahalesi",
+        "Sensör/rotor sinyal düzensizliği"
+      ],
+      "checks": [
+        "14 kodu ile birlikte değerlendirip arka sensör/rotor ve teker montajını kontrol edin.",
+        "Kodun oluştuğu sürüş koşullarını kaydedin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "15_ABS",
+      "title": "Ön teker hız sensörü devresi açık veya kısa devre",
+      "description": "Ön teker sensör devresinde açık devre ya da kısa devre algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör kablosu/bağlantı devresi",
+        "Ön sensör arızası",
+        "ABS hidrolik ünitesi giriş devresi"
+      ],
+      "checks": [
+        "Kontak kapalıyken sensör devresini servis kılavuzundaki elektrik kontrol sırasıyla inceleyin.",
+        "Kablo sürekliliği ve kısa devre kontrolünü şemaya göre yapın.",
+        "Sensör ve hidrolik üniteyi ancak tesisat doğrulandıktan sonra değerlendirin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "16_ABS",
+      "title": "Arka teker hız sensörü devresi açık veya kısa devre",
+      "description": "Arka teker sensör devresinde açık devre ya da kısa devre algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör kablosu/bağlantı devresi",
+        "Arka sensör arızası",
+        "ABS hidrolik ünitesi giriş devresi"
+      ],
+      "checks": [
+        "Kontak kapalıyken sensör devresini servis kılavuzundaki elektrik kontrol sırasıyla inceleyin.",
+        "Kablo sürekliliği ve kısa devre kontrolünü şemaya göre yapın.",
+        "Sensör ve hidrolik üniteyi ancak tesisat doğrulandıktan sonra değerlendirin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "17_ABS",
+      "title": "Ön teker sensöründe eksik darbeler",
+      "description": "Ön teker sensör sinyalinde sürüş sırasında darbe kayıpları algılanıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor yüzeyinde kir veya metal parçacık",
+        "Rotor hasarı veya yanlış montaj",
+        "Sensör montajı veya sensör arızası"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini temizleyip hasar kontrolü yapın.",
+        "Ön teker ve rotor montajını kontrol edin.",
+        "YDT izleme verisinde ön teker hız sinyalini inceleyin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "45_ABS",
+      "title": "Ön teker sensöründe düşük hızda eksik darbe",
+      "description": "Ön teker sensöründe düşük hız koşulunda darbe kaybı algılanıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor yüzeyinde kir veya metal parçacık",
+        "Rotor hasarı veya yanlış montaj",
+        "Sensör montajı veya sensör arızası"
+      ],
+      "checks": [
+        "17 koduyla birlikte değerlendirip sensör ve rotor yüzeyini kontrol edin.",
+        "Teker ve sensör montajını inceleyin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "18_ABS",
+      "title": "Arka teker sensöründe eksik darbeler",
+      "description": "Arka teker sensör sinyalinde sürüş sırasında darbe kayıpları algılanıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor yüzeyinde kir veya metal parçacık",
+        "Rotor hasarı veya yanlış montaj",
+        "Sensör montajı veya sensör arızası"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini temizleyip hasar kontrolü yapın.",
+        "Arka teker ve rotor montajını kontrol edin.",
+        "YDT izleme verisinde arka teker hız sinyalini inceleyin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "46_ABS",
+      "title": "Arka teker sensöründe düşük hızda eksik darbe",
+      "description": "Arka teker sensöründe düşük hız koşulunda darbe kaybı algılanıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor yüzeyinde kir veya metal parçacık",
+        "Rotor hasarı veya yanlış montaj",
+        "Sensör montajı veya sensör arızası"
+      ],
+      "checks": [
+        "18 koduyla birlikte değerlendirip sensör ve rotor yüzeyini kontrol edin.",
+        "Arka teker ve sensör montajını inceleyin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "21_ABS",
+      "title": "ABS hidrolik ünitesi solenoid sürücü devresi",
+      "description": "Hidrolik ünitedeki solenoid sürücü devresi açık veya kısa devre algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "ABS hidrolik ünitesi iç solenoid sürücü devresi"
+      ],
+      "checks": [
+        "Bu kodu güvenlik açısından kritik kabul edin.",
+        "ABS hidrolik ünitesi için model servis prosedürüne göre profesyonel test uygulayın.",
+        "Uygun doğrulama olmadan solenoide doğrudan enerji vermeyin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "24_ABS",
+      "title": "Fren lambası veya fren müşürü sinyali",
+      "description": "ABS ECU fren lambası/fren müşürü sinyalini beklenen şekilde alamıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Ön veya arka fren müşürü",
+        "Fren lambası devresi",
+        "ABS ECU'ya giden sinyal tesisatı"
+      ],
+      "checks": [
+        "Ön ve arka fren müşürlerinin çalışmasını kontrol edin.",
+        "Fren lambasının her iki fren koluyla doğru yandığını doğrulayın.",
+        "Sinyal kablosu ve ABS girişini servis şemasına göre kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "31_ABS",
+      "title": "ABS solenoid beslemesi anormal",
+      "description": "Hidrolik ünitedeki solenoid devresine besleme ulaşmıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "ABS solenoid sigortası",
+        "Akü-hidrolik ünite besleme hattı",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "ABS solenoid sigortasını doğru amper değeriyle kontrol edin.",
+        "Besleme hattında açık/kısa devre kontrolünü servis şemasına göre yapın.",
+        "Hidrolik üniteyi ancak besleme hattı doğrulandıktan sonra değerlendirin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "32_ABS",
+      "title": "ABS solenoid besleme devresinde kısa devre",
+      "description": "Hidrolik ünitenin solenoid besleme devresinde kısa devre algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Hidrolik ünite solenoid besleme devresi"
+      ],
+      "checks": [
+        "Aracı kullanmayın; fren sistemi uzman kontrolü gerektirir.",
+        "Devreyi yalnızca servis kılavuzundaki izolasyon/ölçüm yöntemiyle kontrol edin.",
+        "ABS ünitesine harici enerji uygulamayın."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "33_ABS",
+      "title": "ABS motor beslemesi anormal",
+      "description": "Hidrolik ünitenin ABS motor devresine besleme ulaşmıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "ABS motor sigortası",
+        "Akü-hidrolik ünite besleme hattı",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "ABS motor sigortasını doğru amper değeriyle kontrol edin.",
+        "Besleme ve şase hattını servis şemasına göre kontrol edin.",
+        "Hidrolik üniteyi ancak hatlar doğrulandıktan sonra değerlendirin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "34_ABS",
+      "title": "ABS motor besleme devresinde kısa devre",
+      "description": "Hidrolik ünitenin ABS motor besleme devresinde kısa devre algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Hidrolik ünite motor besleme devresi"
+      ],
+      "checks": [
+        "Aracı kullanmayın; fren sistemi uzman kontrolü gerektirir.",
+        "Devreyi yalnızca servis kılavuzundaki izolasyon/ölçüm yöntemiyle kontrol edin.",
+        "ABS motoruna harici enerji uygulamayın."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "41_ABS",
+      "title": "Ön teker ABS darbe/basınç boşaltma hatası",
+      "description": "Ön teker hız darbeleri kesintili olabilir veya ABS basınç azaltma komutuna rağmen teker kilitlenme eğilimini bırakmıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Ön teker sensörü montajı",
+        "Ön tekerin serbest dönmemesi/fren sürtmesi",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "Ön tekerin serbest döndüğünü kontrol edin.",
+        "Ön fren sürtmesi ve hidrolik basıncın bırakılmasını uzman prosedürüyle kontrol edin.",
+        "ABS hidrolik üniteyi yalnızca diğer kontrollerden sonra değerlendirin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "42_ABS",
+      "title": "Arka teker ABS darbe/basınç boşaltma hatası",
+      "description": "Arka teker hız darbeleri kesintili olabilir veya ABS basınç azaltma komutuna rağmen teker kilitlenme eğilimini bırakmıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Arka teker sensörü montajı",
+        "Arka tekerin serbest dönmemesi/fren sürtmesi",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "Arka tekerin serbest döndüğünü kontrol edin.",
+        "Arka fren sürtmesi ve hidrolik basıncın bırakılmasını uzman prosedürüyle kontrol edin.",
+        "ABS hidrolik üniteyi yalnızca diğer kontrollerden sonra değerlendirin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "47_ABS",
+      "title": "Arka teker ABS çalışma hatası (eşlik eden kod)",
+      "description": "Arka teker ABS işlevinde darbe/basınç boşaltma anormalliği; 42 koduyla birlikte değerlendirilir.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Arka teker sensör sinyali",
+        "Arka fren sürtmesi veya hidrolik ünite"
+      ],
+      "checks": [
+        "42 koduyla birlikte değerlendirip arka teker sensörü, teker serbest dönüşü ve fren sürtmesini kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "43_ABS",
+      "title": "Ön teker sensöründe eksik darbeler",
+      "description": "Ön teker sensör sinyalinde eksik darbeler algılanıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor kirlenmesi",
+        "Rotor hasarı veya yanlış montaj",
+        "Ön teker sensörü"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini temizleyip hasar kontrolü yapın.",
+        "Ön teker ve sensör montajını kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "44_ABS",
+      "title": "Arka teker sensöründe eksik darbeler",
+      "description": "Arka teker sensör sinyalinde eksik darbeler algılanıyor.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Sensör/rotor kirlenmesi",
+        "Rotor hasarı veya yanlış montaj",
+        "Arka teker sensörü"
+      ],
+      "checks": [
+        "Sensör ve rotor yüzeyini temizleyip hasar kontrolü yapın.",
+        "Arka teker ve sensör montajını kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "51_ABS",
+      "title": "ABS ECU besleme voltajı yüksek",
+      "description": "ABS ECU besleme voltajı beklenen değerin üzerinde.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Akü arızası veya yanlış şarj durumu",
+        "Akü terminali bağlantı sorunu",
+        "Şarj sistemi arızası"
+      ],
+      "checks": [
+        "Akü voltajını ölçün.",
+        "Akü bağlantılarını ve şarj sistemini servis değerleriyle kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "52_ABS",
+      "title": "Teker sensörü besleme voltajı yüksek",
+      "description": "Teker sensörü besleme voltajı beklenen değerin üzerinde.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Akü/şarj sistemi",
+        "Sensör besleme devresi"
+      ],
+      "checks": [
+        "Akü ve şarj sistemini kontrol edin.",
+        "Sensör beslemesini model elektrik şemasına göre ölçün."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "53_ABS",
+      "title": "ABS ECU besleme voltajı düşük",
+      "description": "ABS ECU besleme voltajı beklenen değerin altında.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Zayıf akü",
+        "Akü-hidrolik ünite besleme bağlantısı",
+        "Besleme tesisatında açık/kısa devre",
+        "Şarj sistemi arızası"
+      ],
+      "checks": [
+        "Akü voltajını ölçün ve aküyü servis prosedürüne göre test edin.",
+        "ABS besleme sigortası ve bağlantılarını kontrol edin.",
+        "Şarj sistemini model servis değerleriyle kontrol edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "54_ABS",
+      "title": "ABS solenoid ve motor besleme devreleri anormal",
+      "description": "Hidrolik ünitede solenoid veya motor besleme devresinde anormallik algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Akü ve besleme bağlantıları",
+        "ABS motor/solenoid sigortaları",
+        "Şarj sistemi",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "Akü ve şarj sistemini kontrol edin.",
+        "ABS motor ve solenoid sigortalarını doğru değerlerle kontrol edin.",
+        "Harici pompa/solenoid sürme yapmayın; uzman servis prosedürü kullanın."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "55_ABS",
+      "title": "ABS ECU / hidrolik ünite arızası",
+      "description": "Hidrolik ünitede anormal veri algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "ABS ECU veya hidrolik ünite iç arızası"
+      ],
+      "checks": [
+        "ABS ECU ve hidrolik ünite için yetkili/uzman servis doğrulaması gerekir.",
+        "Kod silmeden önce mevcut ve geçmiş arıza kaydını raporlayın."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "56_ABS",
+      "title": "ABS hidrolik ünitesi dahili besleme arızası",
+      "description": "Hidrolik ünitenin iç besleme devresinde anormallik algılandı.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Hidrolik ünite iç güç besleme devresi"
+      ],
+      "checks": [
+        "ABS hidrolik üniteyi model servis prosedürüne göre test ettirin.",
+        "Dış besleme hatları doğrulanmadan üniteyi değiştirmeyin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "63_ABS",
+      "title": "Ön teker sensörü beslemesi düşük",
+      "description": "ABS ECU'dan ön teker sensörüne giden besleme voltajı düşük.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Ön sensör besleme tesisatında kısa devre",
+        "Ön teker sensörü",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "Ön sensör besleme devresini elektrik şemasına göre kontrol edin.",
+        "Sensörü ve hidrolik ünite çıkışını servis değerlerine göre test edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
+      "verification": "OEM_MANUAL_VERIFIED",
+      "namespace": "ABS"
+    },
+    {
+      "code": "64_ABS",
+      "title": "Arka teker sensörü beslemesi düşük",
+      "description": "ABS ECU'dan arka teker sensörüne giden besleme voltajı düşük.",
+      "system": "ABS / Kilitlenme önleyici fren sistemi",
+      "possibleCauses": [
+        "Arka sensör besleme tesisatında kısa devre",
+        "Arka teker sensörü",
+        "Hidrolik ünite"
+      ],
+      "checks": [
+        "Arka sensör besleme devresini elektrik şemasına göre kontrol edin.",
+        "Sensörü ve hidrolik ünite çıkışını servis değerlerine göre test edin."
+      ],
+      "models": [
+        "XMAX 300 (CZD300-A)"
+      ],
+      "years": [
+        2017,
+        2018,
+        2019
+      ],
+      "codeStandard": "YAMAHA_ABS_DTC",
+      "source": "Yamaha X-MAX 300 CZD300-A Service Manual, 2019, ABS fault-code table and troubleshooting sections 8-89–8-109. https://www.scribd.com/document/1019506688/2019%EB%85%84-X-MAX-300-B74-F8197-EA-%EC%9E%A0%EA%B8%88-%ED%95%B4%EC%A0%9C%EB%90%A8-o-1g0gakpl3143h1aad1fjf1qieuf38",
       "verification": "OEM_MANUAL_VERIFIED",
       "namespace": "ABS"
     }
