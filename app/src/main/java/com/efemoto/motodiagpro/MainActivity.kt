@@ -1740,7 +1740,7 @@ class MainActivity : ComponentActivity() {
 
         // Alt menüden veya ana sayfadan bu ekrana gelindiğinde bağlı ECU'nun
         // canlı verisini otomatik başlat; mevcut sesli komut akışına dokunma.
-        if (connected && viecarConnection.isConnected() && !liveLoop && !busy.get()) {
+        if (!liveLoop && !busy.get()) {
             startLiveRead()
         }
     }
