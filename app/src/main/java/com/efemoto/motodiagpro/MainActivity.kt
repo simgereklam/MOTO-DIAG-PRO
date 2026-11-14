@@ -1585,6 +1585,14 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    private data class LiveMetricDef(
+        val key: String,
+        val label: String,
+        val unit: String,
+        val color: Int,
+        val section: String
+    )
+
     private fun liveMetricDefinitions(): List<LiveMetricDef> = listOf(
         LiveMetricDef("speed", "ARAÇ HIZI", "km/h", yellow, "MOTOR / SÜRÜŞ"),
         LiveMetricDef("tps", "GAZ KELEBEĞİ (TPS)", "%", green, "MOTOR / SÜRÜŞ"),
