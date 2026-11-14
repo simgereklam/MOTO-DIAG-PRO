@@ -1427,7 +1427,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
-            .setMessage("Kontak açık, motor kapalı olmalı. Önce standart OBD Mode 04 silme komutu en fazla 3 kez denenir. Yanıt alınamazsa Python/Viecar dosyasındaki yedek RAW 14 komutu denenir. Sonrasında ECU yeniden okunur; doğrulama olmadan işlem başarılı sayılmaz. Devam edilsin mi?")
+            .setMessage("Kontak açık, motor kapalı olmalı. Önce standart OBD Mode 04 komutu denenir. ECU protokolü belirlenebilirse KWP2000 veya UDS için uygun ClearDiagnosticInformation isteği gönderilir. Ardından ECU yeniden okunur; olumlu ECU yanıtı ve doğrulama olmadan işlem başarılı sayılmaz. Devam edilsin mi?")
             .setNegativeButton("VAZGEÇ", null)
             .setPositiveButton("SİL VE DOĞRULA") { _, _ -> clearFaults() }.show()
     }
@@ -1440,28 +1440,26 @@ class MainActivity : ComponentActivity() {
         io.execute {
             val attempts = mutableListOf<String>()
             var clearAcknowledged = false
+            var clearMethod = ""
             try {
                 ensureConnected()
 
-                // Python/Viecar uygulamasındaki gerçek silme sırası:
-                // 1) Standart OBD CLEAR_DTC (Mode 04) en fazla üç kez.
-                // 2) Standart yanıt alınamazsa aynı adaptör oturumunda ham "14" denemesi.
-                // Her iki durumda da sonuç yalnızca ECU yeniden okunarak doğrulanır.
+                // ELM327 AT komutları adaptörü yapılandırır; DTC'yi silen servis ECU'ya gönderilir.
+                // 1) SAE J1979 Mode 04: tüm OBD emisyon teşhis bilgisini temizleme.
                 for (attempt in 1..3) {
-                    mainHandler.post {
-                        statusLine?.text = "● STANDART ARIZA SİLME • DENEME $attempt/3"
-                    }
+                    mainHandler.post { statusLine?.text = "● OBD MODE 04 • DENEME $attempt/3" }
                     try {
                         val response = elm("04", 8000)
                         val compact = response.filter { it in "0123456789ABCDEF" }
                         val positive = compact.contains("44")
-                        attempts.add("Standart CLEAR_DTC $attempt/3 • 04 → ${response.ifBlank { "YANIT YOK" }}")
+                        attempts.add("SAE J1979 Mode 04 • 04 → ${response.ifBlank { "YANIT YOK" }}")
                         if (positive) {
                             clearAcknowledged = true
+                            clearMethod = "SAE J1979 Mode 04"
                             break
                         }
                     } catch (e: Exception) {
-                        attempts.add("Standart CLEAR_DTC $attempt/3 • HATA: ${e.message}")
+                        attempts.add("SAE J1979 Mode 04 • HATA: ${e.message}")
                         if (!viecarConnection.isConnected()) {
                             closeAdapter()
                             if (attempt < 3) {
@@ -1470,32 +1468,52 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
-                    if (attempt < 3 && !clearAcknowledged) Thread.sleep(2000)
+                    if (attempt < 3 && !clearAcknowledged) Thread.sleep(1500)
                 }
 
+                // 2) Mode 04 yanıt vermediyse, önce ELM327'nin seçtiği protokolü öğren.
+                // KWP2000 (3/4/5): SID 14, grup parametresi üreticiye bağlı/opsiyoneldir.
+                // UDS over CAN (6/7/8/9): SID 14 + 3-byte groupOfDTC=FFFFFF.
+                // Bilinmeyen protokolde tahmini/çıplak servis gönderilmez.
                 if (!clearAcknowledged) {
                     if (!viecarConnection.isConnected()) {
-                        mainHandler.post { statusLine?.text = "● VIECAR YENİDEN BAĞLANIYOR" }
                         closeAdapter()
                         ensureConnected()
                     }
-                    mainHandler.post {
-                        statusLine?.text = "● YEDEK SİLME YÖNTEMİ • RAW 14"
+                    val protocolReply = try { elm("ATDPN", 3000).trim().uppercase(Locale.US) }
+                        catch (e: Exception) {
+                            attempts.add("ELM327 protokol sorgusu başarısız: ${e.message}")
+                            ""
+                        }
+                    val protocolNumber = Regex("([0-9A-C])$").find(protocolReply)?.groupValues?.get(1)
+                    val fallback = when (protocolNumber) {
+                        "3", "4", "5" -> "14"
+                        "6", "7", "8", "9" -> "14FFFFFF"
+                        else -> null
                     }
-                    try {
-                        val rawResponse = elm("14", 8000)
-                        val normalized = rawResponse.uppercase(Locale.US)
-                        val compact = normalized.filter { it in "0123456789ABCDEF" }
-                        val rejected = normalized.contains("NO DATA") ||
-                            normalized.contains("ERROR") ||
-                            normalized.contains("UNABLE TO CONNECT") ||
-                            normalized.contains("BUS INIT") ||
-                            normalized.contains("STOPPED")
-                        attempts.add("Yedek RAW KWP/UDS 14 → ${rawResponse.ifBlank { "YANIT YOK" }}")
-                        // RAW response is not treated as proof by itself; final ECU read-back is mandatory.
-                        clearAcknowledged = compact.contains("54") || (rawResponse.isNotBlank() && !rejected)
-                    } catch (e: Exception) {
-                        attempts.add("Yedek RAW 14 • HATA: ${e.message}")
+                    attempts.add("ELM327 protokol tespiti • ATDPN → ${protocolReply.ifBlank { "BELİRLENEMEDİ" }}")
+                    if (fallback != null) {
+                        mainHandler.post {
+                            statusLine?.text = if (protocolNumber in listOf("3", "4", "5"))
+                                "● KWP2000 CLEAR DIAGNOSTIC INFORMATION"
+                            else "● UDS CLEAR DIAGNOSTIC INFORMATION"
+                        }
+                        try {
+                            val response = elm(fallback, 8000)
+                            val compact = response.filter { it in "0123456789ABCDEF" }
+                            val positive = compact.contains("54")
+                            attempts.add(
+                                "${if (protocolNumber in listOf("3", "4", "5")) "KWP2000" else "UDS"} ClearDiagnosticInformation • $fallback → ${response.ifBlank { "YANIT YOK" }}"
+                            )
+                            if (positive) {
+                                clearAcknowledged = true
+                                clearMethod = if (protocolNumber in listOf("3", "4", "5")) "KWP2000 SID 14" else "UDS SID 14 FFFFFF"
+                            }
+                        } catch (e: Exception) {
+                            attempts.add("Protokole özel DTC silme • HATA: ${e.message}")
+                        }
+                    } else {
+                        attempts.add("Protokole özel 14 isteği gönderilmedi: protokol güvenilir biçimde 3/4/5 veya 6/7/8/9 olarak belirlenemedi.")
                     }
                 }
 
@@ -1505,7 +1523,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 mainHandler.post { statusLine?.text = "● SİLME SONRASI ECU DOĞRULAMASI" }
-                Thread.sleep(2000)
+                Thread.sleep(1500)
 
                 val afterClear = mutableListOf<String>()
                 val storedRaw = elm("03", 8000)
@@ -1543,31 +1561,31 @@ class MainActivity : ComponentActivity() {
                     when {
                         !clearAcknowledged -> {
                             val detail = if (distinctRemaining.isEmpty()) {
-                                "Yeniden okumada aktif arıza kodu görülmedi; ancak hiçbir silme yöntemi ECU tarafından açıkça onaylanmadı. İşlem kesin başarılı sayılmadı."
+                                "Yeniden okumada aktif arıza kodu görülmedi; ancak ECU hiçbir silme isteğini olumlu yanıtlamadı. İşlem kesin başarılı sayılmadı."
                             } else {
-                                "ECU silme işlemini onaylamadı. Yeniden okumada kalan kodlar:\n${distinctRemaining.joinToString("\n")}"
+                                "ECU silme işlemini olumlu yanıtlamadı. Yeniden okumada kalan kodlar:\n${distinctRemaining.joinToString("\n")}"
                             }
-                            log("Arıza silme doğrulanamadı • Mode 04 ve RAW 14 onayı alınamadı")
+                            log("Arıza silme doğrulanamadı • ECU olumlu yanıtı yok")
                             AlertDialog.Builder(this).setTitle("SİLME ONAYLANMADI")
                                 .setMessage(detail + "\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
                         }
                         activeRemaining.isEmpty() && permanentRemaining.isEmpty() -> {
-                            log("Arıza silme doğrulandı • Mode 04/RAW 14 denemesi ve ECU yeniden okuması başarılı")
+                            log("Arıza silme doğrulandı • $clearMethod ve ECU yeniden okuması başarılı")
                             AlertDialog.Builder(this).setTitle("✓ ARIZALAR SİLİNDİ")
-                                .setMessage("ECU yeniden okundu. Kayıtlı, bekleyen ve kalıcı arıza kodu kalmadı.\n\n" + attempts.joinToString("\n"))
+                                .setMessage("ECU, $clearMethod isteğini olumlu yanıtladı. Yeniden okumada kayıtlı, bekleyen ve kalıcı arıza kodu kalmadı.\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("TAMAM") { _, _ -> showFaults() }.show()
                         }
                         activeRemaining.isEmpty() -> {
                             log("Kayıtlı/bekleyen arızalar temizlendi; kalıcı DTC'ler ECU'da tutuluyor.")
                             AlertDialog.Builder(this).setTitle("AKTİF ARIZALAR TEMİZLENDİ")
-                                .setMessage("Kayıtlı ve bekleyen kod kalmadı. ECU'nun kalıcı hafızada tuttuğu kodlar:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setMessage("ECU, $clearMethod isteğini olumlu yanıtladı. Kayıtlı ve bekleyen kod kalmadı. Kalıcı hafızada kalan kodlar:\n${permanentRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("KALICI KODLARI GÖR") { _, _ -> showFaults() }.show()
                         }
                         else -> {
                             log("Silme sonrası kalan arızalar: ${distinctRemaining.joinToString()}")
                             AlertDialog.Builder(this).setTitle("BAZI ARIZALAR KALDI")
-                                .setMessage("Silme denemelerinden sonra ECU'da kalan kodlar:\n${distinctRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
+                                .setMessage("Silme isteği yanıtlandı ancak ECU'da kalan kodlar var:\n${distinctRemaining.joinToString("\n")}\n\n" + attempts.joinToString("\n"))
                                 .setPositiveButton("GÖRÜNTÜLE") { _, _ -> showFaults() }.show()
                         }
                     }
@@ -1585,6 +1603,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
     private data class LiveMetricDef(
         val key: String,
         val label: String,
