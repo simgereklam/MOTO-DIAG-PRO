@@ -40,7 +40,6 @@ except ImportError: OBD_OK = False
 # Marka-ozel ABS/DCT/CAN islemleri dogrulanmis ECU profili olmadan kapali tutulur.
 # ==================== GENİŞLETİLMİŞ DTC (ARIZA KODU) KÜTÜPHANESİ ====================
 DTC_TR = {
-    "11": "Ön Tekerlek Hız Sensörü (ABS)", "12": "Arka Tekerlek Hız Sensörü (ABS)",
     "13": "Pulsar Bobin Sinyali", "14": "Krank Konum Sensörü Sinyali",
     "15": "Motor Sıcaklık Sensörü", "16": "Gaz Kelebeği Sensörü (TPS) Takılı Kaldı",
     "17": "Vuruntu Sensörü", "18": "Gaz Kelebeği Konum Sensörü Sinyali",
@@ -73,6 +72,81 @@ DTC_TR = {
     "P0511": "Rölanti Hava Kontrol (IAC) Devresi",
 }
 def dtc_desc(code): return DTC_TR.get(code.upper().strip(), "Bilinmeyen arıza kodu")
+
+# ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
+# Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
+# gelecekte gerçek ECU sorgularını etkinleştirebilir.
+ABS_PROFILE_SCHEMA_VERSION = 1
+ABS_PROFILE_REGISTRY = {}  # (marka, normalize_model, yil) -> doğrulanmış profil
+ABS_DTC_DATABASE = {}      # (marka, normalize_model, yil, DTC) -> doğrulanmış açıklama
+ABS_BRANDS = ("yamaha", "honda", "kawasaki", "suzuki", "bmw motorrad", "ktm",
+              "ducati", "triumph", "bajaj", "tvs", "cf moto", "aprilia",
+              "benelli", "royal enfield", "harley-davidson", "diğer")
+ABS_PROTOCOL_FAMILIES = {
+    "uds_can": "UDS / ISO-TP over CAN (araç özel adresleme gerekir)",
+    "kwp_kline": "KWP2000 / ISO 14230 over K-Line (başlatma ve adresleme gerekir)",
+    "iso9141": "ISO 9141-2 (araç özel pin/prosedür gerekir)",
+    "proprietary_can": "Üreticiye özel CAN (tanımlı servis profili gerekir)",
+    "proprietary": "Üreticiye özel teşhis protokolü",
+}
+ABS_SAFETY_CAPABILITIES = ("read_dtcs", "read_live_data", "clear_dtcs", "actuator_test")
+
+def normalize_abs_text(value):
+    import unicodedata
+    value = str(value or "").strip().casefold()
+    value = "".join(ch for ch in unicodedata.normalize("NFKD", value) if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", " ", value).strip()
+
+def abs_profile_key(brand, model, year):
+    try:
+        model_year = int(year)
+    except (TypeError, ValueError):
+        raise ValueError("Geçerli bir model yılı girin.")
+    brand_key, model_key = normalize_abs_text(brand), normalize_abs_text(model)
+    if not brand_key or not model_key:
+        raise ValueError("ABS profili için marka ve model zorunludur.")
+    if model_year < 1980 or model_year > datetime.now().year + 1:
+        raise ValueError("Model yılı geçerli aralıkta değil.")
+    return brand_key, model_key, model_year
+
+def evaluate_abs_profile(brand, model, year, connection=None):
+    """Yerel kapsama kontrolü; hiçbir adaptör/ECU komutu göndermez."""
+    key = abs_profile_key(brand, model, year)
+    profile = ABS_PROFILE_REGISTRY.get(key)
+    adapter_name = "Bağlantı yok"
+    if connection is not None:
+        adapter_name = ("ELM327 Wi-Fi / standart motor OBD bağlantısı"
+                        if isinstance(connection, ELM327TcpConnection)
+                        else "USB/COM / python-OBD motor OBD bağlantısı")
+    if not profile:
+        return {"ok": True, "verified": False, "status": "PROFİL DOĞRULANMADI",
+                "profile_id": None, "protocol": "Bilinmiyor", "adapter": adapter_name,
+                "capabilities": [],
+                "message": (f"{brand} {model} {year} için doğrulanmış ABS ECU profili henüz kayıtlı değil. "
+                            "Soket tipi veya motor ECU bağlantısı ABS erişimini kanıtlamaz. "
+                            "Bu nedenle ABS'ye hiçbir komut gönderilmedi.")}
+    required = ("profile_id", "protocol", "evidence", "transport")
+    missing = [field for field in required if not profile.get(field)]
+    if missing or profile.get("verified") is not True:
+        return {"ok": True, "verified": False, "status": "PROFİL EKSİK / DOĞRULANMAMIŞ",
+                "profile_id": profile.get("profile_id"), "protocol": profile.get("protocol", "Bilinmiyor"),
+                "adapter": adapter_name, "capabilities": [],
+                "message": "ABS profili doğrulama için eksik alan içeriyor: " + ", ".join(missing or ["verified"])}
+    allowed = [cap for cap in profile.get("capabilities", []) if cap in ABS_SAFETY_CAPABILITIES]
+    return {"ok": True, "verified": True, "status": "PROFİL KAYITLI · TAŞIMA UYUMLULUĞU BEKLENİYOR",
+            "profile_id": profile["profile_id"],
+            "protocol": ABS_PROTOCOL_FAMILIES.get(profile["protocol"], profile["protocol"]),
+            "adapter": adapter_name, "capabilities": allowed,
+            "message": "Profil kaydı mevcut. Gerçek bağlantı için fiziksel arayüz, pinout, adresleme ve ECU yanıtı ayrıca doğrulanmalıdır. Bu kontrol bağlantı kurmaz."}
+
+def decode_abs_dtc(brand, model, year, code):
+    """ABS DTC çözümü motor ECU DTC sözlüğünden tamamen ayrıdır."""
+    key = abs_profile_key(brand, model, year)
+    entry = ABS_DTC_DATABASE.get(key + (str(code or "").strip().upper(),))
+    if not entry or not entry.get("verified"):
+        return "Bu araç profili için doğrulanmış ABS arıza kodu açıklaması bulunamadı."
+    return entry.get("description_tr") or "Doğrulanmış açıklama mevcut değil."
+
 
 # ==================== SERVİS LOG VE AKILLI TEŞHİS ====================
 SERVICE_INFO = {"musteri": "", "plaka": "", "sikayet": ""}
@@ -878,36 +952,37 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <div id="tab-test" class="container"><div class="panel"><h3 style="color:#00e5ff;margin-top:0">🧪 TEST / SERVİS</h3><div class="title" style="margin-top:15px; color:#fff;">MÜŞTERİ VE LOG BİLGİLERİ</div><div class="service-box"><input id="musteri" placeholder="Müşteri Adı" onchange="updateInfo()"><input id="plaka" placeholder="Plaka / Şase No" onchange="updateInfo()"><input id="sikayet" placeholder="Servis Şikayeti" onchange="updateInfo()"></div><div class="test-block"><div class="title">BAĞLANTI BİLGİSİ</div><pre id="test_info">-</pre><button class="btn test-btn" onclick="testGetInfo()">🔄 YENİLE</button><button class="btn test-btn" style="border-color:#00ff00;color:#00ff00" onclick="window.open('/log', '_blank')">📄 SERVİS LOGLARINI AÇ</button></div><div class="test-block"><div class="title">ECU BİLGİSİ</div><pre id="test_ecu" style="color:#ffea00;min-height:40px">-</pre><button class="btn test-btn" onclick="testGetEcu()">📋 ECU SORGULA</button></div><div class="test-block"><div class="title">RAW OBD KOMUTU</div><input id="test_cmd_input" class="test-input" placeholder="örn: 0100"><button class="btn test-btn" onclick="testSendRaw()">▶ GÖNDER</button><pre id="test_raw_out" style="min-height:40px">-</pre></div></div></div>
 <div id="tab-abs" class="container">
  <div class="panel">
-  <div class="module-head"><h2 style="color:#ff626f">🛑 ABS KONTROL ÜNİTESİ</h2><span class="module-status">PROFİL BEKLİYOR · KOMUT GÖNDERİLMİYOR</span></div>
-  <p style="color:#aab5c2">ABS, motor ECU'sundan bağımsız bir kontrol modülü olarak yönetilir. Bu sayfa kendi bağlantı, arıza tarama ve canlı veri alanlarına sahiptir.</p>
+  <div class="module-head"><h2 style="color:#ff626f">🛑 ÇOK MARKALI ABS TEŞHİS MERKEZİ</h2><span class="module-status">EVRENSEL PROFİL ALTYAPISI · GÜVENLİ MOD</span></div>
+  <p style="color:#aab5c2">ABS teşhis katmanı marka, model, yıl, ABS beyni ve fiziksel adaptör profiline göre çalışır. Motor ECU bağlantısı ABS bağlantısı yerine geçmez.</p>
   <div class="module-grid">
-   <div class="module-card"><div class="k">Modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU bağlantısından ayrı durum göstergesi</div></div>
-   <div class="module-card"><div class="k">ABS ECU kimliği</div><div class="v" id="abs_ecu_id">Henüz okunmadı</div><div class="hint">Üretici / parça no / yazılım kimliği</div></div>
-   <div class="module-card"><div class="k">İletişim profili</div><div class="v" id="abs_protocol">Doğrulanmadı</div><div class="hint">CAN / K-Line / üreticiye özel servis protokolü</div></div>
+   <div class="module-card"><div class="k">ABS modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU oturumundan tamamen ayrı</div></div>
+   <div class="module-card"><div class="k">ABS ECU kimliği</div><div class="v" id="abs_ecu_id">Henüz okunmadı</div><div class="hint">Üretici / parça / yazılım kimliği</div></div>
+   <div class="module-card"><div class="k">ABS iletişim profili</div><div class="v" id="abs_protocol">Henüz doğrulanmadı</div><div class="hint">CAN / K-Line / üreticiye özel taşıma</div></div>
   </div>
-  <div class="test-block"><div class="title">ARAÇ VE MODÜL PROFİLİ</div>
+  <div class="test-block"><div class="title">MOTOSİKLET VE ABS PROFİLİ</div>
    <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div><label class="title">Marka</label><select class="module-field" id="abs_brand"><option>Yamaha</option><option>Honda</option><option>Kawasaki</option><option>Suzuki</option><option>BMW Motorrad</option><option>KTM</option><option>Diğer</option></select></div>
-    <div><label class="title">Model</label><input class="module-field" id="abs_model" placeholder="Örn. MT-09 / NC750X"></div>
+    <div><label class="title">Marka</label><select class="module-field" id="abs_brand"><option>Yamaha</option><option>Honda</option><option>Kawasaki</option><option>Suzuki</option><option>BMW Motorrad</option><option>KTM</option><option>Ducati</option><option>Triumph</option><option>Bajaj</option><option>TVS</option><option>CF Moto</option><option>Aprilia</option><option>Benelli</option><option>Royal Enfield</option><option>Harley-Davidson</option><option>Diğer</option></select></div>
+    <div><label class="title">Model / kasa kodu</label><input class="module-field" id="abs_model" placeholder="Örn. XMAX 300 / NC750X / MT-09"></div>
     <div><label class="title">Model yılı</label><input class="module-field" id="abs_year" type="number" min="1980" max="2035" placeholder="2020"></div>
    </div>
-   <div class="module-actions"><button class="btn test-btn" disabled title="ECU protokolü doğrulanınca etkinleşecek">🔌 ABS BAĞLAN</button><button class="btn test-btn" disabled>🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled>🗑 ABS ARIZALARINI SİL</button></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="absCheckProfile()">🧭 ABS PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="Araç ve adaptör için doğrulanmış ABS iletişim profili gerekli">🔌 ABS ECU'YA BAĞLAN</button><button class="btn test-btn" disabled title="Gerçek ABS ECU bağlantısı ve doğrulanmış okuma servisi gerekli">🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled title="Model özelinde silme servisi doğrulanmadan kapalı">🗑 ABS ARIZALARINI SİL</button></div>
+   <pre id="abs_profile_result" style="color:#00e5ff;min-height:55px;white-space:pre-wrap">Marka, model ve yılı seçip profil kontrolü yapın. Bu işlem motosiklete komut göndermez.</pre>
   </div>
-  <div class="module-note"><b>Güvenlik kilidi:</b> Bu aşamada ABS'ye rastgele CAN/K-Line komutu gönderilmiyor. ECU adresi, servis oturumu ve araç profili doğrulanmadan arıza silme veya pompa/valf çalıştırma açılmayacak.</div>
+  <div class="module-note"><b>Güvenlik kilidi:</b> Profil kontrolü yalnızca yerel veri tabanına bakar. Doğrulanmış OEM dokümanı, pinout, protokol/adresleme, adaptör uyumluluğu ve gerçek ECU yanıtı olmadan ABS'ye bağlantı, arıza silme veya pompa/valf komutu gönderilmez.</div>
   <h3 style="color:#ff8c96">ABS canlı veri ekranı</h3>
   <div class="module-list">
-   <div class="module-item"><b>Ön tekerlek hızı</b><span id="abs_front_speed">Veri bekleniyor · km/h</span></div>
-   <div class="module-item"><b>Arka tekerlek hızı</b><span id="abs_rear_speed">Veri bekleniyor · km/h</span></div>
-   <div class="module-item"><b>ABS pompa / valf durumu</b><span>ECU destekliyorsa okunacak; şu an sorgu yok</span></div>
-   <div class="module-item"><b>Fren müşürü / basınç</b><span>Desteklenen sensör ve ECU profiline göre</span></div>
+   <div class="module-item"><b>Ön tekerlek hızı</b><span id="abs_front_speed">ABS ECU bağlantısı bekleniyor · km/h</span></div>
+   <div class="module-item"><b>Arka tekerlek hızı</b><span id="abs_rear_speed">ABS ECU bağlantısı bekleniyor · km/h</span></div>
+   <div class="module-item"><b>ABS pompa / valf durumu</b><span>Yalnızca doğrulanmış canlı veri parametresi varsa okunacak</span></div>
+   <div class="module-item"><b>Fren müşürü / basınç</b><span>Seçilen ABS kontrol ünitesinin desteklediği parametrelere göre</span></div>
   </div>
-  <h3 style="color:#ff8c96;margin-top:22px">ABS TEST VE TEŞHİS FONKSİYONLARI</h3>
+  <h3 style="color:#ff8c96;margin-top:22px">PLANLANAN ABS TEŞHİS KAPSAMI</h3>
   <div class="module-list">
-   <div class="module-item"><b>Arıza geçmişini oku</b><span>Yalnızca seçili ABS ECU'sundan doğrulanmış yanıt alınırsa.</span></div>
-   <div class="module-item"><b>Arıza kodlarını sil ve doğrula</b><span>Silme sonrası ABS ECU yeniden okunmadan işlem başarılı sayılmaz.</span></div>
-   <div class="module-item"><b>Pompa ve valf aktif testi</b><span>Yalnızca model özelinde doğrulanmış prosedür ve güvenli servis koşullarında.</span></div>
-   <div class="module-item"><b>Ön / arka sensör karşılaştırması</b><span>Gerçek tekerlek hızı verileri aynı zaman çizelgesinde gösterilecek.</span></div>
-   <div class="module-item"><b>Arıza geçmişi ve rapor</b><span>Okunan DTC, durum bilgisi ve zaman damgası saklanacak.</span></div>
+   <div class="module-item"><b>ABS DTC okuma / açıklama</b><span>Her marka-model-yıl ve ABS beyni için ayrı, doğrulanmış kod sözlüğü</span></div>
+   <div class="module-item"><b>Arıza silme ve tekrar okuma</b><span>Yalnızca üretici prosedürü ve ECU yanıtı doğrulanmış profillerde</span></div>
+   <div class="module-item"><b>Canlı tekerlek hızları</b><span>Ön/arka sensör verileri ve zaman damgalı karşılaştırma</span></div>
+   <div class="module-item"><b>Sensör ve besleme kontrolleri</b><span>Ölçüm sınırları ilgili servis dokümanından alınacak</span></div>
+   <div class="module-item"><b>Pompa / valf aktif testleri</b><span>Şimdilik kapalı; güvenli servis prosedürü ve onaylı rutin kimliği şart</span></div>
   </div>
  </div>
 </div>
@@ -976,6 +1051,9 @@ socket.on('dtc_cleared',d=>{if(d.ok){document.getElementById('dtc-icon').innerTe
 function testGetInfo(){document.getElementById('test_info').innerText='Yükleniyor...';socket.emit('test_info')}function testGetEcu(){document.getElementById('test_ecu').innerText='Sorgulanıyor...';socket.emit('test_ecu_info')}function testSendRaw(){var c=document.getElementById('test_cmd_input').value;if(!c)return;document.getElementById('test_raw_out').innerText='Gönderiliyor...';socket.emit('test_raw',{cmd:c})}
 socket.on('test_info_result',d=>{document.getElementById('test_info').innerText=JSON.stringify(d,null,2)});socket.on('test_ecu_result',d=>{document.getElementById('test_ecu').innerText=d.ok?JSON.stringify(d.data,null,2):('HATA: '+d.msg)});socket.on('test_raw_result',d=>{document.getElementById('test_raw_out').innerText=(d.ok?'✓ OK:\n':'✗ HATA:\n')+(d.msg||d.raw||'')});
 function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanıyor...';socket.emit('gkbus_connect')}function gkTest(code){document.getElementById('gk_test_out').innerText='Komut gönderiliyor...';socket.emit('gkbus_test',{code:code})}function gkD07(){document.getElementById('gk_d07_out').innerText='Okunuyor...';socket.emit('gkbus_d07')}
+ function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
+ socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+'\\n'+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80'});
+
 socket.on('gkbus_result',d=>{var el=document.getElementById('gk_conn_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_test_result',d=>{var el=document.getElementById('gk_test_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_d07_result',d=>{var el=document.getElementById('gk_d07_out');if(el)el.innerText=d.ok?('Pulse: '+d.data):('❌ '+d.msg)});
 function aracSec(){var data={marka:document.getElementById('sel_marka').value,model:document.getElementById('sel_model').value,yil:parseInt(document.getElementById('sel_yil').value),konnektor:document.getElementById('sel_konnektor').value,manuel_model:document.getElementById('sel_model_manual').value};document.getElementById('arac_sonuc').style.display='block';document.getElementById('arac_sonuc_text').innerText='Yapılandırma hesaplanıyor...';socket.emit('arac_sec',data)}
 socket.on('arac_sec_result',function(d){var sonucText=document.getElementById('arac_sonuc_text');if(d.ok){sonucText.innerText=d.msg;sonucText.style.color='#00ff00'}else{sonucText.innerText='HATA: '+d.msg;sonucText.style.color='#ff5252'}});
@@ -1001,6 +1079,24 @@ def handle_arac_sec(data):
         msg = f"✅ ARAÇ: {ARAC_CONFIG['marka'].upper()} {ARAC_CONFIG['model'].upper()} ({ARAC_CONFIG['yil']})\nProtokol: {ARAC_CONFIG['protokol'].upper()}\nPin Şeması: {ARAC_CONFIG['pin_sema']}\nNot: {ARAC_CONFIG['notlar']}"
         socketio.emit('arac_sec_result', {'ok': True, 'msg': msg})
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
+
+@socketio.on('abs_profile_check')
+def handle_abs_profile_check(data):
+    """Yerel ABS profilini kontrol eder; adaptöre/ECU'ya hiçbir komut göndermez."""
+    try:
+        brand = str((data or {}).get('brand', '')).strip()
+        model = str((data or {}).get('model', '')).strip()
+        year = (data or {}).get('year', '')
+        with _conn_lock:
+            conn = _connection if _mode == 'real' else None
+        result = evaluate_abs_profile(brand, model, year, conn)
+        result.update({'brand': brand, 'model': model, 'year': int(year)})
+        socketio.emit('abs_profile_result', result)
+        write_log("ABS PROFİL KONTROLÜ", f"{brand} {model} {year}: {result['status']} | {result['message']}")
+    except Exception as exc:
+        socketio.emit('abs_profile_result', {'ok': False, 'verified': False,
+            'status': 'PROFİL KONTROLÜ BAŞARISIZ', 'message': str(exc),
+            'protocol': 'Doğrulanmadı', 'profile_id': None})
 
 @socketio.on('scan_dtc')
 def handle_scan():
