@@ -533,10 +533,7 @@ class MainActivity : ComponentActivity() {
                 assistant.speak("Arıza kodu arama bölümünü açtım. Aramak istediğin kodu yazabilirsin.")
             }
 
-            SeyfiAction.SHOW_VOICE_STATUS -> {
-                showSeyfiVoiceStatus()
-                assistant.speak("Seyfi Usta çevrimdışı sesli komut ekranını açtım.")
-            }
+            SeyfiAction.SHOW_VOICE_STATUS -> Unit
 
             SeyfiAction.SHOW_COMMUNICATION_REPORT -> {
                 assistant.speak("Viecar ve ECU iletişim raporunu hazırlıyorum.")
