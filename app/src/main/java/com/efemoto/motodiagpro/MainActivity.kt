@@ -94,13 +94,42 @@ class MainActivity : ComponentActivity() {
     private var statusLine: TextView? = null
     private var progressLine: TextView? = null
     private var scanPercent = 0
-    private val seyfiChatHistory = StringBuilder()
     private var lastSeyfiPartialToastText = ""
     private var lastSeyfiPartialToastAt = 0L
-    private var seyfiOrbView: SeyfiOrbView? = null
-    private var seyfiConversationView: TextView? = null
     // Sesli komutlar yalnızca uyandırma kelimesinden sonra işlenir.
     @Volatile private var seyfiAwaitingCommand = false
+    @Volatile private var autoConnectMonitorActive = false
+    private val autoConnectAttemptRunning = AtomicBoolean(false)
+    private val autoConnectRunnable = object : Runnable {
+        override fun run() {
+            if (!autoConnectMonitorActive || isFinishing || isDestroyed) { autoConnectMonitorActive = false; return }
+            if (connected && viecarConnection.isConnected()) { autoConnectMonitorActive = false; return }
+            if (busy.get() || scanRunning.get() || !autoConnectAttemptRunning.compareAndSet(false, true)) {
+                mainHandler.postDelayed(this, 5000L); return
+            }
+            io.execute {
+                var acquiredBusy = false
+                var connectionReady = false
+                try {
+                    acquiredBusy = busy.compareAndSet(false, true)
+                    if (acquiredBusy) { ensureConnected(); connectionReady = true }
+                } catch (_: Exception) {
+                    // Adaptör henüz görünmüyorsa kullanıcıya sürekli hata gösterme.
+                } finally {
+                    if (acquiredBusy) busy.set(false)
+                    autoConnectAttemptRunning.set(false)
+                }
+                mainHandler.post {
+                    if (!autoConnectMonitorActive || isFinishing || isDestroyed) return@post
+                    if (connectionReady) {
+                        autoConnectMonitorActive = false
+                        log("Otomatik Viecar / ECU bağlantısı doğrulandı; otomatik tarama başlatılıyor.")
+                        startDiagnosis()
+                    } else mainHandler.postDelayed(this, 7000L)
+                }
+            }
+        }
+    }
 
     private val homeScreenBitmap: Bitmap by lazy {
         // Açılış görseli bozuk/eksik Base64 ise uygulama açılışını çökertme.
@@ -128,6 +157,7 @@ class MainActivity : ComponentActivity() {
         loadPersistentState()
         showHome()
         setupSeyfiAssistant()
+        startAutoConnectionMonitor()
     }
 
     private fun setupSeyfiAssistant() {
@@ -135,7 +165,7 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
                 PackageManager.PERMISSION_GRANTED
 
-        // Yerel yapay zekâ modeli mikrofon izninden bağımsız başlatılır.
+        // Çevrimdışı ses tanıma mikrofon izninden bağımsız hazırlanır.
         initializeSeyfiAssistant(startVoice = hasMicrophonePermission)
 
         if (!hasMicrophonePermission) {
@@ -153,13 +183,6 @@ class MainActivity : ComponentActivity() {
             activity = this,
             onCommandRecognized = { recognized -> handleSeyfiCommand(recognized) },
             onVoiceStatusChanged = { status ->
-                val orbMode = when {
-                    status.contains("konuşuyor", true) -> SeyfiOrbView.Mode.SPEAKING
-                    status.contains("düşün", true) || status.contains("metne çevriliyor", true) -> SeyfiOrbView.Mode.THINKING
-                    status.contains("dinliyor", true) || status.contains("duyuyor", true) -> SeyfiOrbView.Mode.LISTENING
-                    else -> SeyfiOrbView.Mode.IDLE
-                }
-                seyfiOrbView?.post { seyfiOrbView?.setMode(orbMode) }
                 // Mikrofon/model hatalarını yalnızca Logcat'te bırakma.
                 // Normal dinleme durumlarında ekrana bildirim basma.
                 val isProblem = listOf(
@@ -210,7 +233,6 @@ class MainActivity : ComponentActivity() {
             }
         )
         seyfiUstaAI = assistant
-        assistant.updateVehicleProfile(persistentPrefs().getString("yamaha_model_year", "").orEmpty())
         assistant.initializeVoiceOnly {
             val voiceFailures = mutableListOf<String>()
             if (!assistant.isTtsReady()) voiceFailures += "Türkçe TTS hazır değil."
@@ -242,7 +264,7 @@ class MainActivity : ComponentActivity() {
                 if (assistant.isTtsReady() && voiceFailures.isEmpty() && parserFailures.isEmpty()) {
                     assistant.stopListening()
                     assistant.speak(startupMessage) {
-                        if (!isFinishing && !isDestroyed) startDiagnosis()
+                        if (!isFinishing && !isDestroyed && assistant.isRecognitionAvailable()) assistant.startListening()
                     }
                 } else {
                     assistant.speak(startupMessage) {
@@ -314,7 +336,7 @@ class MainActivity : ComponentActivity() {
         applyImmersiveMode()
         when (currentScreen) {
             "HOME" -> showHome()
-            "SEYFI" -> showSeyfiChat()
+            "SEYFI" -> showSeyfiVoiceStatus()
             "LIVE" -> showLiveData()
             "TESTS" -> showTests()
             "LOGS" -> showLogs()
@@ -340,12 +362,21 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        autoConnectMonitorActive = false
+        mainHandler.removeCallbacks(autoConnectRunnable)
         seyfiUstaAI?.release()
         seyfiUstaAI = null
         liveLoop = false
         closeAdapter()
         io.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun startAutoConnectionMonitor() {
+        if (autoConnectMonitorActive || isFinishing || isDestroyed) return
+        autoConnectMonitorActive = true
+        mainHandler.removeCallbacks(autoConnectRunnable)
+        mainHandler.post(autoConnectRunnable)
     }
 
     private fun handleSeyfiCommand(rawCommand: String) {
@@ -469,13 +500,6 @@ class MainActivity : ComponentActivity() {
                 speakFaultDetails()
             }
 
-            SeyfiAction.CLEAR_FAULTS -> {
-                confirmClearFaults()
-                assistant.speak(
-                    "Arıza silme onay ekranını açtım. Güvenlik için ekrandaki Sil ve Doğrula düğmesine basmanız gerekiyor."
-                )
-            }
-
             SeyfiAction.SHOW_LIVE_DATA -> {
                 showLiveData()
                 if (connected && viecarConnection.isConnected()) {
@@ -512,9 +536,9 @@ class MainActivity : ComponentActivity() {
                 assistant.speak("Arıza kodu arama bölümünü açtım. Aramak istediğin kodu yazabilirsin.")
             }
 
-            SeyfiAction.SHOW_SEYFI_CHAT -> {
-                showSeyfiChat()
-                assistant.speak("Seyfi Usta sohbet ve Yamaha teşhis ekranını açtım.")
+            SeyfiAction.SHOW_VOICE_STATUS -> {
+                showSeyfiVoiceStatus()
+                assistant.speak("Seyfi Usta çevrimdışı sesli komut ekranını açtım.")
             }
 
             SeyfiAction.SHOW_COMMUNICATION_REPORT -> {
@@ -530,18 +554,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            SeyfiAction.ANALYZE_ENGINE_DATA -> {
-                if (!connected || liveValues.isEmpty()) {
-                    assistant.speak("Yapay zekâ motor analizi için önce gerçek ECU bağlantısı ve canlı sensör verileri gerekiyor.")
-                } else {
-                    assistant.speak("Gerçek motor verilerini yerel yapay zekâ ile değerlendiriyorum.")
-                    assistant.analyzeCurrentEngineData { success, result ->
-                        log("Yapay zekâ motor analizi " + if (success) "başarılı: $result" else "başarısız: $result")
-                        if (!success) Toast.makeText(this, result, Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
-
             SeyfiAction.SHOW_HELP -> assistant.speak(
                 "Usta, uygulamadaki bölümleri sesinle açabilirsin. Ana sayfa için ana sayfa de. " +
                     "Gerçek ECU taraması için arıza taramasını başlat de. Arıza kodları için arıza kodlarını incele, " +
@@ -551,7 +563,8 @@ class MainActivity : ComponentActivity() {
                     "Hata dökümü veya işlem kayıtları dediğinde kayıt ekranını açarım. Servis kaydı için servis kaydı de. " +
                     "Sistem testleri, mikrofon testi veya sensör kontrolü dediğinde testler bölümünü açarım. " +
                     "Viecar ECU iletişim raporu dediğinde iletişim kontrolünü başlatırım. " +
-                    "Seyfi ekranı veya Yamaha teşhis ekranı dediğinde sohbet ve Yamaha teşhis bölümünü açarım. " +
+                    "Arıza silme yalnızca ekrandaki onaylı düğmeyle yapılır. " +
+                    "Seyfi Usta sesli komut durumunu görmek için sesli komut ekranı de. " +
                     "Raporu dışa aktar dediğinde raporu hazırlarım. ECU bağlı değilse ölçüm uydurmam."
             )
 
@@ -596,38 +609,13 @@ class MainActivity : ComponentActivity() {
             }
 
             SeyfiAction.UNKNOWN -> {
-                // Bilinmeyen konuşma komut değil, serbest sohbet sorusu olarak yerel
-                // Seyfi mantık katmanına gönderilir. Mikrofon TTS bitene kadar kapalı kalır.
-                appendSeyfiConversation("SİZ", commandInput)
-                seyfiOrbView?.setMode(SeyfiOrbView.Mode.THINKING)
-                assistant.chat(commandInput) { answer ->
-                    // SeyfiUstaAI.chat yanıtı zaten bir kez seslendirir.
-                    // Burada tekrar speak çağırmak QUEUE_FLUSH ile sesi kesip yineletebiliyordu.
-                    appendSeyfiConversation("SEYFİ USTA", answer)
+                assistant.speak("Bu sesli komutu tanımadım usta. Yardım diyerek kullanılabilir komutları dinleyebilirsin.") {
+                    if (assistant.isRecognitionAvailable()) assistant.startListening()
                 }
             }
         }
     }
 
-    private fun sendSeyfiChatMessage(message: String) {
-        val assistant = seyfiUstaAI ?: return
-        if (message.isBlank()) return
-        seyfiChatHistory.append("SİZ: ").append(message).append("\n\n")
-        if (currentScreen == "SEYFI") showSeyfiChat()
-        Toast.makeText(this, "SEYFİ USTA: Yerel yapay zekâ yanıt hazırlıyor.", Toast.LENGTH_SHORT).show()
-        assistant.chat(message) { answer ->
-            log("Seyfi Usta yanıtı: $answer")
-            seyfiChatHistory.append("SEYFİ USTA: ").append(answer).append("\n\n")
-            if (currentScreen == "SEYFI") showSeyfiChat()
-            Toast.makeText(this, answer, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    /**
-     * Seyfi Usta'nın izin verilen uygulama aracını ana UI thread'inde çalıştırır.
-     * Gerçek ECU işlemlerini
-     * mevcut teşhis yöneticisi yürütür.
-     */
     private fun executeSeyfiAppAction(action: String): String {
         val actionParts = action.split('|', limit = 2)
         val actionName = actionParts.firstOrNull().orEmpty()
@@ -916,7 +904,7 @@ class MainActivity : ComponentActivity() {
             Triple("LIVE", "◉", "Canlı Veri"),
             Triple("TESTS", "⚒", "Test"),
             Triple("LOGS", "▤", "Hata Dökümü"),
-            Triple("SEYFI", "✦", "Seyfi Usta")
+            Triple("SEYFI", "✦", "Sesli Komut")
         )
         entries.forEach { (key, symbol, label) ->
             val selected = active == key || (key == "HOME" && active in listOf("FAULTS", "DETAIL", "SCAN"))
@@ -938,7 +926,7 @@ class MainActivity : ComponentActivity() {
                         "LIVE" -> showLiveData()
                         "TESTS" -> showTests()
                         "LOGS" -> showLogs()
-                        "SEYFI" -> showSeyfiChat()
+                        "SEYFI" -> showSeyfiVoiceStatus()
                     }
                 }
             }
@@ -1087,7 +1075,7 @@ class MainActivity : ComponentActivity() {
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
             side.addView(actionButton("◉  CANLI VERİ EKRANINI AÇ", blue) { showLiveData() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
-            side.addView(actionButton("✦  SEYFİ USTA / YEREL YAPAY ZEKÂ", cyan) { showSeyfiChat() },
+            side.addView(actionButton("✦  SEYFİ USTA / SESLİ KOMUTLAR", cyan) { showSeyfiVoiceStatus() },
                 LinearLayout.LayoutParams(-1, dp(58)).apply { setMargins(0, dp(3), 0, dp(3)) })
 
             val sideScroll = ScrollView(this).apply {
@@ -1125,6 +1113,11 @@ class MainActivity : ComponentActivity() {
         seyfiUstaAI?.stopListening()
         if (!scanRunning.compareAndSet(false, true)) {
             seyfiUstaAI?.speak("Usta, ECU taraması zaten devam ediyor.")
+            return
+        }
+        if (!busy.compareAndSet(false, true)) {
+            scanRunning.set(false)
+            seyfiUstaAI?.speak("Başka bir ECU işlemi devam ediyor. İşlem bitince tekrar tarama yapabilirsin.")
             return
         }
         val c = baseScreen("SCAN", true)
@@ -1247,6 +1240,7 @@ class MainActivity : ComponentActivity() {
             } catch (e: Exception) {
                 mainHandler.post {
                     log("Tarama hatası: ${e.message}")
+                    saveMotorcycleFaultRecord(emptyList(), "Tarama başarısız: ${e.message ?: "ECU yanıtı alınamadı"}")
                     closeAdapter()
                     seyfiUstaAI?.speak(
                         "Bağlantı kuramadım usta. Lütfen motosiklet ile OBD kablosunun bağlantısını, Viecar adaptörünün açık olduğunu, kontağın açık olduğunu ve telefonun Wi-Fi üzerinden Viecar ağına bağlı olduğunu kontrol edin. Kontrollerden sonra yeniden deneyebiliriz."
@@ -1259,6 +1253,7 @@ class MainActivity : ComponentActivity() {
                 }
             } finally {
                 scanRunning.set(false)
+                busy.set(false)
             }
         }
     }
@@ -1447,7 +1442,7 @@ class MainActivity : ComponentActivity() {
             return
         }
         AlertDialog.Builder(this).setTitle("ARIZALARI SİL")
-            .setMessage("Kontak açık, motor kapalı olmalı. Standart OBD Mode 04 komutu uzatılmış yanıt süresiyle en fazla 3 kez denenir. Ardından kayıtlı, bekleyen ve kalıcı arıza hafızaları yeniden okunarak sonuç doğrulanır. Desteklenmeyen üretici komutları gönderilmez. Devam edilsin mi?")
+            .setMessage("Kontak açık, motor kapalı olmalı. Standart OBD Mode 04 komutu bir kez gönderilir. Ardından kayıtlı, bekleyen ve kalıcı arıza hafızaları yeniden okunarak sonuç doğrulanır. ECU yanıtı doğrulanmadan işlem başarılı sayılmaz. Devam edilsin mi?")
             .setNegativeButton("VAZGEÇ", null)
             .setPositiveButton("SİL VE DOĞRULA") { _, _ -> clearFaults() }.show()
     }
@@ -1967,55 +1962,36 @@ class MainActivity : ComponentActivity() {
         ))
         c.addView(intro)
 
-        val aiStatusCard = neonCard("YEREL YAPAY ZEKÂ DURUMU", purpleColor())
-        val aiStatusText = text(
-            seyfiUstaAI?.getModelStatus() ?: "Yapay zekâ henüz başlatılmadı.",
-            13, white, true
-        )
-        val voiceStatusText = text("", 12, muted)
-        val ttsStatusText = text("", 12, muted)
+        val voiceCard = neonCard("SEYFİ USTA • ÇEVRİMDIŞI SES", cyan)
+        val voiceStatusText = text("", 12, white)
+        val commandStatusText = text("", 12, muted)
         fun refreshAssistantStatuses() {
             val assistant = seyfiUstaAI
-            voiceStatusText.text = "SES TANIMA: " + if (assistant?.isRecognitionAvailable() == true) "HAZIR" else "KULLANILAMIYOR"
-            ttsStatusText.text = "SES YANITLAMA: " + if (assistant?.isTtsReady() == true) "HAZIR" else "HAZIR DEĞİL"
-            aiStatusText.text = assistant?.getModelStatus() ?: "Yapay zekâ henüz başlatılmadı."
+            voiceStatusText.text = "SES TANIMA: " +
+                if (assistant?.isRecognitionAvailable() == true) "HAZIR" else "KULLANILAMIYOR"
+            commandStatusText.text = "TÜRKÇE KOMUT SÖZLÜĞÜ: " +
+                if (seyfiCommandHandler.selfTest().isEmpty()) "HAZIR" else "UYARI VAR"
         }
         refreshAssistantStatuses()
-        aiStatusCard.addView(text("SES TANIMA VE KOMUTLAR", 12, cyan, true))
-        aiStatusCard.addView(voiceStatusText)
-        aiStatusCard.addView(text("METİN OKUMA / SESLENDİRME", 12, cyan, true))
-        aiStatusCard.addView(ttsStatusText)
-        aiStatusCard.addView(text("SEYFİ YEREL TEŞHİS ÇEKİRDEĞİ", 12, cyan, true))
-        aiStatusCard.addView(aiStatusText)
-        addGap(aiStatusCard, 7)
-        aiStatusCard.addView(text(
-            "Bu test Seyfi Usta'nın bağımsız yerel teşhis çekirdeğini, Türkçe ses sistemini ve komut sözlüğünü kontrol eder. ECU bağlantısı gerekmez.",
-            12, muted
+        voiceCard.addView(voiceStatusText)
+        voiceCard.addView(text("METİN OKUMA / SESLENDİRME", 12, cyan, true))
+        voiceCard.addView(text(
+            if (seyfiUstaAI?.isTtsReady() == true) "TÜRKÇE TTS: HAZIR" else "TÜRKÇE TTS: HAZIR DEĞİL",
+            12, white
         ))
-        addGap(aiStatusCard, 7)
-        aiStatusCard.addView(actionButton("DURUMLARI YENİLE", blue) {
-            refreshAssistantStatuses()
+        voiceCard.addView(commandStatusText)
+        addGap(voiceCard, 7)
+        voiceCard.addView(actionButton("DURUMLARI YENİLE", blue) { refreshAssistantStatuses() })
+        voiceCard.addView(actionButton("KOMUT SÖZLÜĞÜNÜ TEST ET", cyan) {
+            val failures = seyfiCommandHandler.selfTest()
+            commandStatusText.text = if (failures.isEmpty()) "BAŞARILI • Tüm çevrimdışı komut eşleşmeleri doğru."
+                else "HATALAR: " + failures.joinToString(" | ")
+            log("SEYFİ KOMUT TESTİ: " + if (failures.isEmpty()) "BAŞARILI" else failures.joinToString(" | "))
         })
-        addGap(aiStatusCard, 5)
-        aiStatusCard.addView(actionButton("YAPAY ZEKÂYI GERÇEKTEN TEST ET", purpleColor()) {
-            val assistant = seyfiUstaAI
-            if (assistant == null) {
-                aiStatusText.text = "HATA: Sesli asistan nesnesi oluşturulmadı."
-                return@actionButton
-            }
-            aiStatusText.text = "TEST EDİLİYOR: Yerel modelden gerçek cevap bekleniyor…"
-            assistant.runModelSelfTest { success, result ->
-                aiStatusText.text = if (success) "BAŞARILI — Model gerçek cevap üretti.\n$result"
-                    else "BAŞARISIZ — $result"
-                log("YAPAY ZEKÂ TESTİ: " + (if (success) "BAŞARILI" else "BAŞARISIZ") + " — $result")
-                AlertDialog.Builder(this)
-                    .setTitle(if (success) "YAPAY ZEKÂ ÇALIŞIYOR" else "YAPAY ZEKÂ TESTİ BAŞARISIZ")
-                    .setMessage(result)
-                    .setPositiveButton("TAMAM", null)
-                    .show()
-            }
+        voiceCard.addView(actionButton("SESLİ YANIT TESTİ", green) {
+            seyfiUstaAI?.speak("Ses testi. Ben Seyfi Usta. Çevrimdışı komut sistemim hazır.")
         })
-        c.addView(aiStatusCard)
+        c.addView(voiceCard)
 
         fun testCard(title: String, detail: String, button: String, color: Int, action: () -> Unit) {
             val card = neonCard(null, color)
@@ -2332,106 +2308,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun showSeyfiChat() {
+    private fun showSeyfiVoiceStatus() {
         val c = baseScreen("SEYFI")
-        c.addView(header("SEYFİ USTA • SESLİ SOHBET"))
-
-        // Yalnızca Seyfi ekranına eklenen canlı animasyon; mevcut ana ekran ve teşhis
-        // ekranlarının ölçülerine/yerleşimine dokunulmaz.
-        val conversationCard = neonCard("CANLI ASİSTAN", cyan)
-        val orb = SeyfiOrbView(this)
-        seyfiOrbView = orb
-        conversationCard.addView(orb, LinearLayout.LayoutParams(-1, dp(174)))
-        val voiceState = text("HAZIR • Konuşmak için DİNLE düğmesine basın", 13, cyan, true).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(4), dp(8), dp(4), dp(8))
-        }
-        conversationCard.addView(voiceState)
-        val transcript = text(
-            "SEYFİ USTA: Merhaba usta. Buradayım. Bana motosikletinle veya başka bir konuyla ilgili soru sorabilirsin.\n",
-            13, white
-        )
-        transcript.setPadding(dp(10), dp(10), dp(10), dp(10))
-        transcript.minHeight = dp(92)
-        transcript.background = rounded(panel2, blue, 10)
-        seyfiConversationView = transcript
-        conversationCard.addView(transcript)
-
-        val messageInput = EditText(this).apply {
-            hint = "Seyfi Usta'ya yaz..."
-            setTextColor(white)
-            setHintTextColor(muted)
-            setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = rounded(panel2, cyan, 10)
-            minLines = 1
-            maxLines = 3
-        }
-        addGap(conversationCard, 8)
-        conversationCard.addView(messageInput)
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-        }
-        actions.addView(actionButton("GÖNDER", blue) {
-            val message = messageInput.text.toString().trim()
-            if (message.isNotBlank()) {
-                messageInput.text.clear()
-                sendSeyfiChatMessage(message)
-            }
-        }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(0, 0, dp(5), 0) })
-        actions.addView(actionButton("🎙 DİNLE", green) {
+        c.addView(header("SEYFİ USTA • ÇEVRİMDIŞI SESLİ KOMUTLAR"))
+        val voiceCard = neonCard("SES / MİKROFON DURUMU", cyan)
+        val voiceStatus = text(seyfiUstaAI?.getVoiceStatus() ?: "Sesli asistan hazırlanıyor.", 13, white)
+        voiceStatus.setPadding(dp(4), dp(8), dp(4), dp(8))
+        voiceCard.addView(voiceStatus)
+        voiceCard.addView(actionButton("↻  SES DURUMUNU YENİLE", blue) {
+            voiceStatus.text = seyfiUstaAI?.getVoiceStatus() ?: "Sesli asistan hazır değil."
+        })
+        voiceCard.addView(actionButton("🎙  DİNLEMEYİ BAŞLAT", green) {
             val assistant = seyfiUstaAI
-            if (assistant == null) {
-                voiceState.text = "Asistan henüz hazır değil."
-            } else if (!assistant.isRecognitionAvailable()) {
-                voiceState.text = "Cihaz içi Türkçe konuşma tanıma servisi bulunamadı. Telefonun çevrimdışı Türkçe ses paketini kontrol edin."
-                orb.setMode(SeyfiOrbView.Mode.IDLE)
+            if (assistant == null || !assistant.isRecognitionAvailable()) {
+                voiceStatus.text = "Çevrimdışı Türkçe konuşma tanıma hazır değil. Mikrofon iznini ve Vosk dil modelini kontrol edin."
             } else {
                 seyfiAwaitingCommand = true
                 assistant.startListening()
-                voiceState.text = "DİNLİYORUM • Konuşman bitince cevap vereceğim."
-                orb.setMode(SeyfiOrbView.Mode.LISTENING)
+                voiceStatus.text = "Dinliyorum. Seyfi Usta diyerek komut verebilirsiniz."
             }
-        }, LinearLayout.LayoutParams(0, dp(52), 1f).apply { setMargins(dp(5), 0, 0, 0) })
-        conversationCard.addView(actions)
-        c.addView(conversationCard)
-
-        val statusCard = neonCard("YEREL SES / MODEL DURUMU", cyan)
-        fun combinedAssistantStatus(): String {
-            val assistant = seyfiUstaAI
-            return if (assistant == null) {
-                "Asistan başlatılıyor. Mikrofon izni bekleniyor olabilir."
-            } else {
-                "YAPAY ZEKÂ: ${assistant.getModelStatus()}\n\nSES / MİKROFON: ${assistant.getVoiceStatus()}"
-            }
-        }
-        val status = text(combinedAssistantStatus(), 12, white)
-        status.setPadding(dp(4), dp(6), dp(4), dp(6))
-        statusCard.addView(status)
-        statusCard.addView(actionButton("DURUMU YENİLE", blue) {
-            status.text = combinedAssistantStatus()
         })
-        statusCard.addView(actionButton("SESLİ CEVABI TEST ET", green) {
-            seyfiUstaAI?.speak("Ses testi. Ben Seyfi Usta. Beni net duyabiliyor musunuz?")
+        voiceCard.addView(actionButton("■  DİNLEMEYİ DURDUR", red) {
+            seyfiUstaAI?.stopListening()
+            voiceStatus.text = seyfiUstaAI?.getVoiceStatus() ?: "Dinleme durduruldu."
         })
-        c.addView(statusCard)
-
-        val statusRefresh = object : Runnable {
-            override fun run() {
-                if (!status.isAttachedToWindow) return
-                status.text = combinedAssistantStatus()
-                val current = seyfiUstaAI?.getVoiceStatus().orEmpty()
-                voiceState.text = when {
-                    current.contains("konuşuyor", true) -> "CEVAP VERİYOR"
-                    current.contains("düşün", true) || current.contains("metne çevriliyor", true) -> "DÜŞÜNÜYOR"
-                    current.contains("dinliyor", true) || current.contains("duyuyor", true) -> "DİNLİYOR"
-                    else -> "HAZIR"
-                }
-                status.postDelayed(this, 500L)
-            }
-        }
-        status.post(statusRefresh)
-
+        voiceCard.addView(actionButton("♪  SES TESTİ", cyan) {
+            seyfiUstaAI?.speak("Ses testi. Ben Seyfi Usta. Çevrimdışı sesli komut sistemi hazır.")
+        })
+        addGap(voiceCard, 8)
+        voiceCard.addView(text(
+            "Komut örnekleri: “Seyfi Usta”, “taramayı başlat”, “canlı veri”, “arıza kodlarını incele”, “hata dökümü”, “test yap”, “ana sayfa”. Arıza silme yalnızca ekrandaki düğmeyle yapılır.",
+            12, muted
+        ))
+        c.addView(voiceCard)
         val analysisCard = neonCard("YAMAHA UZMAN TEŞHİS MOTORU • ÇEVRİMDIŞI", purpleColor())
         analysisCard.addView(text(
             "Bu teşhis katmanı sohbet mantığından ayrıdır. Doğrulanmış Yamaha model/yıl servis prosedürlerini ve gerçek ECU kodlarını kullanır; doğrulanmamış değerleri başka modellere taşımaz.",
@@ -2477,25 +2386,16 @@ class MainActivity : ComponentActivity() {
         c.addView(analysisCard)
     }
 
-    private fun appendSeyfiConversation(who: String, message: String) {
-        val view = seyfiConversationView ?: return
-        runOnUiThread {
-            val updated = (view.text.toString() + "\n$who: $message").takeLast(5000)
-            view.text = updated
-            view.post { (view.parent as? View)?.let { parent ->
-                if (parent is ScrollView) parent.post { parent.fullScroll(View.FOCUS_DOWN) }
-            } }
-        }
-    }
-
     private fun saveMotorcycleFaultRecord(foundCodes: List<String>, result: String = "ECU taraması") {
         val prefs = persistentPrefs()
         val time = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("tr", "TR")).format(Date())
         val vehicle = prefs.getString("yamaha_model_year", "").orEmpty()
             .ifBlank { servicePlate.ifBlank { "Model bilgisi girilmedi" } }
         val codes = foundCodes.map { it.substringBefore(" •").trim().uppercase(Locale.US) }.distinct()
+        val emptyResult = if (result.contains("başarısız", ignoreCase = true)) "Arıza kodları okunamadı"
+            else "ECU yanıtında arıza kodu yok"
         val line = "$time • $vehicle • $result • " +
-            (codes.joinToString(", ").ifBlank { "ECU yanıtında arıza kodu yok" })
+            (codes.joinToString(", ").ifBlank { emptyResult })
         val history = prefs.getString("motorcycle_fault_history", "").orEmpty()
             .lineSequence().filter { it.isNotBlank() }.toMutableList()
         history.add(0, line)
