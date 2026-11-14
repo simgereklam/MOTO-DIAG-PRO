@@ -7,9 +7,7 @@ on:
       - main
     paths:
       - SEYFI_USTA_MASAUSTU.py
-      - seyfi_voice.py
       - desktop_requirements.txt
-      - scripts/prepare_desktop_assets.py
       - installer/MOTO_DIAG_PRO.iss
       - .github/workflows/desktop-installer.yml
 
@@ -30,31 +28,20 @@ jobs:
           python-version: "3.12"
           architecture: x64
 
-      - name: Install CPU-only PyTorch
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
-
       - name: Install desktop dependencies
         shell: pwsh
         run: |
           python -m pip install -r desktop_requirements.txt
 
-      - name: Prepare bundled offline Turkish speech models
-        shell: pwsh
-        run: |
-          python scripts/prepare_desktop_assets.py
-
       - name: Verify Python source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTU.py seyfi_voice.py scripts/prepare_desktop_assets.py
+          python -m py_compile SEYFI_USTA_MASAUSTU.py
 
       - name: Build self-contained Windows application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --collect-all torch --collect-all pocket_tts --collect-all pocket_tts_turkish --collect-all vosk --collect-all sounddevice --collect-all soundfile --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
 
       - name: Download Microsoft Visual C++ runtime
         shell: pwsh
