@@ -15,9 +15,32 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime
-from flask import Flask, render_template_string, request, jsonify
 import csv
-from flask_socketio import SocketIO
+import traceback
+
+# Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
+try:
+    from flask import Flask, render_template_string, request, jsonify
+    from flask_socketio import SocketIO
+    WEB_STACK_OK = True
+    WEB_STACK_ERROR = ""
+except Exception as _web_exc:
+    WEB_STACK_OK = False
+    WEB_STACK_ERROR = str(_web_exc)
+    try:
+        _err_root = tk.Tk()
+        _err_root.withdraw()
+        messagebox.showerror(
+            "Seyfi Usta - Eksik kutuphane",
+            "Program acilamadi. Web arayuzu icin gerekli Python kutuphaneleri yuklu degil.\\n\\n"
+            "Komut Istemi'nde su komutu calistirin:\\n"
+            "py -m pip install flask flask-socketio\\n\\n"
+            "Ayrinti: " + WEB_STACK_ERROR
+        )
+        _err_root.destroy()
+    except Exception:
+        pass
+    raise SystemExit(1)
 
 # --- Kütüphane Yüklemeleri ---
 try:
@@ -2548,13 +2571,35 @@ class App:
 
 # ==================== MAIN ====================
 if __name__ == "__main__":
-    threading.Thread(target=run_flask, daemon=True).start()
-    print("Web Arayüzü: http://localhost:5000")
-    root = tk.Tk(); app_gui = App(root)
-    def on_closing():
-        app_gui.running = False
-        _cancel_runs()
-        if VOICE_ENGINE is not None:
-            VOICE_ENGINE.stop()
-        root.after(200, lambda: (close_obd(), root.destroy()))
-    root.protocol("WM_DELETE_WINDOW", on_closing); root.mainloop()
+    root = None
+    try:
+        threading.Thread(target=run_flask, daemon=True).start()
+        print("Web Arayuzu: http://localhost:5000")
+        root = tk.Tk()
+        app_gui = App(root)
+
+        def on_closing():
+            app_gui.running = False
+            _cancel_runs()
+            if VOICE_ENGINE is not None:
+                VOICE_ENGINE.stop()
+            root.after(200, lambda: (close_obd(), root.destroy()))
+
+        root.protocol("WM_DELETE_WINDOW", on_closing)
+        root.mainloop()
+    except Exception:
+        _details = traceback.format_exc()
+        try:
+            _log_path = os.path.join(tempfile.gettempdir(), "seyfi_usta_startup_error.txt")
+            with open(_log_path, "w", encoding="utf-8") as _log_file:
+                _log_file.write(_details)
+            if root is None:
+                root = tk.Tk()
+                root.withdraw()
+            messagebox.showerror(
+                "Seyfi Usta - Baslatma hatasi",
+                "Program baslatilirken hata olustu. Hata ayrintisi su dosyaya kaydedildi:\\n"
+                + _log_path + "\\n\\n" + _details[-2500:]
+            )
+        except Exception:
+            print(_details)
