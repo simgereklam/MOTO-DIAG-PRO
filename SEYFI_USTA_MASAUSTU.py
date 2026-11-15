@@ -15,7 +15,8 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime
-from flask import Flask, render_template_string
+from flask import Flask, render_template_string, request, jsonify
+import csv
 from flask_socketio import SocketIO
 
 # --- Kütüphane Yüklemeleri ---
@@ -182,6 +183,116 @@ def evaluate_abs_profile(brand, model, year, connection=None):
             "adapter": adapter_name, "capabilities": allowed,
             "message": "Profil kaydı mevcut. Gerçek bağlantı için fiziksel arayüz, pinout, adresleme ve ECU yanıtı ayrıca doğrulanmalıdır. Bu kontrol bağlantı kurmaz."}
 
+def _can_id_from_text(value):
+    token = str(value or "").strip().lower()
+    if not token:
+        raise ValueError("CAN ID boş.")
+    return int(token[2:], 16) if token.startswith("0x") else int(token, 16)
+
+
+def analyze_abs_can_log(file_text, filename="can_log.txt"):
+    """Önceden kaydedilmiş CAN günlüklerini inceler; CAN hattına bağlanmaz."""
+    import csv
+    import io
+    import statistics
+    frames, ignored = [], 0
+    for raw_line in str(file_text or "").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith(("//", ";", "#")):
+            continue
+        try:
+            match = re.match(r"^\((\d+(?:\.\d+)?)\)\s+(\S+)\s+([0-9A-Fa-f]{1,8})#(?:#)?([0-9A-Fa-f]*)", line)
+            if match:
+                stamp, channel, can_id, payload = match.groups()
+                if len(payload) % 2:
+                    ignored += 1
+                    continue
+                frames.append({"t": float(stamp), "channel": channel, "id": _can_id_from_text(can_id), "data": bytes.fromhex(payload)})
+                continue
+            match = re.match(r"^(\d+(?:\.\d+)?)\s+\d+\s+([0-9A-Fa-f]{1,8})\s+(Rx|Tx)\s+d\s+(\d+)\s+((?:[0-9A-Fa-f]{2}\s*)*)", line, re.IGNORECASE)
+            if match:
+                stamp, can_id, direction, dlc, payload = match.groups()
+                if direction.lower() != "rx":
+                    ignored += 1
+                    continue
+                data, length = bytes.fromhex(payload), int(dlc)
+                if length > 8 or len(data) < length:
+                    ignored += 1
+                    continue
+                frames.append({"t": float(stamp), "channel": "ASC", "id": _can_id_from_text(can_id), "data": data[:length]})
+        except (ValueError, TypeError):
+            ignored += 1
+
+    if not frames and str(filename).lower().endswith(".csv"):
+        try:
+            sample = str(file_text or "")[:4096]
+            dialect = csv.Sniffer().sniff(sample, delimiters=",;\t")
+            reader = csv.DictReader(io.StringIO(str(file_text or "")), dialect=dialect)
+            if reader.fieldnames:
+                def norm(name):
+                    return re.sub(r"[^a-z0-9]+", "", str(name or "").lower())
+                cols = {norm(name): name for name in reader.fieldnames}
+                time_col = next((cols[x] for x in ("timestamp", "time", "absolutetime", "seconds") if x in cols), None)
+                id_col = next((cols[x] for x in ("canid", "id", "arbitrationid", "frameid") if x in cols), None)
+                data_col = next((cols[x] for x in ("data", "payload", "databytes", "bytes") if x in cols), None)
+                dlc_col = next((cols[x] for x in ("dlc", "length") if x in cols), None)
+                bus_col = next((cols[x] for x in ("bus", "channel") if x in cols), None)
+                if not id_col or not data_col:
+                    raise ValueError("CSV başlıklarında CAN ID ve Data/Payload sütunları bulunamadı.")
+                for row in reader:
+                    try:
+                        stamp = float(row.get(time_col, 0) or 0) if time_col else float(len(frames))
+                        octets = re.findall(r"(?i)(?<![0-9a-f])[0-9a-f]{2}(?![0-9a-f])", str(row.get(data_col, "") or ""))
+                        data = bytes.fromhex("".join(octets))
+                        length = int(row.get(dlc_col) or len(data)) if dlc_col else len(data)
+                        if length < 0 or length > 64 or len(data) < length:
+                            ignored += 1
+                            continue
+                        frames.append({"t": stamp, "channel": str(row.get(bus_col, "CSV")) if bus_col else "CSV",
+                                       "id": _can_id_from_text(row.get(id_col)), "data": data[:length]})
+                    except (ValueError, TypeError):
+                        ignored += 1
+        except csv.Error as exc:
+            raise ValueError("CSV biçimi okunamadı: " + str(exc)) from exc
+
+    if not frames:
+        raise ValueError("Desteklenen CAN satırı bulunamadı. candump, Vector ASC RX veya başlıklı CAN CSV dosyası seçin.")
+    frames.sort(key=lambda item: item["t"])
+    by_id, previous, periods, byte_values = {}, {}, {}, {}
+    for frame in frames:
+        can_id = frame["id"]
+        entry = by_id.setdefault(can_id, {"count": 0, "lengths": set()})
+        entry["count"] += 1
+        entry["lengths"].add(len(frame["data"]))
+        if can_id in previous:
+            delta = frame["t"] - previous[can_id]
+            if delta >= 0:
+                periods.setdefault(can_id, []).append(delta)
+        previous[can_id] = frame["t"]
+        values = byte_values.setdefault(can_id, {})
+        for index, value in enumerate(frame["data"]):
+            values.setdefault(index, set()).add(value)
+    summary = []
+    for can_id, entry in sorted(by_id.items(), key=lambda item: (-item[1]["count"], item[0])):
+        deltas = periods.get(can_id, [])
+        summary.append({
+            "id": f"{can_id:03X}" if can_id <= 0x7FF else f"{can_id:08X}",
+            "count": entry["count"],
+            "period_ms": round(statistics.mean(deltas) * 1000, 2) if deltas else None,
+            "min_period_ms": round(min(deltas) * 1000, 2) if deltas else None,
+            "max_period_ms": round(max(deltas) * 1000, 2) if deltas else None,
+            "dlc": ", ".join(str(x) for x in sorted(entry["lengths"])),
+            "changing_bytes": [i for i, vals in sorted(byte_values[can_id].items()) if len(vals) > 1],
+        })
+    return {
+        "filename": os.path.basename(str(filename)), "frame_count": len(frames),
+        "unique_ids": len(by_id), "ignored_lines": ignored,
+        "duration_s": round(max(x["t"] for x in frames) - min(x["t"] for x in frames), 3),
+        "ids": summary[:40],
+        "note": "Bu çıktı ham CAN çerçeve istatistiğidir; ABS sinyali/DTC çözümü değildir. Hiçbir CAN mesajı gönderilmedi.",
+    }
+
+
 def decode_abs_dtc(brand, model, year, code):
     """ABS DTC çözümü motor ECU DTC sözlüğünden tamamen ayrıdır."""
     key = abs_profile_key(brand, model, year)
@@ -313,6 +424,7 @@ def arac_konfigurasyonu_hesapla(marka, model, yil, konnektor, manuel_model=""):
 
 # ==================== FLASK & SOCKETIO ====================
 app = Flask(__name__); app.config['SECRET_KEY'] = 'efe_moto_r25'
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 _connection = None; _mode = 'idle'; _conn_lock = threading.Lock(); _query_lock = threading.Lock()
 _live_data_lock = threading.Lock(); _last_live_data = {}
@@ -1016,7 +1128,15 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <pre id="abs_dtc_result" style="color:#ffcc80;white-space:pre-wrap;min-height:42px">Yalnızca veri tabanında doğrulanmış araç profilleri için açıklama gösterilir. ECU'dan kod okunmaz.</pre>
   </div>
   <div class="module-note"><b>Güvenlik kilidi:</b> Profil kontrolü yalnızca yerel veri tabanına bakar. Doğrulanmış OEM dokümanı, pinout, protokol/adresleme, adaptör uyumluluğu ve gerçek ECU yanıtı olmadan ABS'ye bağlantı, arıza silme veya pompa/valf komutu gönderilmez.</div>
-  <h3 style="color:#ff8c96">ABS canlı veri ekranı</h3>
+  <div class="test-block" style="margin-top:16px">
+    <div class="title">ABS PASİF CAN KAYDI İNCELEME</div>
+    <p style="color:#aab5c2">SavvyCAN veya uyumlu bir cihazdan önceden kaydedilmiş candump / Vector ASC / başlıklı CSV dosyasını seçin. Program yalnızca dosyayı analiz eder; motosiklete bağlanmaz ve CAN mesajı göndermez.</p>
+    <input id="abs_can_log_file" type="file" accept=".log,.txt,.asc,.csv" style="color:#ddd;max-width:100%">
+    <button class="btn test-btn" onclick="absAnalyzeLog()">📂 KAYDI ANALİZ ET</button>
+    <pre id="abs_can_log_result" style="color:#00e5ff;white-space:pre-wrap;min-height:70px">Henüz kayıt seçilmedi.</pre>
+    <div id="abs_can_log_table" style="overflow-x:auto"></div>
+   </div>
+   <h3 style="color:#ff8c96">ABS canlı veri ekranı</h3>
   <div class="module-list">
    <div class="module-item"><b>Ön tekerlek hızı</b><span id="abs_front_speed">ABS ECU bağlantısı bekleniyor · km/h</span></div>
    <div class="module-item"><b>Arka tekerlek hızı</b><span id="abs_rear_speed">ABS ECU bağlantısı bekleniyor · km/h</span></div>
@@ -1098,6 +1218,20 @@ socket.on('dtc_cleared',d=>{if(d.ok){document.getElementById('dtc-icon').innerTe
 function testGetInfo(){document.getElementById('test_info').innerText='Yükleniyor...';socket.emit('test_info')}function testGetEcu(){document.getElementById('test_ecu').innerText='Sorgulanıyor...';socket.emit('test_ecu_info')}function testSendRaw(){var c=document.getElementById('test_cmd_input').value;if(!c)return;document.getElementById('test_raw_out').innerText='Gönderiliyor...';socket.emit('test_raw',{cmd:c})}
 socket.on('test_info_result',d=>{document.getElementById('test_info').innerText=JSON.stringify(d,null,2)});socket.on('test_ecu_result',d=>{document.getElementById('test_ecu').innerText=d.ok?JSON.stringify(d.data,null,2):('HATA: '+d.msg)});socket.on('test_raw_result',d=>{document.getElementById('test_raw_out').innerText=(d.ok?'✓ OK:\n':'✗ HATA:\n')+(d.msg||d.raw||'')});
 function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanıyor...';socket.emit('gkbus_connect')}function gkTest(code){document.getElementById('gk_test_out').innerText='Komut gönderiliyor...';socket.emit('gkbus_test',{code:code})}function gkD07(){document.getElementById('gk_d07_out').innerText='Okunuyor...';socket.emit('gkbus_d07')}
+ function absAnalyzeLog(){
+  var input=document.getElementById('abs_can_log_file'), out=document.getElementById('abs_can_log_result'), table=document.getElementById('abs_can_log_table');
+  table.innerHTML=''; if(!input.files||!input.files.length){out.innerText='Önce bir CAN kayıt dosyası seçin.';return;}
+  var file=input.files[0]; if(file.size>5*1024*1024){out.innerText='Dosya 5 MB sınırını aşıyor.';return;}
+  out.innerText='Kayıt okunuyor ve pasif olarak analiz ediliyor...';
+  var body=new FormData(); body.append('file',file);
+  fetch('/abs/passive/analyze',{method:'POST',body:body}).then(function(r){return r.json();}).then(function(d){
+    if(!d.ok){out.innerText='ANALİZ EDİLEMEDİ: '+(d.error||'Bilinmeyen hata');return;}
+    out.innerText='DOSYA: '+d.filename+'\\nÇERÇEVE: '+d.frame_count+'\\nFARKLI CAN ID: '+d.unique_ids+'\\nKAYIT SÜRESİ: '+d.duration_s+' sn\\nATLANAN SATIR: '+d.ignored_lines+'\\n\\n'+d.note;
+    var html='<table style="width:100%;border-collapse:collapse;color:#ddd;font-size:12px"><thead><tr><th>ID</th><th>Adet</th><th>Ort. periyot ms</th><th>Min/Max ms</th><th>DLC</th><th>Değişen byte</th></tr></thead><tbody>';
+    d.ids.forEach(function(x){html+='<tr><td>'+x.id+'</td><td>'+x.count+'</td><td>'+(x.period_ms===null?'-':x.period_ms)+'</td><td>'+(x.min_period_ms===null?'-':x.min_period_ms+' / '+x.max_period_ms)+'</td><td>'+x.dlc+'</td><td>'+x.changing_bytes.join(', ')+'</td></tr>';});
+    html+='</tbody></table>'; table.innerHTML=html;
+  }).catch(function(e){out.innerText='Dosya analiz hatası: '+e;});
+ }
  function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
  function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
  socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
@@ -1369,6 +1503,27 @@ def handle_gkbus_d07():
     if ARAC_CONFIG['protokol'] in ['can', 'can_uds']: d, m = can_d07_oku()
     else: d, m = kline_d07_oku()
     socketio.emit('gkbus_d07_result', {'ok': d is not None, 'data': str(d) if d else '', 'msg': m})
+
+@app.route('/abs/passive/analyze', methods=['POST'])
+def abs_passive_analyze():
+    """CAN kaydını yerel analiz eder; adaptör veya CAN arayüzü açmaz."""
+    uploaded = request.files.get('file')
+    if uploaded is None or not uploaded.filename:
+        return jsonify({"ok": False, "error": "CAN kayıt dosyası seçilmedi."}), 400
+    filename = os.path.basename(uploaded.filename)
+    if os.path.splitext(filename)[1].lower() not in (".log", ".txt", ".asc", ".csv"):
+        return jsonify({"ok": False, "error": "Yalnızca .log, .txt, .asc veya .csv dosyaları kabul edilir."}), 400
+    try:
+        content = uploaded.read(5 * 1024 * 1024 + 1)
+        if len(content) > 5 * 1024 * 1024:
+            return jsonify({"ok": False, "error": "Dosya 5 MB sınırını aşıyor."}), 413
+        result = analyze_abs_can_log(content.decode("utf-8-sig", errors="replace"), filename)
+        result["ok"] = True
+        write_log("ABS PASİF CAN KAYDI ANALİZİ", f"{filename}: {result['frame_count']} çerçeve, {result['unique_ids']} CAN ID")
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
 
 @app.route('/log')
 def view_logs():
