@@ -222,6 +222,68 @@ def get_dct_diagnostic_comparison():
     """Kaynaklı ürün karşılaştırması; fiziksel ECU yanıtı üretmez."""
     return {name: dict(data) for name, data in DCT_DIAGNOSTIC_COMPARISON.items()}
 
+# DCT v2 profile/capture foundation. Passive only: no ECU requests are transmitted.
+DCT_PROFILE_SCHEMA_VERSION = 2
+DCT_MODEL_CATALOG = {
+ "VFR1200F DCT":"VFR1200","VFR1200X Crosstourer DCT":"VFR1200",
+ "NC700S DCT":"NC700","NC700X DCT":"NC700","NC750S DCT":"NC750",
+ "NC750X DCT":"NC750","Integra DCT":"NC platform","CTX700 DCT":"CTX700",
+ "NM4 Vultus DCT":"NM4","CRF1000L Africa Twin DCT":"Africa Twin CRF1000L",
+ "CRF1100L Africa Twin DCT":"Africa Twin CRF1100L","X-ADV DCT":"X-ADV",
+ "Forza 750 DCT":"Forza 750","NT1100 DCT":"NT1100",
+ "CMX1100 Rebel DCT":"CMX1100","Gold Wing DCT":"Gold Wing"}
+DCT_CAPTURE_MAX_BYTES = 5 * 1024 * 1024
+
+def build_dct_profile_record(model, year, transport="unknown"):
+    """Create an unverified profile shell for later evidence-backed completion."""
+    y=int(year)
+    if y < 1980 or y > datetime.now().year+1: raise ValueError("Model yılı geçersiz.")
+    if transport not in ("unknown","kline","can","proprietary"): raise ValueError("Taşıma türü geçersiz.")
+    key=normalize_dct_model(model)
+    if not key: raise ValueError("DCT modeli zorunlu.")
+    return {"schema_version":DCT_PROFILE_SCHEMA_VERSION,
+      "profile_id":"HONDA-DCT-"+key.upper().replace(" ","-")+"-"+str(y),
+      "brand":"honda","model":str(model).strip(),"model_key":key,"year":y,
+      "model_family":DCT_MODEL_CATALOG.get(str(model).strip(),"Tanımlanmamış Honda DCT ailesi"),
+      "transport":transport,"transport_verified":False,"ecu_architecture":"unknown",
+      "ecu_address":None,"can_bitrate":None,"can_tx_id":None,"can_rx_id":None,"kline_init":None,
+      "diagnostic_services":[],"capabilities":{k:"not_implemented" for k in
+      ("identify","read_dtcs","read_live_data","clear_dtcs","actuator_test","adaptation")},
+      "evidence":[],"verified":False,
+      "safety":{"active_requests_enabled":False,"write_operations_enabled":False}}
+
+def analyze_dct_capture(file_text, filename="dct_capture.log"):
+    """Parse existing TX/RX or candump logs without opening an adapter."""
+    frames=[]; ignored=0
+    for n,raw in enumerate(str(file_text or "").splitlines(),1):
+        line=raw.strip()
+        if not line or line.startswith(("#",";","//")): continue
+        m=re.match(r"^(?:(\\d+(?:\\.\\d+)?)\\s+)?(TX|RX|SEND|RECV)\\s*[:=]\\s*([0-9A-Fa-f ]+)$",line,re.I)
+        if m:
+            stamp,direction,payload=m.groups()
+            try:
+                b=bytes.fromhex(payload)
+                frames.append({"line":n,"time":float(stamp) if stamp else None,
+                 "direction":"tx" if direction.lower() in ("tx","send") else "rx",
+                 "data":b.hex(" ").upper(),"length":len(b),"transport":"unclassified"})
+            except ValueError: ignored+=1
+            continue
+        m=re.match(r"^\\((\\d+(?:\\.\\d+)?)\\)\\s+(\\S+)\\s+([0-9A-Fa-f]{1,8})#([0-9A-Fa-f]*)$",line)
+        if m:
+            stamp,ch,cid,payload=m.groups()
+            try:
+                b=bytes.fromhex(payload)
+                frames.append({"line":n,"time":float(stamp),"direction":"unknown","channel":ch,
+                 "can_id":int(cid,16),"data":b.hex(" ").upper(),"length":len(b),"transport":"can_capture"})
+            except ValueError: ignored+=1
+            continue
+        ignored+=1
+    tx=sum(x["direction"]=="tx" for x in frames); rx=sum(x["direction"]=="rx" for x in frames)
+    ids=sorted({x["can_id"] for x in frames if "can_id" in x})
+    return {"ok":True,"filename":os.path.basename(filename),"frame_count":len(frames),
+      "tx_count":tx,"rx_count":rx,"ignored_lines":ignored,"can_ids":[f"0x{x:X}" for x in ids],
+      "frames":frames[:500],"note":"Pasif kayıt özeti; tek başına ECU kimliğini, protokolü veya komut güvenliğini doğrulamaz."}
+
 
 # ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
 # Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
@@ -1343,6 +1405,13 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <pre id="dct_dtc_result" style="color:#aab5c2;white-space:pre-wrap">Yalnızca kaynakla doğrulanmış DCT kodları çevrimdışı açıklanır. ECU'ya bağlanmaz.</pre>
   </div>
   <div class="module-note"><b>Güvenlik kilidi:</b> DCT kavrama, vites seçici ve adaptasyon komutları model/yıl/TCU kimliğine bağlıdır. Doğrulanmamış reset veya kalibrasyon komutu gönderilmeyecek.</div>
+  <div class="test-block" id="dct-capture-lab">
+   <div class="title">KENDİ DCT CİHAZIMIZ – PASİF HABERLEŞME KAYDI</div>
+   <p style="color:#aab5c2">TX/RX veya CAN kayıtlarını yükleyip inceleyin. Bu ekran ECU'ya komut göndermez.</p>
+   <div class="module-actions"><input id="dct_capture_file" type="file" accept=".log,.txt,.asc,.csv" class="module-field"><button class="btn test-btn" onclick="dctAnalyzeCapture()">KAYDI ANALİZ ET</button></div>
+   <pre id="dct_capture_result" style="color:#ffcc80;white-space:pre-wrap;max-height:300px;overflow:auto">Kayıt bekleniyor. Örnek: TX: 81 F1 ... / RX: 83 F1 ...</pre>
+  </div>
+
   <div class="test-block" id="dct-tool-research">
    <div class="title">DCT TEŞHİS / SERVİS ARAÇLARI – ARAŞTIRMA KAYITLARI</div>
    <div class="module-list">
@@ -1433,6 +1502,12 @@ function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanı
 socket.on('gkbus_result',d=>{var el=document.getElementById('gk_conn_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_test_result',d=>{var el=document.getElementById('gk_test_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_d07_result',d=>{var el=document.getElementById('gk_d07_out');if(el)el.innerText=d.ok?('Pulse: '+d.data):('❌ '+d.msg)});
 function aracSec(){var data={marka:document.getElementById('sel_marka').value,model:document.getElementById('sel_model').value,yil:parseInt(document.getElementById('sel_yil').value),konnektor:document.getElementById('sel_konnektor').value,manuel_model:document.getElementById('sel_model_manual').value};document.getElementById('arac_sonuc').style.display='block';document.getElementById('arac_sonuc_text').innerText='Yapılandırma hesaplanıyor...';socket.emit('arac_sec',data)}
 socket.on('arac_sec_result',function(d){var sonucText=document.getElementById('arac_sonuc_text');if(d.ok){sonucText.innerText=d.msg;sonucText.style.color='#00ff00'}else{sonucText.innerText='HATA: '+d.msg;sonucText.style.color='#ff5252'}});
+
+function dctCheckProfile(){socket.emit('dct_profile_check',{model:document.getElementById('dct_model').value,year:document.getElementById('dct_year').value});}
+function dctDecodeDtc(){socket.emit('dct_decode_dtc',{model:document.getElementById('dct_model').value,year:document.getElementById('dct_year').value,code:document.getElementById('dct_dtc_code').value});}
+socket.on('dct_profile_result',d=>{document.getElementById('dct_profile_result').innerText=JSON.stringify(d,null,2);});
+socket.on('dct_decode_dtc_result',d=>{document.getElementById('dct_dtc_result').innerText=d.code+' – '+d.description+(d.source?'\\nKaynak: '+d.source:'');});
+async function dctAnalyzeCapture(){const f=document.getElementById('dct_capture_file').files[0],o=document.getElementById('dct_capture_result');if(!f){o.innerText='Önce dosya seçin.';return;}const fd=new FormData();fd.append('file',f);o.innerText='Analiz ediliyor...';try{const r=await fetch('/dct/passive/analyze',{method:'POST',body:fd});o.innerText=JSON.stringify(await r.json(),null,2);}catch(e){o.innerText='Analiz hatası: '+e;}}
 </script></body></html>
 """
 
@@ -1455,6 +1530,22 @@ def handle_arac_sec(data):
         msg = f"✅ ARAÇ: {ARAC_CONFIG['marka'].upper()} {ARAC_CONFIG['model'].upper()} ({ARAC_CONFIG['yil']})\nProtokol: {ARAC_CONFIG['protokol'].upper()}\nPin Şeması: {ARAC_CONFIG['pin_sema']}\nNot: {ARAC_CONFIG['notlar']}"
         socketio.emit('arac_sec_result', {'ok': True, 'msg': msg})
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
+
+
+@app.route('/dct/passive/analyze', methods=['POST'])
+def dct_passive_capture_analyze():
+    uploaded=request.files.get('file')
+    if uploaded is None or not uploaded.filename:
+        return jsonify({"ok":False,"error":"DCT kayıt dosyası seçilmedi."}),400
+    filename=os.path.basename(uploaded.filename)
+    if os.path.splitext(filename)[1].lower() not in (".log",".txt",".asc",".csv"):
+        return jsonify({"ok":False,"error":"Yalnızca .log, .txt, .asc veya .csv kabul edilir."}),400
+    content=uploaded.read(DCT_CAPTURE_MAX_BYTES+1)
+    if len(content)>DCT_CAPTURE_MAX_BYTES:
+        return jsonify({"ok":False,"error":"Dosya 5 MB sınırını aşıyor."}),413
+    result=analyze_dct_capture(content.decode("utf-8-sig",errors="replace"),filename)
+    write_log("DCT PASİF KAYIT",f"{filename}: {result['frame_count']} çerçeve; TX {result['tx_count']}; RX {result['rx_count']}")
+    return jsonify(result)
 
 @socketio.on('dct_profile_check')
 def handle_dct_profile_check(data):
