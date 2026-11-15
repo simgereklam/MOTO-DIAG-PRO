@@ -312,7 +312,7 @@ class _J2534Msg(ctypes.Structure):
                 ("Data", ctypes.c_ubyte * 4128)]
 
 _j2534_lock = threading.RLock()
-_j2534_state = {"dll": None, "device_id": None, "channel_id": None,
+_j2534_state = {"dll": None, "device_id": None, "channel_id": None, "filter_id": None,
                 "protocol": None, "dll_path": None, "last_error": None}
 
 def _j2534_candidates():
@@ -325,7 +325,11 @@ def _j2534_candidates():
                      os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")):
             paths.extend([os.path.join(base, "Scanmatik", "Drivers", "sm2j2534.dll"),
                           os.path.join(base, "Scanmatik", "sm2j2534.dll"),
-                          os.path.join(base, "Scanmatik 2", "sm2j2534.dll")])
+                          os.path.join(base, "Scanmatik 2", "sm2j2534.dll"),
+                          os.path.join(base, "Tactrix", "Drivers", "op20pt64.dll"),
+                          os.path.join(base, "Tactrix", "Drivers", "op20pt32.dll"),
+                          os.path.join(base, "OpenPort 2.0", "op20pt64.dll"),
+                          os.path.join(base, "OpenPort 2.0", "op20pt32.dll")])
     return list(dict.fromkeys(p for p in paths if p))
 
 def j2534_status():
@@ -336,6 +340,7 @@ def j2534_status():
                 "dll_path": _j2534_state["dll_path"],
                 "device_id": _j2534_state["device_id"],
                 "channel_id": _j2534_state["channel_id"],
+                "filter_id": _j2534_state.get("filter_id"),
                 "last_error": _j2534_state["last_error"],
                 "note": "PassThru API hazirligi veya kanal acilmasi ECU kimligini/DCT-ABS uyumlulugunu kanitlamaz."}
 
@@ -360,10 +365,19 @@ def j2534_open_passive(protocol="can", baud=None):
             connect_fn = dll.PassThruConnect
             connect_fn.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
                                    ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]
-            connect_fn.restype = ctypes.c_long
+            connect_fn.restype = ctypes.c_uint32
             close_fn = dll.PassThruClose
             close_fn.argtypes = [ctypes.c_uint32]
-            close_fn.restype = ctypes.c_long
+            close_fn.restype = ctypes.c_uint32
+            disconnect_fn = dll.PassThruDisconnect
+            disconnect_fn.argtypes = [ctypes.c_uint32]
+            disconnect_fn.restype = ctypes.c_uint32
+            filter_fn = getattr(dll, "PassThruStartMsgFilter", None)
+            if filter_fn is not None:
+                filter_fn.argtypes = [ctypes.c_uint32, ctypes.c_uint32,
+                    ctypes.POINTER(_J2534Msg), ctypes.POINTER(_J2534Msg),
+                    ctypes.POINTER(_J2534Msg), ctypes.POINTER(ctypes.c_uint32)]
+                filter_fn.restype = ctypes.c_uint32
             device = ctypes.c_uint32(0)
             rc = int(open_fn(None, ctypes.byref(device)))
             if rc != 0:
@@ -375,10 +389,25 @@ def j2534_open_passive(protocol="can", baud=None):
             if rc != 0:
                 close_fn(device.value)
                 return False, f"PassThruConnect basarisiz: {J2534_STATUS.get(rc, 'J2534 hata '+str(rc))}"
+            filter_id = None
+            filter_note = "Alim filtresi kurulmadan kanal acildi."
+            # CAN/ISO15765 icin 4-byte CAN-ID alaninda sifir maskeli PASS_FILTER
+            # tum ID'leri kabul eder. Bu yalnizca RX filtresidir; ECU'ya TX yapmaz.
+            if protocol in ("can", "iso15765") and filter_fn is not None:
+                mask = _J2534Msg(); pattern = _J2534Msg(); fid = ctypes.c_uint32(0)
+                mask.ProtocolID = spec["id"]; mask.DataSize = 4
+                pattern.ProtocolID = spec["id"]; pattern.DataSize = 4
+                rc_filter = int(filter_fn(channel.value, 1, ctypes.byref(mask),
+                                          ctypes.byref(pattern), None, ctypes.byref(fid)))
+                if rc_filter == 0:
+                    filter_id = fid.value
+                    filter_note = "Tum CAN ID'leri icin pasif RX filtresi etkin."
+                else:
+                    filter_note = "PASS_FILTER kurulamadi: " + J2534_STATUS.get(rc_filter, str(rc_filter))
             _j2534_state.update({"dll": dll, "device_id": device.value,
-                "channel_id": channel.value, "protocol": protocol,
+                "channel_id": channel.value, "filter_id": filter_id, "protocol": protocol,
                 "dll_path": dll_path, "last_error": None})
-            return True, f"J2534 kanali acildi: {spec['label']} / {speed} baud. Yalnizca pasif okuma; ECU istegi gonderilmedi."
+            return True, f"J2534 kanali acildi: {spec['label']} / {speed} baud. {filter_note} ECU istegi gonderilmedi."
         except Exception as exc:
             _j2534_state["last_error"] = str(exc)
             return False, f"J2534 DLL yukleme/API hatasi: {exc}"
@@ -415,11 +444,19 @@ def j2534_read_passive(timeout_ms=250, max_messages=16):
 
 def j2534_close():
     with _j2534_lock:
-        dll, channel, device = (_j2534_state["dll"], _j2534_state["channel_id"],
-                                _j2534_state["device_id"])
+        dll, channel, device, filter_id = (_j2534_state["dll"], _j2534_state["channel_id"],
+                                _j2534_state["device_id"], _j2534_state.get("filter_id"))
         if dll is None:
             return True, "J2534 zaten kapali."
         errors = []
+        try:
+            if channel is not None and filter_id is not None and hasattr(dll, "PassThruStopMsgFilter"):
+                stop_filter = dll.PassThruStopMsgFilter
+                stop_filter.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+                stop_filter.restype = ctypes.c_uint32
+                rc_filter = int(stop_filter(ctypes.c_uint32(channel), ctypes.c_uint32(filter_id)))
+                if rc_filter != 0: errors.append("StopMsgFilter: "+str(rc_filter))
+        except Exception as exc: errors.append("Filter: "+str(exc))
         try:
             if channel is not None:
                 rc = int(dll.PassThruDisconnect(ctypes.c_uint32(channel)))
@@ -430,7 +467,7 @@ def j2534_close():
                 rc = int(dll.PassThruClose(ctypes.c_uint32(device)))
                 if rc != 0: errors.append("Close: "+str(rc))
         except Exception as exc: errors.append(str(exc))
-        _j2534_state.update({"dll": None, "device_id": None, "channel_id": None,
+        _j2534_state.update({"dll": None, "device_id": None, "channel_id": None, "filter_id": None,
                              "protocol": None, "dll_path": None})
         return not errors, ("J2534 kapatildi." if not errors else "Kapatma uyarisi: "+"; ".join(errors))
 
@@ -1543,14 +1580,14 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   <p style="color:#aab5c2">ABS teşhis katmanı marka, model, yıl, ABS beyni ve fiziksel adaptör profiline göre çalışır. Motor ECU bağlantısı ABS bağlantısı yerine geçmez.</p>
   <div class="module-grid">
       <div class="test-block" id="j2534-panel">
-    <div class="title">SCANMATIK / J2534 BAĞLANTI ARAYÜZÜ · PASİF MOD</div>
-    <p style="color:#aab5c2">Windows J2534 DLL üzerinden CAN/K-Line kanalı açılır ve yalnızca gelen mesajlar okunur. ECU sorgusu, arıza silme, aktüatör ve yazma komutu gönderilmez.</p>
+    <div class="title">J2534 KÖPRÜSÜ · SCANMATIK / TACTRIX / UYUMLU DLL</div>
+    <p style="color:#aab5c2">Windows J2534 DLL üzerinden CAN/K-Line kanalı açılır. Bağlan ve RX kayıt okuma çalışır; model/ABS ECU protokolü doğrulanmadan DTC sorgusu, arıza silme, aktüatör ve yazma komutu gönderilmez.</p>
     <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
      <div><label class="title">Protokol</label><select class="module-field" id="j2534_protocol"><option value="can">CAN · 500 kbit/s</option><option value="iso15765">ISO15765 · 500 kbit/s</option><option value="iso9141">ISO9141 K-Line · 10400</option><option value="kwp2000">ISO14230 KWP2000 · 10400</option></select></div>
      <div><label class="title">Baud (isteğe bağlı)</label><input class="module-field" id="j2534_baud" type="number" placeholder="Varsayılan"></div>
      <div><label class="title">J2534 durumu</label><div class="module-field" id="j2534_state">Kontrol edilmedi</div></div>
     </div>
-    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">PASİF KANALI AÇ</button><button class="btn test-btn" onclick="j2534Read()">GELEN MESAJLARI OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
+    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">BAĞLAN</button><button class="btn test-btn" onclick="j2534Read()">HAT MESAJLARINI OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
     <pre id="j2534_output" style="color:#00e5ff;white-space:pre-wrap;min-height:52px">DLL yolu SCANMATIK_J2534_DLL ortam değişkeniyle tanımlanabilir.</pre>
    </div>
 <div class="module-card"><div class="k">ABS modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU oturumundan tamamen ayrı</div></div>
