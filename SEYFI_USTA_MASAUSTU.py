@@ -118,8 +118,8 @@ def decode_dct_dtc(model, year, code):
     try:
         model_key = normalize_dct_model(model)
         model_year = int(year)
-        code_key = re.sub(r"\\s+", "", str(code or "").strip().upper()).replace("_", "-")
-        if not re.fullmatch(r"\\d{1,3}-\\d{1,2}", code_key):
+        code_key = re.sub(r"\s+", "", str(code or "").strip().upper()).replace("_", "-")
+        if not re.fullmatch(r"\d{1,3}-\d{1,2}", code_key):
             raise ValueError("DCT kodunu ana-alt biçiminde girin (ör. 21-1).")
         entry = DCT_DTC_DATABASE.get(("honda", model_key, model_year, code_key))
         if not entry:
@@ -258,7 +258,7 @@ def analyze_dct_capture(file_text, filename="dct_capture.log"):
     for n,raw in enumerate(str(file_text or "").splitlines(),1):
         line=raw.strip()
         if not line or line.startswith(("#",";","//")): continue
-        m=re.match(r"^(?:(\\d+(?:\\.\\d+)?)\\s+)?(TX|RX|SEND|RECV)\\s*[:=]\\s*([0-9A-Fa-f ]+)$",line,re.I)
+        m=re.match(r"^(?:(\d+(?:\.\d+)?)\s+)?(TX|RX|SEND|RECV)\s*[:=]\s*([0-9A-Fa-f ]+)$",line,re.I)
         if m:
             stamp,direction,payload=m.groups()
             try:
@@ -268,7 +268,7 @@ def analyze_dct_capture(file_text, filename="dct_capture.log"):
                  "data":b.hex(" ").upper(),"length":len(b),"transport":"unclassified"})
             except ValueError: ignored+=1
             continue
-        m=re.match(r"^\\((\\d+(?:\\.\\d+)?)\\)\\s+(\\S+)\\s+([0-9A-Fa-f]{1,8})#([0-9A-Fa-f]*)$",line)
+        m=re.match(r"^\((\d+(?:\.\d+)?)\)\s+(\S+)\s+([0-9A-Fa-f]{1,8})#([0-9A-Fa-f]*)$",line)
         if m:
             stamp,ch,cid,payload=m.groups()
             try:
