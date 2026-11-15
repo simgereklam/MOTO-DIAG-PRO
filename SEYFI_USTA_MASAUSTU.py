@@ -476,7 +476,7 @@ def abs_preflight_check(battery_voltage=None, ignition_on=False, wheel_stationar
 
 def decode_abs_dtc(brand, model, year, code):
     key = abs_profile_key(brand, model, year)
-    token = re.sub(r"\\s+", "", str(code or "").strip().upper())
+    token = re.sub(r"\s+", "", str(code or "").strip().upper())
     if not token:
         raise ValueError("ABS ariza kodunu girin.")
     entry = ABS_DTC_DATABASE.get(key + (token,))
@@ -491,7 +491,7 @@ def decode_abs_dtc(brand, model, year, code):
 # ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
 # Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
 # gelecekte gerçek ECU sorgularını etkinleştirebilir.
-ABS_PROFILE_SCHEMA_VERSION = 1
+ABS_PROFILE_SCHEMA_VERSION = 2
 ABS_PROFILE_REGISTRY = {}  # (marka, normalize_model, yil) -> doğrulanmış profil
 ABS_DTC_DATABASE = {}      # (marka, normalize_model, yil, DTC) -> doğrulanmış açıklama
 
