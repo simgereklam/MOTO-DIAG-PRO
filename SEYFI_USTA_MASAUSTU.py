@@ -285,6 +285,209 @@ def analyze_dct_capture(file_text, filename="dct_capture.log"):
       "frames":frames[:500],"note":"Pasif kayıt özeti; tek başına ECU kimliğini, protokolü veya komut güvenliğini doğrulamaz."}
 
 
+
+# ==================== J2534 / SCANMATIK UYUMLU TASIMA KATMANI ====================
+# Genel SAE J2534 PassThru DLL arayuzu. Cihaz modeli/klon uyumlulugu calisma aninda
+# DLL yukleme ve API cagri sonucuyla kontrol edilir. Bu katman ECU'ya istek gondermez.
+import ctypes
+from ctypes import wintypes
+
+J2534_PROTOCOLS = {
+    "can": {"id": 5, "default_baud": 500000, "label": "CAN 2.0"},
+    "iso15765": {"id": 6, "default_baud": 500000, "label": "ISO15765 / CAN"},
+    "iso9141": {"id": 3, "default_baud": 10400, "label": "ISO9141 K-Line"},
+    "kwp2000": {"id": 4, "default_baud": 10400, "label": "ISO14230 KWP2000"},
+}
+J2534_STATUS = {
+    0: "STATUS_NOERROR", 1: "ERR_NOT_SUPPORTED", 2: "ERR_INVALID_CHANNEL_ID",
+    3: "ERR_INVALID_PROTOCOL_ID", 4: "ERR_NULL_PARAMETER", 5: "ERR_INVALID_IOCTL_VALUE",
+    6: "ERR_INVALID_FLAGS", 7: "ERR_FAILED", 8: "ERR_DEVICE_NOT_CONNECTED",
+    9: "ERR_TIMEOUT", 10: "ERR_INVALID_MSG", 11: "ERR_INVALID_TIME_INTERVAL",
+    12: "ERR_EXCEEDED_LIMIT", 13: "ERR_INVALID_MSG", 14: "ERR_DEVICE_IN_USE",
+}
+class _J2534Msg(ctypes.Structure):
+    _fields_ = [("ProtocolID", ctypes.c_uint32), ("RxStatus", ctypes.c_uint32),
+                ("TxFlags", ctypes.c_uint32), ("Timestamp", ctypes.c_uint32),
+                ("DataSize", ctypes.c_uint32), ("ExtraDataIndex", ctypes.c_uint32),
+                ("Data", ctypes.c_ubyte * 4128)]
+
+_j2534_lock = threading.RLock()
+_j2534_state = {"dll": None, "device_id": None, "channel_id": None,
+                "protocol": None, "dll_path": None, "last_error": None}
+
+def _j2534_candidates():
+    paths = []
+    env_path = os.environ.get("SCANMATIK_J2534_DLL") or os.environ.get("J2534_DLL")
+    if env_path:
+        paths.append(env_path)
+    if sys.platform == "win32":
+        for base in (os.environ.get("ProgramFiles", r"C:\Program Files"),
+                     os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")):
+            paths.extend([os.path.join(base, "Scanmatik", "Drivers", "sm2j2534.dll"),
+                          os.path.join(base, "Scanmatik", "sm2j2534.dll"),
+                          os.path.join(base, "Scanmatik 2", "sm2j2534.dll")])
+    return list(dict.fromkeys(p for p in paths if p))
+
+def j2534_status():
+    with _j2534_lock:
+        connected = _j2534_state["channel_id"] is not None
+        return {"ok": True, "connected": connected,
+                "protocol": _j2534_state["protocol"],
+                "dll_path": _j2534_state["dll_path"],
+                "device_id": _j2534_state["device_id"],
+                "channel_id": _j2534_state["channel_id"],
+                "last_error": _j2534_state["last_error"],
+                "note": "PassThru API hazirligi veya kanal acilmasi ECU kimligini/DCT-ABS uyumlulugunu kanitlamaz."}
+
+def j2534_open_passive(protocol="can", baud=None):
+    """J2534 kanalini acar; PassThruWriteMsgs veya ECU sorgusu kullanmaz."""
+    protocol = str(protocol or "can").lower().strip()
+    if protocol not in J2534_PROTOCOLS:
+        return False, "Desteklenen protokoller: CAN, ISO15765, ISO9141, KWP2000."
+    if sys.platform != "win32":
+        return False, "Scanmatik J2534 DLL katmani Windows gerektirir."
+    with _j2534_lock:
+        if _j2534_state["channel_id"] is not None:
+            return False, "J2534 kanali zaten acik. Once baglantiyi kapatin."
+        dll_path = next((p for p in _j2534_candidates() if os.path.isfile(p)), None)
+        if not dll_path:
+            return False, "Scanmatik J2534 DLL bulunamadi. SCANMATIK_J2534_DLL ortam degiskenine DLL tam yolunu tanimlayin."
+        try:
+            dll = ctypes.WinDLL(dll_path)
+            open_fn = dll.PassThruOpen
+            open_fn.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            open_fn.restype = ctypes.c_long
+            connect_fn = dll.PassThruConnect
+            connect_fn.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32,
+                                   ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32)]
+            connect_fn.restype = ctypes.c_long
+            close_fn = dll.PassThruClose
+            close_fn.argtypes = [ctypes.c_uint32]
+            close_fn.restype = ctypes.c_long
+            device = ctypes.c_uint32(0)
+            rc = int(open_fn(None, ctypes.byref(device)))
+            if rc != 0:
+                return False, f"PassThruOpen basarisiz: {J2534_STATUS.get(rc, 'J2534 hata '+str(rc))}"
+            spec = J2534_PROTOCOLS[protocol]
+            channel = ctypes.c_uint32(0)
+            speed = int(baud or spec["default_baud"])
+            rc = int(connect_fn(device.value, spec["id"], 0, speed, ctypes.byref(channel)))
+            if rc != 0:
+                close_fn(device.value)
+                return False, f"PassThruConnect basarisiz: {J2534_STATUS.get(rc, 'J2534 hata '+str(rc))}"
+            _j2534_state.update({"dll": dll, "device_id": device.value,
+                "channel_id": channel.value, "protocol": protocol,
+                "dll_path": dll_path, "last_error": None})
+            return True, f"J2534 kanali acildi: {spec['label']} / {speed} baud. Yalnizca pasif okuma; ECU istegi gonderilmedi."
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return False, f"J2534 DLL yukleme/API hatasi: {exc}"
+
+def j2534_read_passive(timeout_ms=250, max_messages=16):
+    """Yalnizca hattan gelen J2534 mesajlarini okur; TX API'si cagirilmaz."""
+    with _j2534_lock:
+        dll, channel = _j2534_state["dll"], _j2534_state["channel_id"]
+        if dll is None or channel is None:
+            return {"ok": False, "error": "J2534 kanali acik degil.", "frames": []}
+        try:
+            read_fn = dll.PassThruReadMsgs
+            read_fn.argtypes = [ctypes.c_uint32, ctypes.POINTER(_J2534Msg),
+                                ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32]
+            read_fn.restype = ctypes.c_long
+            count = max(1, min(int(max_messages), 64))
+            messages = (_J2534Msg * count)()
+            received = ctypes.c_uint32(count)
+            rc = int(read_fn(channel, messages, ctypes.byref(received),
+                             max(1, min(int(timeout_ms), 5000))))
+            if rc not in (0, 9):
+                return {"ok": False, "error": J2534_STATUS.get(rc, "J2534 hata "+str(rc)), "frames": []}
+            frames = []
+            for msg in list(messages)[:received.value]:
+                size = min(int(msg.DataSize), 4128)
+                frames.append({"protocol_id": int(msg.ProtocolID),
+                    "rx_status": int(msg.RxStatus), "timestamp": int(msg.Timestamp),
+                    "data": bytes(msg.Data[:size]).hex(" ").upper(), "length": size})
+            return {"ok": True, "frames": frames, "count": len(frames),
+                    "note": "J2534 RX kaydi; ECU istegi gonderilmedi."}
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return {"ok": False, "error": str(exc), "frames": []}
+
+def j2534_close():
+    with _j2534_lock:
+        dll, channel, device = (_j2534_state["dll"], _j2534_state["channel_id"],
+                                _j2534_state["device_id"])
+        if dll is None:
+            return True, "J2534 zaten kapali."
+        errors = []
+        try:
+            if channel is not None:
+                rc = int(dll.PassThruDisconnect(ctypes.c_uint32(channel)))
+                if rc != 0: errors.append("Disconnect: "+str(rc))
+        except Exception as exc: errors.append(str(exc))
+        try:
+            if device is not None:
+                rc = int(dll.PassThruClose(ctypes.c_uint32(device)))
+                if rc != 0: errors.append("Close: "+str(rc))
+        except Exception as exc: errors.append(str(exc))
+        _j2534_state.update({"dll": None, "device_id": None, "channel_id": None,
+                             "protocol": None, "dll_path": None})
+        return not errors, ("J2534 kapatildi." if not errors else "Kapatma uyarisi: "+"; ".join(errors))
+
+# ==================== ABS PROFIL TAMAMLAMA / GUVENLIK KONTROLU ====================
+ABS_PROFILE_SCHEMA_VERSION = 2
+ABS_SUPPORTED_TRANSPORTS = ("unknown", "can", "iso15765", "kline", "iso9141", "kwp2000", "proprietary")
+
+def build_abs_profile_shell(brand, model, year, transport="unknown"):
+    """Model/yil icin kanit bekleyen ABS profili; aktif islevleri acmaz."""
+    key = abs_profile_key(brand, model, year)
+    transport = str(transport or "unknown").lower().strip()
+    if transport not in ABS_SUPPORTED_TRANSPORTS:
+        raise ValueError("ABS tasima turu gecersiz.")
+    b, m, y = key
+    return {"schema_version": ABS_PROFILE_SCHEMA_VERSION,
+        "profile_id": "ABS-"+b.upper().replace(" ","-")+"-"+m.upper().replace(" ","-")+"-"+str(y),
+        "brand": str(brand).strip(), "model": str(model).strip(), "year": y,
+        "transport": transport, "transport_verified": False, "protocol_verified": False,
+        "connector": None, "pinout": None, "bitrate": None, "tx_id": None, "rx_id": None,
+        "ecu_identity": None, "dtc_format": None, "evidence": [],
+        "capabilities": {k: "not_implemented" for k in ABS_SAFETY_CAPABILITIES},
+        "verified": False, "safety": {"active_requests_enabled": False,
+        "clear_dtcs_enabled": False, "actuator_tests_enabled": False,
+        "write_operations_enabled": False}}
+
+def abs_preflight_check(battery_voltage=None, ignition_on=False, wheel_stationary=True,
+                        hydraulic_work=False):
+    """Servis on-kontrolu; fren hidroligini calistirmaz veya aktue etmez."""
+    checks = []
+    try:
+        v = float(battery_voltage) if battery_voltage not in (None, "") else None
+    except (TypeError, ValueError):
+        v = None
+    checks.append({"item": "Akü gerilimi", "ok": v is not None and v >= 12.8,
+                   "detail": (f"{v:.2f} V" if v is not None else "Ölçüm girilmedi; 12.8 V ve üzeri hedeflenir.")})
+    checks.append({"item": "Kontak", "ok": bool(ignition_on), "detail": "Açık" if ignition_on else "Kontak açık olarak doğrulanmadı."})
+    checks.append({"item": "Tekerlekler", "ok": bool(wheel_stationary), "detail": "Araç sabit" if wheel_stationary else "Araç hareket ediyor; ABS teşhis işlemi başlatılmamalı."})
+    checks.append({"item": "Hidrolik işlem", "ok": not bool(hydraulic_work),
+                   "detail": "Yalnızca elektronik teşhis" if not hydraulic_work else "Hidrolik hava alma/aktüatör işlemi bu yazılımda desteklenmez."})
+    passed = all(x["ok"] for x in checks)
+    return {"ok": True, "ready": passed, "checks": checks,
+            "note": "Bu kontrol yalnızca ön koşul listesidir; ECU bağlantısı veya fren sistemi güvenliğini onaylamaz."}
+
+def decode_abs_dtc(brand, model, year, code):
+    key = abs_profile_key(brand, model, year)
+    token = re.sub(r"\\s+", "", str(code or "").strip().upper())
+    if not token:
+        raise ValueError("ABS ariza kodunu girin.")
+    entry = ABS_DTC_DATABASE.get(key + (token,))
+    if not entry or entry.get("verified") is not True:
+        return {"ok": True, "found": False, "code": token,
+                "description": "Bu marka/model/yil icin kaynakla dogrulanmis ABS kod aciklamasi bulunamadi.",
+                "source": None}
+    return {"ok": True, "found": True, "code": token,
+            "description": entry["description_tr"], "source": entry.get("source")}
+
+
 # ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
 # Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
 # gelecekte gerçek ECU sorgularını etkinleştirebilir.
@@ -1531,6 +1734,57 @@ def handle_arac_sec(data):
         socketio.emit('arac_sec_result', {'ok': True, 'msg': msg})
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
 
+
+
+@app.route('/api/j2534/status', methods=['GET'])
+def api_j2534_status():
+    return jsonify(j2534_status())
+
+@app.route('/api/j2534/open', methods=['POST'])
+def api_j2534_open():
+    payload = request.get_json(silent=True) or {}
+    ok, msg = j2534_open_passive(payload.get("protocol", "can"), payload.get("baud"))
+    write_log("J2534 PASIF KANAL", msg)
+    return jsonify({"ok": ok, "message": msg, "status": j2534_status()}), (200 if ok else 400)
+
+@app.route('/api/j2534/read', methods=['GET'])
+def api_j2534_read():
+    result = j2534_read_passive(request.args.get("timeout_ms", 250))
+    if result.get("frames"):
+        write_log("J2534 RX", f"{result['count']} mesaj alindi.")
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+@app.route('/api/j2534/close', methods=['POST'])
+def api_j2534_close():
+    ok, msg = j2534_close()
+    write_log("J2534 KAPAT", msg)
+    return jsonify({"ok": ok, "message": msg}), (200 if ok else 400)
+
+@app.route('/api/abs/profile-shell', methods=['POST'])
+def api_abs_profile_shell():
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = build_abs_profile_shell(payload.get("brand", ""), payload.get("model", ""),
+                                         payload.get("year", ""), payload.get("transport", "unknown"))
+        return jsonify({"ok": True, "profile": result})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+@app.route('/api/abs/preflight', methods=['POST'])
+def api_abs_preflight():
+    payload = request.get_json(silent=True) or {}
+    return jsonify(abs_preflight_check(payload.get("battery_voltage"),
+        payload.get("ignition_on", False), payload.get("wheel_stationary", True),
+        payload.get("hydraulic_work", False)))
+
+@app.route('/api/abs/dtc/decode', methods=['POST'])
+def api_abs_dtc_decode():
+    payload = request.get_json(silent=True) or {}
+    try:
+        return jsonify(decode_abs_dtc(payload.get("brand", ""), payload.get("model", ""),
+                                       payload.get("year", ""), payload.get("code", "")))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 @app.route('/dct/passive/analyze', methods=['POST'])
 def dct_passive_capture_analyze():
