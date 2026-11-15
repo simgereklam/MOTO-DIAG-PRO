@@ -183,6 +183,45 @@ def get_dct_tool_research():
     """DCT araçları hakkındaki çevrimdışı araştırma notlarını döndürür; ECU'ya bağlanmaz."""
     return {key: dict(value) for key, value in DCT_TOOL_REFERENCES.items()}
 
+DCT_DIAGNOSTIC_COMPARISON = {
+ "biketune": {
+  "models": ["NC750S DCT (2014+)", "NC750X DCT (2014+)"],
+  "transport": "Honda K-Line; STN tabanlı K-Line adaptör ve uygun Honda 4/6 pin kablo",
+  "functions": ["Yanıt veren bilinen ünitelerden DTC okuma", "Pro ile DTC silme", "Motor OBD-II canlı verisi (yanıt verirse)"],
+  "dct_tcu_named_in_public_docs": False, "raw_dct_reply_published": False, "known_reply_bytes": None,
+  "assessment": "DCT model varyantı listeli; gerçek TCU erişimi araç üzerinde doğrulanmalı.",
+  "source": "https://biketune.app/bike/honda-nc-750-cc/"
+ },
+ "fxtul_m3a": {
+  "models": [],
+  "transport": "Honda adaptör kablosu ile motosiklet teşhisi; DCT protokolü açıklanmıyor",
+  "functions": ["Quick Test", "Kontrol ünitesi seçimi", "Modül bilgisi", "DTC okuma/silme", "Canlı veri", "Freeze frame", "Aktüatör testi (desteklenirse)"],
+  "dct_tcu_named_in_public_docs": False, "raw_dct_reply_published": False, "known_reply_bytes": None,
+  "assessment": "Genel çoklu sistem işlevleri belgeli; Honda DCT uyumluluğu kanıtlanmadı.",
+  "source": "https://manuals.plus/asin/B0C2CMGFS4.pdf"
+ },
+ "honda_mcs": {
+  "models": ["Honda DCT donanımlı motosikletler"],
+  "transport": "Honda OEM MCS/VCI ve modele özgü DLC bağlantısı",
+  "functions": ["DCT dahil tüm ECU'larda DTC okuma/silme", "ECU verisi izleme", "Reset/güncelleme", "Aktüasyon", "Quick Doctor"],
+  "dct_tcu_named_in_public_docs": True, "raw_dct_reply_published": False, "known_reply_bytes": None,
+  "assessment": "Honda'nın resmî DCT teşhis referansı; ham protokol kamuya açık değil.",
+  "source": "https://global.honda/en/motorcycle-aftersales/plusone/202506.html"
+ },
+ "gst_xadv_2020": {
+  "models": ["2020 Honda X-ADV ADV750/ADV750M"],
+  "transport": "Servis kitabı GST veya MCS üzerinden DCT DTC okuma/silme diyor; protokol tanımı yok",
+  "functions": ["DCT DTC okuma", "DCT DTC silme"],
+  "dct_tcu_named_in_public_docs": True, "raw_dct_reply_published": False, "known_reply_bytes": None,
+  "assessment": "Yalnızca bu model/yıl servis prosedürü kanıtı; her GST'ye genellenemez.",
+  "source": "https://www.scribd.com/document/852109922/2020-Honda-x-Adv750-Workshop-Manual"
+ }
+}
+
+def get_dct_diagnostic_comparison():
+    """Kaynaklı ürün karşılaştırması; fiziksel ECU yanıtı üretmez."""
+    return {name: dict(data) for name, data in DCT_DIAGNOSTIC_COMPARISON.items()}
+
 
 # ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
 # Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
@@ -1313,6 +1352,17 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div class="module-item"><b><a href="https://github.com/Sirawit45/josave-tuner" target="_blank" rel="noopener">JOSAVE TUNER – GitHub</a></b><span>Honda ECM K-Line haberleşmesi ve ECM DTC kodu için kaynak kodu. DCT TCM protokolü doğrulanmadı; ECM komutları DCT'ye gönderilmez.</span></div>
    </div>
    <div class="module-note"><b>Kanıt seviyesi:</b> Bu liste araştırma referansıdır, uyumluluk garantisi değildir. Gerçek DCT TCU/PCM kimliği ve yanıtı doğrulanmadan bağlanma, tarama, silme, adaptasyon veya aktüatör komutu etkinleştirilmez.</div>
+  </div>
+
+  <div class="test-block" id="dct-communication-comparison">
+   <div class="title">BİKETUNE / FXTUL M3-A – DCT HABERLEŞME KARŞILAŞTIRMASI</div>
+   <div class="module-list">
+    <div class="module-item"><b>Biketune – NC750S/X DCT</b><span>Model sayfasında NC750S DCT ve NC750X DCT listeli. Honda K-Line için STN tabanlı K-Line adaptör ve Honda 4/6 pin kablo istiyor. Yanıt veren bilinen üniteleri tarıyor; fakat kamuya açık sayfada DCT TCU adı, kimliği veya ham yanıt baytları gösterilmiyor. <a href="https://biketune.app/bike/honda-nc-750-cc/" target="_blank" rel="noopener">Kaynak</a></span></div>
+    <div class="module-item"><b>FXTUL M3-A</b><span>Kılavuz Quick Test ile erişilebilir sistemleri tarama; modül bilgisi, DTC okuma/silme, canlı veri, freeze-frame ve aktüatör testini belgeliyor. Örnek ekranlar ECM/ABS/BODY/IMMO; Honda DCT/TCM adı, model uyumluluğu veya ham TCM yanıtı yok. <a href="https://manuals.plus/asin/B0C2CMGFS4.pdf" target="_blank" rel="noopener">Kılavuz</a></span></div>
+    <div class="module-item"><b>Honda MCS – referans</b><span>Honda, MCS'nin PGM-FI, ABS ve DCT dahil tüm ECU'ları teşhis ettiğini söylüyor. Aynı açıklama genel GST'leri normalde emisyonla ilgili PGM-FI ile sınırlar; 2020 X-ADV servis kitabı ise o modelin DCT DTC işlemleri için GST veya MCS diyor. GST kabiliyeti model/cihaz bazında ele alınmalı. <a href="https://global.honda/en/motorcycle-aftersales/plusone/202506.html" target="_blank" rel="noopener">Honda</a> · <a href="https://www.scribd.com/document/852109922/2020-Honda-x-Adv750-Workshop-Manual" target="_blank" rel="noopener">X-ADV servis kitabı</a></span></div>
+   </div>
+   <div class="module-note"><b>Gerçek yanıt karşılaştırması:</b> Biketune: yayımlanmış ham DCT TCU yanıtı yok. FXTUL M3-A: yayımlanmış ham DCT TCU yanıtı yok. Honda MCS: DCT ECU erişimi resmen doğrulanmış, ham protokol baytları kamuya açık değil. CAN ID, K-Line hedef adresi, init dizisi, servis ID veya checksum tahmin edilmedi.</div>
+   <div class="module-note"><b>Servis kitabındaki DCT kod örnekleri (2020 X-ADV):</b> P0197/P0198 (EOT sensörü/TCM), P0775 (No.2 lineer solenoid/TCM), P170A/P170B (vites kontrol motoru/TCM). Bunlar ham ECU yanıtı değil, servis kitabındaki arıza kayıtlarıdır.</div>
   </div>
   <h3 style="color:#00d9f5">DCT canlı veri</h3>
   <div class="module-list">
