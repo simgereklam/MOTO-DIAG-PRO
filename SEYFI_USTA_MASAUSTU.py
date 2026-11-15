@@ -1668,7 +1668,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div class="title">J2534 KÖPRÜSÜ · SCANMATIK / TACTRIX / UYUMLU DLL</div>
     <p style="color:#aab5c2">Windows J2534 DLL üzerinden CAN/K-Line kanalı açılır. Motor ECU için standart OBD-II Mode 03 arıza okuma ISO15765/CAN üzerinden denenebilir. Bu sorgu ABS/DCT taraması değildir. ABS özel sorgusu yalnızca doğrulanmış model protokolüyle açılır.</p>
     <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-     <div><label class="title">Protokol</label><select class="module-field" id="j2534_protocol"><option value="can">CAN · 500 kbit/s</option><option value="iso15765">ISO15765 · 500 kbit/s</option><option value="iso9141">ISO9141 K-Line · 10400</option><option value="kwp2000">ISO14230 KWP2000 · 10400</option></select></div>
+     <div><label class="title">Protokol</label><select class="module-field" id="j2534_protocol"><option value="iso15765">ISO15765 · 500 kbit/s (OBD-II)</option><option value="can">CAN · 500 kbit/s (ham/pasif)</option><option value="iso9141">ISO9141 K-Line · 10400</option><option value="kwp2000">ISO14230 KWP2000 · 10400</option></select></div>
      <div><label class="title">Baud (isteğe bağlı)</label><input class="module-field" id="j2534_baud" type="number" placeholder="Varsayılan"></div>
      <div><label class="title">J2534 durumu</label><div class="module-field" id="j2534_state">Kontrol edilmedi</div></div>
     </div>
