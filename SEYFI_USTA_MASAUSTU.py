@@ -130,6 +130,60 @@ def decode_dct_dtc(model, year, code):
         return {"ok": False, "found": False, "code": "", "description": str(exc), "source": None}
 
 
+# ==================== HONDA DCT ARAŞTIRMA / REFERANS KATMANI ====================
+# Bu kayıtlar DCT protokolünü veya araç üzerindeki uyumluluğu etkinleştirmez.
+# Yalnızca üretici/uygulama açıklamalarından derlenen araştırma referanslarıdır.
+DCT_TOOL_REFERENCES = {
+    "biketune": {
+        "name": "Biketune",
+        "url": "https://biketune.app/bike/honda-nc-750-cc/",
+        "category": "diagnostic_app",
+        "status": "MODEL SAYFASINDA NC750S DCT / NC750X DCT LİSTELİ",
+        "functions": ["Arıza kodu okuma", "Pro ile arıza kodu silme", "Canlı veri (yanıt veren üniteler)"],
+        "adapter": "Honda K-Line için STN tabanlı, K-Line destekli adaptör; Honda 4/6 pin kablo gerekebilir.",
+        "limitations": "Uygulama her kontrol ünitesini taradığını ve yalnızca yanıt veren üniteleri listelediğini belirtiyor. DCT TCU erişimi araç/yıl/ünite bazında ayrıca doğrulanmalı.",
+        "evidence": "Üreticinin NC 750 model sayfası ve adaptör/uyumluluk açıklaması."
+    },
+    "fxtul_m3a": {
+        "name": "FXTUL M3-A",
+        "url": "https://fxtul.com/products/fxtul-m3-motorcycle-diagnostic-tool-obd2-code-reader-scan-tool-for-honda-yamaha-motorcycle",
+        "category": "diagnostic_device",
+        "status": "GENEL MOTOSİKLET TEŞHİS İŞLEVLERİ VAR; HONDA DCT TCU ERİŞİMİ DOĞRULANMADI",
+        "functions": ["Genel ürün dokümanında DTC okuma/silme", "Canlı veri", "Freeze-frame ve servis/test işlevleri (model desteğine bağlı)"],
+        "adapter": "Üreticinin motosiklet bağlantı kablo seti ve cihazı.",
+        "limitations": "Motor ECU'sunda DTC okuması, DCT kontrol ünitesine erişim kanıtı değildir. Honda DCT modülü için bağımsız, model/yıl bazlı test sonucu gerekli.",
+        "evidence": "Üretici ürün/kılavuz bilgisi; DCT TCU işlevi ayrıca teyit edilmedi."
+    },
+    "healtech_dct": {
+        "name": "HealTech DCT Dyno Tool",
+        "url": "https://www.healtech-electronics.com/products/dct/",
+        "category": "service_function",
+        "status": "DCT DİNAMOMETRE MODU ETKİNLEŞTİRME İŞLEVİ ÜRETİCİ TARAFINDAN TANIMLANMIŞ",
+        "functions": ["DCT dyno mode etkinleştirme"],
+        "variants": {
+            "DCT-H01": "Eski nesil DCT uygulama listesi: NC700/NC750, Integra, CTX700, CRF1000L, VFR1200X, bazı Gold Wing ve X-ADV yılları.",
+            "DCT-H02": "Yeni nesil uygulama listesi: CRF1100L, CMX1100, NT1100, Forza 750, yeni X-ADV ve Gold Wing yılları."
+        },
+        "limitations": "Arıza kodu okuma/silme, canlı veri veya DCT programlama cihazı değildir. Kesin parça numarası motosiklet/yıl için ürün uyumluluk seçicisinden doğrulanmalı.",
+        "evidence": "HealTech ürün sayfası ve DCT kullanım kılavuzu; model/yıl listeleri ürün uygulama listesine göre değişebilir."
+    },
+    "josave_tuner": {
+        "name": "JOSAVE TUNER",
+        "url": "https://github.com/Sirawit45/josave-tuner",
+        "category": "open_source_reference",
+        "status": "HONDA ECM K-LINE KODU VAR; DCT TCM PROTOKOLÜ DOĞRULANMADI",
+        "functions": ["Honda ECM K-Line haberleşme araştırması", "ECM DTC okuma/silme kodu", "ECM kimliği ve flash/servis altyapısı"],
+        "adapter": "Kaynak kodunda FTDI/seri port K-Line yaklaşımı anlatılıyor; donanım ve hat seviyesi uyumluluğu ayrıca doğrulanmalı.",
+        "limitations": "ECM için görülen DTC komutları DCT TCM'ye kopyalanamaz. Flash/yazma işlevleri bu teşhis uygulamasında otomatik kullanılmayacak.",
+        "evidence": "Açık kaynak depo ve Honda ECU tuning dokümantasyonu; fiziksel DCT TCM testi bulunamadı."
+    }
+}
+
+def get_dct_tool_research():
+    """DCT araçları hakkındaki çevrimdışı araştırma notlarını döndürür; ECU'ya bağlanmaz."""
+    return {key: dict(value) for key, value in DCT_TOOL_REFERENCES.items()}
+
+
 # ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
 # Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
 # gelecekte gerçek ECU sorgularını etkinleştirebilir.
@@ -1250,6 +1304,16 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <pre id="dct_dtc_result" style="color:#aab5c2;white-space:pre-wrap">Yalnızca kaynakla doğrulanmış DCT kodları çevrimdışı açıklanır. ECU'ya bağlanmaz.</pre>
   </div>
   <div class="module-note"><b>Güvenlik kilidi:</b> DCT kavrama, vites seçici ve adaptasyon komutları model/yıl/TCU kimliğine bağlıdır. Doğrulanmamış reset veya kalibrasyon komutu gönderilmeyecek.</div>
+  <div class="test-block" id="dct-tool-research">
+   <div class="title">DCT TEŞHİS / SERVİS ARAÇLARI – ARAŞTIRMA KAYITLARI</div>
+   <div class="module-list">
+    <div class="module-item"><b><a href="https://biketune.app/bike/honda-nc-750-cc/" target="_blank" rel="noopener">Biketune – NC750 DCT</a></b><span>NC750S DCT / NC750X DCT model listesi. DTC okuma; Pro ile silme; STN + K-Line adaptör. DCT kontrol ünitesi yanıtı araçta ayrıca doğrulanmalı.</span></div>
+    <div class="module-item"><b><a href="https://fxtul.com/products/fxtul-m3-motorcycle-diagnostic-tool-obd2-code-reader-scan-tool-for-honda-yamaha-motorcycle" target="_blank" rel="noopener">FXTUL M3-A</a></b><span>Genel motosiklet DTC okuma/silme ve canlı veri aracı. Honda DCT TCM erişimi henüz kanıtlanmadı; motor ECU taraması DCT taraması sayılmaz.</span></div>
+    <div class="module-item"><b><a href="https://www.healtech-electronics.com/products/dct/" target="_blank" rel="noopener">HealTech DCT Dyno Tool</a></b><span>DCT-H01 / DCT-H02: dinamometre modunu etkinleştirir. DTC okuma veya silme cihazı değildir. Parça numarası model/yıla göre seçilmeli.</span></div>
+    <div class="module-item"><b><a href="https://github.com/Sirawit45/josave-tuner" target="_blank" rel="noopener">JOSAVE TUNER – GitHub</a></b><span>Honda ECM K-Line haberleşmesi ve ECM DTC kodu için kaynak kodu. DCT TCM protokolü doğrulanmadı; ECM komutları DCT'ye gönderilmez.</span></div>
+   </div>
+   <div class="module-note"><b>Kanıt seviyesi:</b> Bu liste araştırma referansıdır, uyumluluk garantisi değildir. Gerçek DCT TCU/PCM kimliği ve yanıtı doğrulanmadan bağlanma, tarama, silme, adaptasyon veya aktüatör komutu etkinleştirilmez.</div>
+  </div>
   <h3 style="color:#00d9f5">DCT canlı veri</h3>
   <div class="module-list">
    <div class="module-item"><b>Seçili vites</b><span id="dct_selected_gear">Veri bekleniyor</span></div>
