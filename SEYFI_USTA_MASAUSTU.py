@@ -474,7 +474,7 @@ def abs_preflight_check(battery_voltage=None, ignition_on=False, wheel_stationar
     return {"ok": True, "ready": passed, "checks": checks,
             "note": "Bu kontrol yalnızca ön koşul listesidir; ECU bağlantısı veya fren sistemi güvenliğini onaylamaz."}
 
-def decode_abs_dtc(brand, model, year, code):
+def decode_abs_dtc_record(brand, model, year, code):
     key = abs_profile_key(brand, model, year)
     token = re.sub(r"\s+", "", str(code or "").strip().upper())
     if not token:
@@ -1542,7 +1542,18 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   <div class="module-head"><h2 style="color:#ff626f">🛑 ÇOK MARKALI ABS TEŞHİS MERKEZİ</h2><span class="module-status">EVRENSEL PROFİL ALTYAPISI · GÜVENLİ MOD</span></div>
   <p style="color:#aab5c2">ABS teşhis katmanı marka, model, yıl, ABS beyni ve fiziksel adaptör profiline göre çalışır. Motor ECU bağlantısı ABS bağlantısı yerine geçmez.</p>
   <div class="module-grid">
-   <div class="module-card"><div class="k">ABS modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU oturumundan tamamen ayrı</div></div>
+      <div class="test-block" id="j2534-panel">
+    <div class="title">SCANMATIK / J2534 BAĞLANTI ARAYÜZÜ · PASİF MOD</div>
+    <p style="color:#aab5c2">Windows J2534 DLL üzerinden CAN/K-Line kanalı açılır ve yalnızca gelen mesajlar okunur. ECU sorgusu, arıza silme, aktüatör ve yazma komutu gönderilmez.</p>
+    <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+     <div><label class="title">Protokol</label><select class="module-field" id="j2534_protocol"><option value="can">CAN · 500 kbit/s</option><option value="iso15765">ISO15765 · 500 kbit/s</option><option value="iso9141">ISO9141 K-Line · 10400</option><option value="kwp2000">ISO14230 KWP2000 · 10400</option></select></div>
+     <div><label class="title">Baud (isteğe bağlı)</label><input class="module-field" id="j2534_baud" type="number" placeholder="Varsayılan"></div>
+     <div><label class="title">J2534 durumu</label><div class="module-field" id="j2534_state">Kontrol edilmedi</div></div>
+    </div>
+    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">PASİF KANALI AÇ</button><button class="btn test-btn" onclick="j2534Read()">GELEN MESAJLARI OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
+    <pre id="j2534_output" style="color:#00e5ff;white-space:pre-wrap;min-height:52px">DLL yolu SCANMATIK_J2534_DLL ortam değişkeniyle tanımlanabilir.</pre>
+   </div>
+<div class="module-card"><div class="k">ABS modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU oturumundan tamamen ayrı</div></div>
    <div class="module-card"><div class="k">ABS ECU kimliği</div><div class="v" id="abs_ecu_id">Henüz okunmadı</div><div class="hint">Üretici / parça / yazılım kimliği</div></div>
    <div class="module-card"><div class="k">ABS iletişim profili</div><div class="v" id="abs_protocol">Henüz doğrulanmadı</div><div class="hint">CAN / K-Line / üreticiye özel taşıma</div></div>
   </div>
@@ -1697,7 +1708,11 @@ function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanı
     html+='</tbody></table>'; table.innerHTML=html;
   }).catch(function(e){out.innerText='Dosya analiz hatası: '+e;});
  }
- function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
+ function j2534Status(){fetch('/api/j2534/status').then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText=d.connected?'Kanal açık: '+d.protocol:'Kanal kapalı';document.getElementById('j2534_output').innerText=JSON.stringify(d,null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Durum hatası: '+e);}
+function j2534Open(){var p=document.getElementById('j2534_protocol').value,b=document.getElementById('j2534_baud').value;fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:p,baud:b||null})}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText=d.status&&d.status.connected?'Kanal açık: '+p:'Kanal kapalı';document.getElementById('j2534_output').innerText=d.message+'\\n'+JSON.stringify(d.status||{},null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Bağlantı hatası: '+e);}
+function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).then(d=>{document.getElementById('j2534_output').innerText=JSON.stringify(d,null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Okuma hatası: '+e);}
+function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
+function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
  function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
  socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
  socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+' | '+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80';var ev=document.getElementById('abs_hardware_evidence');if(d.hardware_evidence){var h=d.hardware_evidence;ev.innerText=h.title+'\\n'+h.connector+'\\n'+h.can_h+'\\n'+h.can_l+'\\n\\nDOĞRULANMAYANLAR: '+h.unknown+'\\nGÜVENLİ SONRAKİ ADIM: '+h.next_step+'\\nKAYNAK: '+h.source;}else{ev.innerText='Bu marka/model/yıl için belgelenmiş fiziksel ABS soket ve hat bilgisi henüz eklenmedi.';}});
@@ -1781,7 +1796,7 @@ def api_abs_preflight():
 def api_abs_dtc_decode():
     payload = request.get_json(silent=True) or {}
     try:
-        return jsonify(decode_abs_dtc(payload.get("brand", ""), payload.get("model", ""),
+        return jsonify(decode_abs_dtc_record(payload.get("brand", ""), payload.get("model", ""),
                                        payload.get("year", ""), payload.get("code", "")))
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
