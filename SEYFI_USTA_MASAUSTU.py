@@ -110,7 +110,7 @@ def evaluate_dct_profile(model, year):
         return {"ok": True, "verified": False, "status": "DCT PROFİLİ DOĞRULANMADI",
                 "profile_id": None, "message": "Bu Honda DCT model/yılı için doğrulanmış servis profili yok. ECU'ya komut gönderilmedi.",
                 "manual": None, "ecu_description": "Bilinmiyor", "diagnostic_tool": "Bilinmiyor",
-                "protocol": "Doğrulanmadı", "unknown": "Pinout, CAN hızı, adresleme ve komutlar bilinmiyor."}
+                "protocol": "Doğrulanmadı", "unknown": "Pinout, CAN hızı, adresleme ve komutlar bilinmiyor.", "profile_schema_version": DCT_PROFILE_SCHEMA_VERSION, "profile_shell": build_dct_profile_record(model, model_year), "model_family": DCT_MODEL_CATALOG.get(str(model).strip(), "Tanımlanmamış Honda DCT ailesi")}
     return {"ok": True, "status": "SERVİS KILAVUZU PROFİLİ BULUNDU · ECU BAĞLANTISI DOĞRULANMADI",
             **profile, "message": "Profil yalnızca servis dokümanı kapsamını ve çevrimdışı DTC sözlüğünü doğrular. Viecar motor-OBD bağlantısı DCT erişimi sayılmaz; ECU'ya komut gönderilmedi."}
 
@@ -1395,7 +1395,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   </div>
   <div class="test-block"><div class="title">HONDA DCT ARAÇ PROFİLİ</div>
    <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div><label class="title">Model</label><select class="module-field" id="dct_model"><option value="">Model seçin</option><option>NC750S DCT</option><option>NC750X DCT</option><option>Integra DCT</option><option>X-ADV</option><option>Forza 750</option><option>Diğer Honda DCT</option></select></div>
+    <div><label class="title">Model</label><select class="module-field" id="dct_model"><option value="">Model seçin</option><option>VFR1200F DCT</option><option>VFR1200X Crosstourer DCT</option><option>NC700S DCT</option><option>NC700X DCT</option><option>NC750S DCT</option><option>NC750X DCT</option><option>Integra DCT</option><option>CTX700 DCT</option><option>NM4 Vultus DCT</option><option>CRF1000L Africa Twin DCT</option><option>CRF1100L Africa Twin DCT</option><option>X-ADV DCT</option><option>Forza 750 DCT</option><option>NT1100 DCT</option><option>CMX1100 Rebel DCT</option><option>Gold Wing DCT</option><option>Diğer Honda DCT</option></select></div>
     <div><label class="title">Model yılı</label><input class="module-field" id="dct_year" type="number" min="2000" max="2035" placeholder="2020"></div>
     <div><label class="title">Şanzıman / ECU bilgisi</label><input class="module-field" id="dct_ecu_type" placeholder="Bilinmiyorsa boş bırakın"></div>
    </div>
