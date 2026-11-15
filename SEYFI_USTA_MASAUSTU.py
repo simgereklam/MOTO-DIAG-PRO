@@ -2153,7 +2153,9 @@ def handle_test_ecu_info():
         return
     data = {}
     # VIN yalnızca ECU gerçekten yanıt verirse gösterilir.
-    if isinstance(conn, ELM327TcpConnection):
+    if isinstance(conn, J2534OBDConnection):
+        data['Not'] = 'J2534 motor ECU OBD-II Mode 03 okuma desteği açık; VIN ve canlı PID sorguları bu köprüde henüz uygulanmadı.'
+    elif isinstance(conn, ELM327TcpConnection):
         vin, _raw = conn.read_vin()
         if vin: data['VIN'] = vin
     else:
@@ -2301,9 +2303,10 @@ def discover_adapter_candidates():
                     found.append(('serial', device, desc))
         except Exception as exc:
             write_log('USB PORT TARAMA', str(exc))
-    # J2534 cihaz DLL'i bulunabiliyorsa genel OBD-II ISO15765 secenegi de sun.
+    # J2534 DLL varsa USB seri portlardan once dene; Scanmatik/Tactrix sanal COM
+    # portu gorunse bile tasima DLL uzerinden acilir.
     if sys.platform == "win32" and any(os.path.isfile(p) for p in _j2534_candidates()):
-        found.append(('j2534', 'j2534', 'J2534 arayuzu (Scanmatik / Tactrix / uyumlu)'))
+        found.insert(0, ('j2534', 'j2534', 'J2534 arayuzu (Scanmatik / Tactrix / uyumlu)'))
     return found
 
 
