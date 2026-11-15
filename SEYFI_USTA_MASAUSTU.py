@@ -397,6 +397,9 @@ def j2534_open_passive(protocol="can", baud=None):
                 mask = _J2534Msg(); pattern = _J2534Msg(); fid = ctypes.c_uint32(0)
                 mask.ProtocolID = spec["id"]; mask.DataSize = 4
                 pattern.ProtocolID = spec["id"]; pattern.DataSize = 4
+                if protocol == "iso15765":
+                    for i, value in enumerate((0x00, 0x00, 0x07, 0xF8)): mask.Data[i] = value
+                    for i, value in enumerate((0x00, 0x00, 0x07, 0xE8)): pattern.Data[i] = value
                 rc_filter = int(filter_fn(channel.value, 1, ctypes.byref(mask),
                                           ctypes.byref(pattern), None, ctypes.byref(fid)))
                 if rc_filter == 0:
@@ -490,7 +493,7 @@ def j2534_send_obd_mode03(timeout_ms=2500):
                     codes = []
                     for offset in range(0, len(collected) - 1, 2):
                         pair = bytes(collected[offset:offset + 2])
-                        if pair != b"\\x00\\x00":
+                        if pair != bytes((0, 0)):
                             codes.append((ELM327TcpConnection._decode_dtc(pair), ""))
                     return codes, "J2534 ISO15765 Mode 03: " + str(len(codes)) + " DTC"
             return None, "J2534 kanali acik ancak standart OBD-II Mode 03 yaniti alinmadi. Bu, ABS/DCT ariza taramasi degildir."
@@ -1663,13 +1666,13 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   <div class="module-grid">
       <div class="test-block" id="j2534-panel">
     <div class="title">J2534 KÖPRÜSÜ · SCANMATIK / TACTRIX / UYUMLU DLL</div>
-    <p style="color:#aab5c2">Windows J2534 DLL üzerinden CAN/K-Line kanalı açılır. Bağlan ve RX kayıt okuma çalışır; model/ABS ECU protokolü doğrulanmadan DTC sorgusu, arıza silme, aktüatör ve yazma komutu gönderilmez.</p>
+    <p style="color:#aab5c2">Windows J2534 DLL üzerinden CAN/K-Line kanalı açılır. Motor ECU için standart OBD-II Mode 03 arıza okuma ISO15765/CAN üzerinden denenebilir. Bu sorgu ABS/DCT taraması değildir. ABS özel sorgusu yalnızca doğrulanmış model protokolüyle açılır.</p>
     <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
      <div><label class="title">Protokol</label><select class="module-field" id="j2534_protocol"><option value="can">CAN · 500 kbit/s</option><option value="iso15765">ISO15765 · 500 kbit/s</option><option value="iso9141">ISO9141 K-Line · 10400</option><option value="kwp2000">ISO14230 KWP2000 · 10400</option></select></div>
      <div><label class="title">Baud (isteğe bağlı)</label><input class="module-field" id="j2534_baud" type="number" placeholder="Varsayılan"></div>
      <div><label class="title">J2534 durumu</label><div class="module-field" id="j2534_state">Kontrol edilmedi</div></div>
     </div>
-    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">BAĞLAN</button><button class="btn test-btn" onclick="j2534Read()">HAT MESAJLARINI OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
+    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">BAĞLAN</button><button class="btn test-btn" onclick="j2534Read()">HAT MESAJLARINI OKU</button><button class="btn test-btn" onclick="j2534ReadDtc()">MOTOR ECU OBD-II ARIZA OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
     <pre id="j2534_output" style="color:#00e5ff;white-space:pre-wrap;min-height:52px">DLL yolu SCANMATIK_J2534_DLL ortam değişkeniyle tanımlanabilir.</pre>
    </div>
 <div class="module-card"><div class="k">ABS modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU oturumundan tamamen ayrı</div></div>
@@ -1831,7 +1834,8 @@ function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanı
 function j2534Open(){var p=document.getElementById('j2534_protocol').value,b=document.getElementById('j2534_baud').value;fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:p,baud:b||null})}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText=d.status&&d.status.connected?'Kanal açık: '+p:'Kanal kapalı';document.getElementById('j2534_output').innerText=d.message+'\\n'+JSON.stringify(d.status||{},null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Bağlantı hatası: '+e);}
 function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).then(d=>{document.getElementById('j2534_output').innerText=JSON.stringify(d,null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Okuma hatası: '+e);}
 function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
-function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
+function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
+ function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
  function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
  socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
  socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+' | '+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80';var ev=document.getElementById('abs_hardware_evidence');if(d.hardware_evidence){var h=d.hardware_evidence;ev.innerText=h.title+'\\n'+h.connector+'\\n'+h.can_h+'\\n'+h.can_l+'\\n\\nDOĞRULANMAYANLAR: '+h.unknown+'\\nGÜVENLİ SONRAKİ ADIM: '+h.next_step+'\\nKAYNAK: '+h.source;}else{ev.innerText='Bu marka/model/yıl için belgelenmiş fiziksel ABS soket ve hat bilgisi henüz eklenmedi.';}});
@@ -1887,6 +1891,18 @@ def api_j2534_read():
     if result.get("frames"):
         write_log("J2534 RX", f"{result['count']} mesaj alindi.")
     return jsonify(result), (200 if result.get("ok") else 400)
+
+@app.route('/api/j2534/obd/dtc', methods=['POST'])
+def api_j2534_obd_dtc():
+    codes, detail = j2534_send_obd_mode03()
+    if codes is None:
+        write_log("J2534 OBD-II DTC", detail)
+        return jsonify({"ok": False, "error": detail, "scope": "standard_engine_obd_only"}), 400
+    result = {"ok": True, "codes": [{"code": code, "description": dtc_desc(code)} for code, _ in codes],
+              "count": len(codes), "scope": "standard_engine_obd_only",
+              "note": "Bu sonuç ABS veya Honda DCT arıza taraması değildir."}
+    write_log("J2534 OBD-II DTC", detail + "\\n" + ("\\n".join(x["code"] for x in result["codes"]) or "Kod bulunamadi."))
+    return jsonify(result)
 
 @app.route('/api/j2534/close', methods=['POST'])
 def api_j2534_close():
