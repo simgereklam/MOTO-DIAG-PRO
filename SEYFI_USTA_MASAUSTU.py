@@ -153,6 +153,26 @@ def abs_profile_key(brand, model, year):
         raise ValueError("Model yılı geçerli aralıkta değil.")
     return brand_key, model_key, model_year
 
+def get_abs_hardware_evidence(brand, model, year):
+    """OEM belgesinde açıkça bulunan fiziksel bilgileri verir; bağlantı profili değildir."""
+    try:
+        key = abs_profile_key(brand, model, year)
+    except ValueError:
+        return None
+    if key == ("yamaha", "xmax 300", 2019):
+        return {
+            "title": "Yamaha XMAX 300 CZD300-A · 2019",
+            "connector": "ABS için ayrı 4 pinli test soketi bulunduğu servis el kitabında gösteriliyor.",
+            "can_h": "CAN-H: Mavi/Kırmızı kablo",
+            "can_l": "CAN-L: Mavi/Siyah kablo",
+            "unknown": "Soket pin numarası, CAN bit hızı, CAN kimlikleri ve teşhis adreslemesi bu belgede doğrulanmadı.",
+            "next_step": "Pin numarası tahmin etmeyin. Uygun ara kablo ve donanımın gerçek listen-only modu doğrulanmadan hatta bağlanmayın.",
+            "source": "Yamaha XMAX 300 CZD300-A 2019 servis el kitabı, bağlantı konumları 8-83 ve ABS devre açıklaması 8-87–8-88.",
+            "verified": True,
+        }
+    return None
+
+
 def evaluate_abs_profile(brand, model, year, connection=None):
     """Yerel kapsama kontrolü; hiçbir adaptör/ECU komutu göndermez."""
     key = abs_profile_key(brand, model, year)
@@ -1121,6 +1141,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    </div>
    <div class="module-actions"><button class="btn test-btn" onclick="absCheckProfile()">🧭 ABS PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="Araç ve adaptör için doğrulanmış ABS iletişim profili gerekli">🔌 ABS ECU'YA BAĞLAN</button><button class="btn test-btn" disabled title="Gerçek ABS ECU bağlantısı ve doğrulanmış okuma servisi gerekli">🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled title="Model özelinde silme servisi doğrulanmadan kapalı">🗑 ABS ARIZALARINI SİL</button></div>
    <pre id="abs_profile_result" style="color:#00e5ff;min-height:55px;white-space:pre-wrap">Marka, model ve yılı seçip profil kontrolü yapın. Bu işlem motosiklete komut göndermez.</pre>
+    <pre id="abs_hardware_evidence" style="color:#b8d5ff;white-space:pre-wrap;min-height:0">Seçilen araç için belgelenmiş fiziksel ABS bağlantı bilgisi varsa burada gösterilir.</pre>
    <div class="module-grid" style="grid-template-columns:minmax(180px,1fr) auto;align-items:end;margin-top:12px">
     <div><label class="title">ABS arıza kodu (manuel açıklama)</label><input class="module-field" id="abs_dtc_code" placeholder="Örn. 11 / 25 / 53" maxlength="12"></div>
     <button class="btn test-btn" onclick="absDecodeDtc()">📖 KOD AÇIKLAMASINI BUL</button>
@@ -1235,7 +1256,7 @@ function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanı
  function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
  function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
  socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
- socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+' | '+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80'});
+ socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+' | '+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80';var ev=document.getElementById('abs_hardware_evidence');if(d.hardware_evidence){var h=d.hardware_evidence;ev.innerText=h.title+'\\n'+h.connector+'\\n'+h.can_h+'\\n'+h.can_l+'\\n\\nDOĞRULANMAYANLAR: '+h.unknown+'\\nGÜVENLİ SONRAKİ ADIM: '+h.next_step+'\\nKAYNAK: '+h.source;}else{ev.innerText='Bu marka/model/yıl için belgelenmiş fiziksel ABS soket ve hat bilgisi henüz eklenmedi.';}});
 
 socket.on('gkbus_result',d=>{var el=document.getElementById('gk_conn_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_test_result',d=>{var el=document.getElementById('gk_test_out');if(el)el.innerText=(d.ok?'✅ ':'❌ ')+d.msg});socket.on('gkbus_d07_result',d=>{var el=document.getElementById('gk_d07_out');if(el)el.innerText=d.ok?('Pulse: '+d.data):('❌ '+d.msg)});
 function aracSec(){var data={marka:document.getElementById('sel_marka').value,model:document.getElementById('sel_model').value,yil:parseInt(document.getElementById('sel_yil').value),konnektor:document.getElementById('sel_konnektor').value,manuel_model:document.getElementById('sel_model_manual').value};document.getElementById('arac_sonuc').style.display='block';document.getElementById('arac_sonuc_text').innerText='Yapılandırma hesaplanıyor...';socket.emit('arac_sec',data)}
@@ -1302,6 +1323,7 @@ def handle_abs_profile_check(data):
         with _conn_lock:
             conn = _connection if _mode == 'real' else None
         result = evaluate_abs_profile(brand, model, year, conn)
+        result['hardware_evidence'] = get_abs_hardware_evidence(brand, model, year)
         result.update({'brand': brand, 'model': model, 'year': int(year)})
         socketio.emit('abs_profile_result', result)
         write_log("ABS PROFİL KONTROLÜ", f"{brand} {model} {year}: {result['status']} | {result['message']}")
