@@ -442,6 +442,86 @@ def j2534_read_passive(timeout_ms=250, max_messages=16):
             _j2534_state["last_error"] = str(exc)
             return {"ok": False, "error": str(exc), "frames": []}
 
+def j2534_send_obd_mode03(timeout_ms=2500):
+    """Standart OBD-II Mode 03 istegi; yalnizca ISO15765/CAN motor emisyon ECU'su icindir."""
+    with _j2534_lock:
+        dll = _j2534_state.get("dll")
+        channel = _j2534_state.get("channel_id")
+        if dll is None or channel is None or _j2534_state.get("protocol") != "iso15765":
+            return None, "J2534 ISO15765 kanali acik degil."
+        try:
+            write_fn = dll.PassThruWriteMsgs
+            write_fn.argtypes = [ctypes.c_uint32, ctypes.POINTER(_J2534Msg),
+                                 ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32]
+            write_fn.restype = ctypes.c_uint32
+            msg = _J2534Msg()
+            msg.ProtocolID = J2534_PROTOCOLS["iso15765"]["id"]
+            msg.TxFlags = 0x40  # ISO15765_FRAME_PAD
+            # SAE J1979 functional request CAN ID 7DF; ISO-TP SF: length=2, service=03.
+            payload = bytes((0x00, 0x00, 0x07, 0xDF, 0x02, 0x03, 0x00))
+            msg.DataSize = len(payload)
+            for i, value in enumerate(payload):
+                msg.Data[i] = value
+            count = ctypes.c_uint32(1)
+            rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+            if rc != 0 or count.value != 1:
+                return None, "PassThruWriteMsgs basarisiz: " + J2534_STATUS.get(rc, str(rc))
+            deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 10000) / 1000.0)
+            collected = []
+            while time.monotonic() < deadline:
+                read_result = j2534_read_passive(timeout_ms=250, max_messages=32)
+                if not read_result.get("ok"):
+                    if "ERR_TIMEOUT" in str(read_result.get("error")):
+                        continue
+                    return None, read_result.get("error", "J2534 RX hatasi")
+                for frame in read_result.get("frames", []):
+                    raw = bytes.fromhex(frame.get("data", "").replace(" ", ""))
+                    if len(raw) < 6:
+                        continue
+                    # ISO15765 J2534 Data alaninin ilk dort byte'i CAN ID'dir.
+                    can_id = int.from_bytes(raw[:4], "big")
+                    if 0x7E8 <= can_id <= 0x7EF:
+                        body = raw[4:]
+                        if body and body[0] <= len(body) - 1:
+                            body = body[1:1 + body[0]]
+                        if body and body[0] == 0x43:
+                            collected.extend(body[1:])
+                if collected:
+                    codes = []
+                    for offset in range(0, len(collected) - 1, 2):
+                        pair = bytes(collected[offset:offset + 2])
+                        if pair != b"\\x00\\x00":
+                            codes.append((ELM327TcpConnection._decode_dtc(pair), ""))
+                    return codes, "J2534 ISO15765 Mode 03: " + str(len(codes)) + " DTC"
+            return None, "J2534 kanali acik ancak standart OBD-II Mode 03 yaniti alinmadi. Bu, ABS/DCT ariza taramasi degildir."
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return None, "J2534 Mode 03 hatasi: " + str(exc)
+
+
+class J2534OBDConnection:
+    """J2534 uzerinden standart OBD-II motor DTC okuma baglantisi."""
+    def __init__(self):
+        ok, message = j2534_open_passive("iso15765")
+        if not ok:
+            raise ConnectionError(message)
+        self._closed = False
+        self.adapter_identity = os.path.basename(_j2534_state.get("dll_path") or "J2534")
+        self.protocol = "ISO15765 / CAN 500 kbit/s"
+    def is_connected(self):
+        return not self._closed and j2534_status().get("connected", False)
+    def port_name(self):
+        return "J2534: " + self.adapter_identity
+    def protocol_name(self):
+        return self.protocol
+    def read_dtcs(self):
+        return j2534_send_obd_mode03()
+    def close(self):
+        if not self._closed:
+            self._closed = True
+            j2534_close()
+
+
 def j2534_close():
     with _j2534_lock:
         dll, channel, device, filter_id = (_j2534_state["dll"], _j2534_state["channel_id"],
@@ -1214,7 +1294,9 @@ def open_obd(target, run_id):
     """Wi-Fi ELM327'de doğrudan TCP; USB/COM adaptörde python-OBD kullan."""
     global _connection, _mode
     raw_target = (target or '').strip()
-    if raw_target.startswith('socket://') or (raw_target.count('.') == 3 and ':' in raw_target):
+    if raw_target.lower() in ("j2534", "j2534://", "scanmatik", "tactrix", "openport"):
+        conn = J2534OBDConnection()
+    elif raw_target.startswith('socket://') or (raw_target.count('.') == 3 and ':' in raw_target):
         hostport = raw_target.replace('socket://', '', 1)
         host, port = hostport.rsplit(':', 1) if ':' in hostport else (hostport, '35000')
         conn = ELM327TcpConnection(host, int(port))
@@ -1931,7 +2013,7 @@ def handle_scan():
         socketio.emit('dtc_result', {'codes': [], 'ok': False, 'error': 'Gerçek ECU bağlantısı yok. Önce adaptöre bağlanın.'})
         return
     try:
-        if isinstance(conn, ELM327TcpConnection):
+        if isinstance(conn, (ELM327TcpConnection, J2534OBDConnection)):
             raw_codes, raw_response = conn.read_dtcs()
             if raw_codes is None:
                 socketio.emit('dtc_result', {'codes': [], 'ok': False, 'error': 'ECU arıza sorgusuna geçerli yanıt vermedi: ' + ELM327TcpConnection._short(raw_response)})
@@ -1981,12 +2063,15 @@ def handle_clear():
         return
     try:
         # Önce mevcut kodları kaydet; sonra standart Mode 04 isteğini gönder.
-        if isinstance(conn, ELM327TcpConnection):
+        if isinstance(conn, (ELM327TcpConnection, J2534OBDConnection)):
             before, before_raw = conn.read_dtcs()
             if before is None:
                 socketio.emit('dtc_cleared', {'ok': False, 'msg': 'Silme öncesi ECU arıza hafızası okunamadı. Silme yapılmadı.'})
                 return
             before_codes = [str(c) for c, _ in before]
+            if isinstance(conn, J2534OBDConnection):
+                socketio.emit('dtc_cleared', {'ok': False, 'msg': 'J2534 köprüsünde arıza silme güvenlik nedeniyle etkin değil; yalnızca okuma desteklenir.'})
+                return
             clear_ok, clear_raw = conn.clear_dtcs()
             if not clear_ok:
                 socketio.emit('dtc_cleared', {'ok': False, 'msg': 'ECU Mode 04 isteğini doğrulamadı: ' + ELM327TcpConnection._short(clear_raw)})
@@ -2200,6 +2285,9 @@ def discover_adapter_candidates():
                     found.append(('serial', device, desc))
         except Exception as exc:
             write_log('USB PORT TARAMA', str(exc))
+    # J2534 cihaz DLL'i bulunabiliyorsa genel OBD-II ISO15765 secenegi de sun.
+    if sys.platform == "win32" and any(os.path.isfile(p) for p in _j2534_candidates()):
+        found.append(('j2534', 'j2534', 'J2534 arayuzu (Scanmatik / Tactrix / uyumlu)'))
     return found
 
 
