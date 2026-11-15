@@ -75,6 +75,61 @@ DTC_TR = {
 def dtc_desc(code): return DTC_TR.get(code.upper().strip(), "Bilinmeyen arıza kodu")
 
 # ABS teşhis veri katmanı tek dosyaya alındı; ECU komutu göndermez.
+# ==================== HONDA DCT PROFİL / DTC KATMANI ====================
+# Honda 61MKA04: 2016-2020 NC700X/XD ve NC750X/XA/XD servis kılavuzu kapsamı.
+# Haberleşme pinleri, CAN hızı, adresleme ve komutlar doğrulanmadı.
+DCT_PROFILE_REGISTRY = {("honda", "nc750x dct", 2020): {
+    "profile_id": "HONDA-NC750XD-2020-61MKA04", "verified": True,
+    "manual": "Honda 61MKA04 (2016-2020 NC700X/XD, NC750X/XA/XD)",
+    "ecu_description": "DCT'li XD varyantında PCM üzerinden DCT öz tanılama",
+    "diagnostic_tool": "Honda HDS / modele uygun teşhis aracı",
+    "protocol": "Fiziksel taşıma ve teşhis adreslemesi henüz doğrulanmadı",
+    "unknown": "DLC pin eşlemesi, CAN bit hızı, CAN ID, ISO-TP adresleri ve servis komutları",
+    "capabilities": ["offline_dtc_dictionary"]}}
+DCT_DTC_DATABASE = {
+    ("honda", "nc750x dct", 2020, "21-1"): {
+        "description_tr": "Vites mili açı sensörü voltajı belirtilen alt sınırın altında.",
+        "source": "Honda 61MKA04, DCT sistem açıklaması, sayfa 12-11 (DTC 21-1 örneği)."},
+    ("honda", "nc750x dct", 2020, "21-2"): {
+        "description_tr": "Vites mili açı sensörü voltajı belirtilen üst sınırın üzerinde.",
+        "source": "Honda 61MKA04, DCT sistem açıklaması, sayfa 12-11 (DTC 21-2 örneği)."}}
+
+def normalize_dct_model(value):
+    return normalize_abs_text(value).replace(" dual clutch transmission", " dct")
+
+def evaluate_dct_profile(model, year):
+    try:
+        model_year = int(year)
+    except (TypeError, ValueError):
+        raise ValueError("Geçerli bir DCT model yılı girin.")
+    model_key = normalize_dct_model(model)
+    if not model_key or model_year < 1980 or model_year > datetime.now().year + 1:
+        raise ValueError("DCT model ve model yılı bilgisi geçerli olmalı.")
+    profile = DCT_PROFILE_REGISTRY.get(("honda", model_key, model_year))
+    if not profile:
+        return {"ok": True, "verified": False, "status": "DCT PROFİLİ DOĞRULANMADI",
+                "profile_id": None, "message": "Bu Honda DCT model/yılı için doğrulanmış servis profili yok. ECU'ya komut gönderilmedi.",
+                "manual": None, "ecu_description": "Bilinmiyor", "diagnostic_tool": "Bilinmiyor",
+                "protocol": "Doğrulanmadı", "unknown": "Pinout, CAN hızı, adresleme ve komutlar bilinmiyor."}
+    return {"ok": True, "status": "SERVİS KILAVUZU PROFİLİ BULUNDU · ECU BAĞLANTISI DOĞRULANMADI",
+            **profile, "message": "Profil yalnızca servis dokümanı kapsamını ve çevrimdışı DTC sözlüğünü doğrular. Viecar motor-OBD bağlantısı DCT erişimi sayılmaz; ECU'ya komut gönderilmedi."}
+
+def decode_dct_dtc(model, year, code):
+    try:
+        model_key = normalize_dct_model(model)
+        model_year = int(year)
+        code_key = re.sub(r"\\s+", "", str(code or "").strip().upper()).replace("_", "-")
+        if not re.fullmatch(r"\\d{1,3}-\\d{1,2}", code_key):
+            raise ValueError("DCT kodunu ana-alt biçiminde girin (ör. 21-1).")
+        entry = DCT_DTC_DATABASE.get(("honda", model_key, model_year, code_key))
+        if not entry:
+            return {"ok": True, "found": False, "code": code_key,
+                    "description": "Bu model/yıl için çevrimdışı doğrulanmış açıklama bulunamadı.", "source": None}
+        return {"ok": True, "found": True, "code": code_key, **entry}
+    except (TypeError, ValueError) as exc:
+        return {"ok": False, "found": False, "code": "", "description": str(exc), "source": None}
+
+
 # ==================== EVRENSEL ABS PROFİL ALTYAPISI ====================
 # Protokol/soket/model yılı evrensel değildir. Yalnızca OEM kanıtlı profiller
 # gelecekte gerçek ECU sorgularını etkinleştirebilir.
@@ -1189,7 +1244,10 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div><label class="title">Model yılı</label><input class="module-field" id="dct_year" type="number" min="2000" max="2035" placeholder="2020"></div>
     <div><label class="title">Şanzıman / ECU bilgisi</label><input class="module-field" id="dct_ecu_type" placeholder="Bilinmiyorsa boş bırakın"></div>
    </div>
-   <div class="module-actions"><button class="btn test-btn" disabled title="DCT ECU profili doğrulanınca etkinleşecek">🔌 DCT BAĞLAN</button><button class="btn test-btn" disabled>🔍 DCT ARIZA TARA</button><button class="btn test-btn" disabled>🗑 DCT ARIZALARINI SİL</button></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="dctCheckProfile()">📚 DCT PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="HDS uyumlu fiziksel taşıma ve adresleme doğrulanmadı">🔌 DCT BAĞLAN</button><button class="btn test-btn" disabled>🔍 DCT ARIZA TARA</button><button class="btn test-btn" disabled>🗑 DCT ARIZALARINI SİL</button></div>
+   <pre id="dct_profile_result" style="color:#ffcc80;white-space:pre-wrap;margin-top:12px">Honda NC750X DCT 2020 servis profili yerel olarak kontrol edilebilir.</pre>
+   <div class="module-actions"><input id="dct_dtc_code" class="module-field" style="max-width:180px" placeholder="DCT kodu (örn. 21-1)"><button class="btn test-btn" onclick="dctDecodeDtc()">KODU AÇIKLA</button></div>
+   <pre id="dct_dtc_result" style="color:#aab5c2;white-space:pre-wrap">Yalnızca kaynakla doğrulanmış DCT kodları çevrimdışı açıklanır. ECU'ya bağlanmaz.</pre>
   </div>
   <div class="module-note"><b>Güvenlik kilidi:</b> DCT kavrama, vites seçici ve adaptasyon komutları model/yıl/TCU kimliğine bağlıdır. Doğrulanmamış reset veya kalibrasyon komutu gönderilmeyecek.</div>
   <h3 style="color:#00d9f5">DCT canlı veri</h3>
@@ -1283,6 +1341,27 @@ def handle_arac_sec(data):
         msg = f"✅ ARAÇ: {ARAC_CONFIG['marka'].upper()} {ARAC_CONFIG['model'].upper()} ({ARAC_CONFIG['yil']})\nProtokol: {ARAC_CONFIG['protokol'].upper()}\nPin Şeması: {ARAC_CONFIG['pin_sema']}\nNot: {ARAC_CONFIG['notlar']}"
         socketio.emit('arac_sec_result', {'ok': True, 'msg': msg})
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
+
+@socketio.on('dct_profile_check')
+def handle_dct_profile_check(data):
+    """Yerel Honda DCT servis profili kontrolü; ECU'ya komut göndermez."""
+    try:
+        payload = data or {}
+        result = evaluate_dct_profile(payload.get('model', ''), payload.get('year', ''))
+        result.update({'model': str(payload.get('model', '')).strip(), 'year': int(payload.get('year', 0))})
+        socketio.emit('dct_profile_result', result)
+        write_log("DCT PROFİL KONTROLÜ", f"{result.get('model')} {result.get('year')}: {result.get('status')}")
+    except Exception as exc:
+        socketio.emit('dct_profile_result', {'ok': False, 'verified': False, 'status': 'DCT PROFİL KONTROLÜ BAŞARISIZ', 'message': str(exc)})
+
+@socketio.on('dct_decode_dtc')
+def handle_dct_decode_dtc(data):
+    """Yalnızca yerel, kaynaklı DCT kod sözlüğünde arama yapar."""
+    payload = data or {}
+    result = decode_dct_dtc(payload.get('model', ''), payload.get('year', ''), payload.get('code', ''))
+    socketio.emit('dct_decode_dtc_result', result)
+    if result.get('ok'):
+        write_log("DCT DTC SÖZLÜK SORGUSU", f"{payload.get('model')} {payload.get('year')} {result.get('code')}: {'bulundu' if result.get('found') else 'kayıt yok'}")
 
 @socketio.on('abs_decode_dtc')
 def handle_abs_decode_dtc(data):
