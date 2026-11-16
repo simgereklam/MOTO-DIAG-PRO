@@ -23,6 +23,6 @@ count = publish_j2534_frames([{
 assert count == 1, f"expected one forwarded frame, got {count}"
 message = client.recv(256)
 assert message.startswith(b"< frame 7e8 "), message
-assert b" 410c1f40 >" in message, message
+assert b" 03410c1f40 >" in message, message
 client.close()
 print("socketcand handshake and J2534 CAN frame forwarding passed; TX remains disabled.")
