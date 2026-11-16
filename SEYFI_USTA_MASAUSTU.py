@@ -617,6 +617,79 @@ def abs_preflight_check(battery_voltage=None, ignition_on=False, wheel_stationar
     return {"ok": True, "ready": passed, "checks": checks,
             "note": "Bu kontrol yalnızca ön koşul listesidir; ECU bağlantısı veya fren sistemi güvenliğini onaylamaz."}
 
+
+# ABS islem katmani: tum markalar icin ortak is akis semasi.
+# Gercek ECU istekleri yalnizca model/yil/ECU ve adaptör bazinda OEM kanitli
+# profil eklendiginde etkinlestirilebilir. Burada tahmini servis byte'i yoktur.
+ABS_OPERATION_CATALOG = {
+    "identify": {"label": "ABS ECU kimlik bilgisi", "kind": "read", "safety": "low"},
+    "read_dtcs": {"label": "ABS arıza kodlarını oku", "kind": "read", "safety": "low"},
+    "read_live_data": {"label": "ABS canlı verileri", "kind": "read", "safety": "low"},
+    "read_freeze_frame": {"label": "Arıza anı / geçmiş verisi", "kind": "read", "safety": "low"},
+    "clear_dtcs": {"label": "ABS arıza hafızasını sil", "kind": "write", "safety": "medium"},
+    "wheel_sensor_check": {"label": "Tekerlek hız sensörü kontrolü", "kind": "guided", "safety": "medium"},
+    "actuator_test": {"label": "Pompa / valf aktüatör testi", "kind": "active", "safety": "high"},
+    "service_bleed": {"label": "ABS hidrolik hava alma", "kind": "active", "safety": "critical"},
+    "calibration": {"label": "ABS/IMU kalibrasyonu", "kind": "active", "safety": "high"},
+}
+ABS_OPERATION_EVIDENCE_REQUIREMENTS = {
+    "identify": ["exact_vehicle", "ecu_addressing", "transport", "adapter_validation"],
+    "read_dtcs": ["exact_vehicle", "ecu_addressing", "dtc_service", "response_decode"],
+    "read_live_data": ["exact_vehicle", "ecu_addressing", "pid_map", "scaling"],
+    "read_freeze_frame": ["exact_vehicle", "ecu_addressing", "freeze_frame_format"],
+    "clear_dtcs": ["exact_vehicle", "clear_service", "pre_clear_record", "adapter_validation"],
+    "wheel_sensor_check": ["exact_vehicle", "oem_procedure", "safety_conditions"],
+    "actuator_test": ["exact_vehicle", "oem_actuator_sequence", "safety_conditions", "adapter_validation"],
+    "service_bleed": ["exact_vehicle", "oem_bleed_procedure", "hydraulic_safety", "adapter_validation"],
+    "calibration": ["exact_vehicle", "oem_calibration_procedure", "safety_conditions", "adapter_validation"],
+}
+def abs_operation_matrix(brand, model, year):
+    """Her ABS işlevinin gerçek kapsam durumunu açıkça döndürür; ECU'ya erişmez."""
+    key = abs_profile_key(brand, model, year)
+    profile = ABS_PROFILE_REGISTRY.get(key) or {}
+    capabilities = profile.get("capabilities", {})
+    rows = []
+    for op, meta in ABS_OPERATION_CATALOG.items():
+        raw = capabilities.get(op, capabilities.get({
+            "identify": "read_ecu_id",
+            "read_freeze_frame": "read_freeze_frame",
+            "wheel_sensor_check": "wheel_sensor_check",
+            "service_bleed": "service_bleed",
+            "calibration": "calibration",
+        }.get(op, op), "not_implemented"))
+        enabled = (profile.get("verified") is True and
+                   raw in (True, "verified", "enabled") and
+                   bool(profile.get("evidence")) and
+                   bool(profile.get("protocol")) and
+                   bool(profile.get("transport")))
+        rows.append({"operation": op, "label": meta["label"], "kind": meta["kind"],
+                     "safety": meta["safety"], "status": "verified_profile_ready" if enabled else "profile_required",
+                     "enabled": enabled,
+                     "required_evidence": ABS_OPERATION_EVIDENCE_REQUIREMENTS[op]})
+    return {"ok": True, "brand": brand, "model": model, "year": int(year),
+            "profile_id": profile.get("profile_id"),
+            "operations": rows,
+            "message": "Bu liste işlev kapsamını gösterir. Profil doğrulaması gerçek ECU bağlantısı anlamına gelmez."}
+
+def abs_operation_gate(brand, model, year, operation, confirmation=None):
+    """Komut kapısı: doğrulanmamış profil ve tehlikeli testler kesin olarak reddedilir."""
+    if operation not in ABS_OPERATION_CATALOG:
+        raise ValueError("Bilinmeyen ABS işlemi.")
+    matrix = abs_operation_matrix(brand, model, year)
+    item = next(x for x in matrix["operations"] if x["operation"] == operation)
+    if not item["enabled"]:
+        return {"ok": False, "blocked": True, "operation": operation,
+                "message": "Bu motosiklet/yıl için OEM kaynaklı ve adaptörle doğrulanmış ABS işlem profili yok. Komut gönderilmedi."}
+    if item["safety"] in ("high", "critical"):
+        return {"ok": False, "blocked": True, "operation": operation,
+                "message": "Aktif fren/kalibrasyon işlemi bu sürümde uzaktan çalıştırılmaz. OEM servis prosedürü ve kontrollü servis düzeneği gerekir."}
+    if operation == "clear_dtcs" and confirmation != "CLEAR_ABS_DTC_CONFIRMED":
+        return {"ok": False, "blocked": True, "operation": operation,
+                "message": "Silme öncesi arıza raporu alınmalı ve açık kullanıcı onayı verilmelidir. Komut gönderilmedi."}
+    return {"ok": False, "blocked": True, "operation": operation,
+            "message": "Profil kayıtlı olsa bile bu sürümde gerçek ABS taşıma sürücüsü/servis uygulaması tamamlanmadan komut gönderilmez."}
+
+
 def decode_abs_dtc_record(brand, model, year, code):
     key = abs_profile_key(brand, model, year)
     token = re.sub(r"\s+", "", str(code or "").strip().upper())
@@ -680,8 +753,8 @@ for _code, _description in _XMAX300_2019_ABS_CODES.items():
         "source": "Yamaha XMAX 300 CZD300-A 2019 servis el kitabı, ABS teşhis bölümü (8-85–8-110)",
     }
 ABS_BRANDS = ("yamaha", "honda", "kawasaki", "suzuki", "bmw motorrad", "ktm",
-              "ducati", "triumph", "bajaj", "tvs", "cf moto", "aprilia",
-              "benelli", "royal enfield", "harley-davidson", "diğer")
+              "ducati", "triumph", "cf moto", "aprilia", "benelli",
+              "royal enfield", "harley-davidson", "diğer")
 ABS_PROTOCOL_FAMILIES = {
     "uds_can": "UDS / ISO-TP over CAN (araç özel adresleme gerekir)",
     "kwp_kline": "KWP2000 / ISO 14230 over K-Line (başlatma ve adresleme gerekir)",
@@ -1716,11 +1789,23 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   </div>
   <div class="test-block"><div class="title">MOTOSİKLET VE ABS PROFİLİ</div>
    <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div><label class="title">Marka</label><select class="module-field" id="abs_brand"><option>Yamaha</option><option>Honda</option><option>Kawasaki</option><option>Suzuki</option><option>BMW Motorrad</option><option>KTM</option><option>Ducati</option><option>Triumph</option><option>Bajaj</option><option>TVS</option><option>CF Moto</option><option>Aprilia</option><option>Benelli</option><option>Royal Enfield</option><option>Harley-Davidson</option><option>Diğer</option></select></div>
+    <div><label class="title">Marka</label><select class="module-field" id="abs_brand"><option>Yamaha</option><option>Honda</option><option>Kawasaki</option><option>Suzuki</option><option>BMW Motorrad</option><option>KTM</option><option>Ducati</option><option>Triumph</option><option>CF Moto</option><option>Aprilia</option><option>Benelli</option><option>Royal Enfield</option><option>Harley-Davidson</option><option>Diğer</option></select></div>
     <div><label class="title">Model / kasa kodu</label><input class="module-field" id="abs_model" placeholder="Örn. XMAX 300 / NC750X / MT-09"></div>
     <div><label class="title">Model yılı</label><input class="module-field" id="abs_year" type="number" min="1980" max="2035" placeholder="2020"></div>
    </div>
    <div class="module-actions"><button class="btn test-btn" onclick="absCheckProfile()">🧭 ABS PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="Araç ve adaptör için doğrulanmış ABS iletişim profili gerekli">🔌 ABS ECU'YA BAĞLAN</button><button class="btn test-btn" disabled title="Gerçek ABS ECU bağlantısı ve doğrulanmış okuma servisi gerekli">🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled title="Model özelinde silme servisi doğrulanmadan kapalı">🗑 ABS ARIZALARINI SİL</button></div>
+   <div class="test-block" style="margin-top:12px;border-color:#ffb74d">
+    <div class="title">ABS TAM İŞLEV KAPSAMI · MODEL BAZLI</div>
+    <p style="color:#b8c4d0">Ortak bölüm: ECU kimliği, DTC okuma/silme, canlı veri, freeze-frame, sensör kontrolü, aktüatör testi ve servis prosedürleri. Her satır yalnızca seçilen motorun doğrulanmış profili destekliyorsa etkinleşir.</p>
+    <div class="module-actions">
+     <button class="btn test-btn" onclick="absLoadOperations()">İŞLEVLERİ / DESTEK DURUMUNU GÖSTER</button>
+     <button class="btn test-btn" disabled title="OEM profili ve gerçek ABS haberleşme sürücüsü henüz doğrulanmadı">ABS CAN/K-LINE ECU OTURUMU</button>
+     <button class="btn test-btn" disabled title="Araç özel DTC okuma servisi ve taşıma sürücüsü gerekir">ABS ECU'DAN DTC OKU</button>
+     <button class="btn test-btn" disabled title="Önce DTC kaydı ve araç özel silme servisi gerekir">ABS DTC SİL</button>
+     <button class="btn test-btn" disabled title="Aktif fren hidrolik testi güvenlik prosedürü ve OEM doğrulaması gerektirir">POMPA / VALF TESTİ</button>
+    </div>
+    <pre id="abs_operations_result" style="white-space:pre-wrap;color:#ffcc80">Marka/model/yıl seçip işlev kapsamını sorgulayın. Henüz doğrulanmayan işlemler kapalı kalır.</pre>
+   </div>
    <pre id="abs_profile_result" style="color:#00e5ff;min-height:55px;white-space:pre-wrap">Marka, model ve yılı seçip profil kontrolü yapın. Bu işlem motosiklete komut göndermez.</pre>
     <pre id="abs_hardware_evidence" style="color:#b8d5ff;white-space:pre-wrap;min-height:0">Seçilen araç için belgelenmiş fiziksel ABS bağlantı bilgisi varsa burada gösterilir.</pre>
    <div class="module-grid" style="grid-template-columns:minmax(180px,1fr) auto;align-items:end;margin-top:12px">
@@ -1947,6 +2032,16 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
  }
 function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
 function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
+ function absLoadOperations(){
+  var q=new URLSearchParams({brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value});
+  var out=document.getElementById('abs_operations_result');out.textContent='ABS işlev kapsamı kontrol ediliyor...';
+  fetch('/api/abs/operations?'+q.toString()).then(r=>r.json()).then(d=>{
+   if(!d.ok)throw new Error(d.error||'Kapsam sorgusu başarısız');
+   out.textContent=(d.brand+' '+d.model+' '+d.year+'\\n'+(d.profile_id||'Doğrulanmış profil yok')+'\\n\\n')+
+    d.operations.map(x=>(x.enabled?'✓ ':'🔒 ')+x.label+' — '+(x.enabled?'Profilde tanımlı':'Model profili / doğrulama gerekli')+' ['+x.safety+']').join('\\n')+
+    '\\n\\n'+d.message;
+  }).catch(e=>out.textContent='ABS kapsam hatası: '+e.message);
+ }
  function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
  function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
  socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
@@ -2029,6 +2124,27 @@ def api_abs_profile_shell():
         result = build_abs_profile_shell(payload.get("brand", ""), payload.get("model", ""),
                                          payload.get("year", ""), payload.get("transport", "unknown"))
         return jsonify({"ok": True, "profile": result})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+@app.route('/api/abs/operations', methods=['GET'])
+def api_abs_operations():
+    try:
+        return jsonify(abs_operation_matrix(request.args.get("brand", ""),
+            request.args.get("model", ""), request.args.get("year", "")))
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+
+@app.route('/api/abs/operation', methods=['POST'])
+def api_abs_operation():
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = abs_operation_gate(payload.get("brand", ""), payload.get("model", ""),
+            payload.get("year", ""), payload.get("operation", ""),
+            payload.get("confirmation"))
+        write_log("ABS İŞLEM KAPISI", json.dumps(result, ensure_ascii=False))
+        return jsonify(result), (200 if result.get("ok") else 409)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
