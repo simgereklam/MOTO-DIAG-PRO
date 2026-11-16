@@ -18,6 +18,7 @@ from datetime import datetime
 import csv
 import io
 import traceback
+from savvycan_bridge import publish_j2534_frames
 
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
 try:
@@ -2239,8 +2240,6 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <button id="nav-dct" onclick="switchTab('dct')">⚙️ HONDA DCT</button>
 <button id="nav-dyno" onclick="switchTab('dyno')">📈 DYNO</button>
 <button id="nav-ecu-lab" onclick="switchTab('ecu-lab')">📡 ECU ANALİZ LAB</button>
-<button id="nav-savvycan" onclick="switchTab('savvycan')">🧩 SAVVYCAN</button>
-<button id="nav-css" onclick="switchTab('css')">📁 CSS / CANEDGE</button>
 </div>
 <div id="tab-arac" class="container active"><div class="panel" style="max-width:800px;margin:0 auto;">
 <h3 style="color:#00e5ff;margin-top:0">🚗 ARAÇ SEÇİMİ VE OTOMATİK YAPILANDIRMA</h3>
@@ -2331,7 +2330,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div class="test-block" id="can-sniffer-lab" style="margin-top:14px;border-color:#00e5ff">
      <div class="title">📡 CAN VERİ DİNLEME VE ÇÖZÜMLEME · SNIFFER</div>
      <p style="color:#aab5c2">Protokolü CAN · 500 kbit/s (ham/pasif) seçip J2534 kanalını açın. Ardından dinlemeyi başlatın. Uygulama CAN çerçevesi göndermez; yalnızca gelen kayıtları okur. Adaptörün elektriksel listen-only/ACK davranışı cihaz desteğine bağlıdır.</p>
-     <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;margin:10px 0"><div><label class="title" for="can_profile">MOTOSİKLET CAN PROFİLİ</label><select id="can_profile" class="module-field" onchange="canSniffRenderDecoded()"><option value="none">Genel / bilinmeyen model</option><option value="yamaha_cp3_2021_2024">Yamaha CP3 · Tracer 9 / MT-09 / XSR900 (2021–2024)</option><option value="yamaha_r9_2026">Yamaha R9 (2026)</option><option value="yamaha_mt07_legacy">Yamaha MT-07 eski forum notları</option><option value="yamaha_mt07_2014_project">Yamaha MT-07 2014 açık kaynak profili</option><option value="yamaha_mt07_abs_notes">Yamaha MT-07 Euro 3 ABS · pasif kayıt</option><option value="ducati_panigale_mitsubishi">Ducati Panigale / Mitsubishi ECU CAN</option></select></div><div id="can_profile_note" class="module-field" style="white-space:normal;min-height:42px">Profil seçilmedi; ham kayıt devam eder.</div></div><div class="title" style="margin-top:12px">ARAŞTIRMA KAYNAKLARI</div><div style="font-size:12px;line-height:1.8;color:#b8c4d0"><a target="_blank" href="https://github.com/CSS-Electronics/can-bus-reverse-engineering-skills">CSS Electronics · CAN tersine mühendislik yöntemi</a> · <a target="_blank" href="https://github.com/collin80/SavvyCAN">SavvyCAN · CAN kayıt / DBC analiz aracı</a> · <a target="_blank" href="https://github.com/talss89/motorcycle-canbus-info">Motosiklet CAN bilgi koleksiyonu</a> · <a target="_blank" href="https://github.com/JackHat1/MT07_CAN_Project">MT-07 CAN projesi</a> · <a target="_blank" href="https://github.com/bratukh/yamaha-cp3-can">Yamaha CP3 CAN / DBC</a> · <a target="_blank" href="https://github.com/DeziderMesko/motocan">Yamaha R9 CAN / DBC kaynak</a> · <a href="/static/can_profiles/yamaha_r9_2026.dbc" download>Yamaha R9 2026 DBC dosyasını indir</a> · <a target="_blank" href="https://github.com/renatobo/DucatiPanigaleCanBus">Ducati Panigale CAN projesi</a> · <a target="_blank" href="https://zggtr.org/index.php?topic=20461.0">Kawasaki Concours CAN kayıt tartışması</a></div><div class="test-block" style="margin:12px 0;border-color:#ffcc80">
+     <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;margin:10px 0"><div><label class="title" for="can_profile">MOTOSİKLET CAN PROFİLİ</label><select id="can_profile" class="module-field" onchange="canSniffRenderDecoded()"><option value="none">Genel / bilinmeyen model</option><option value="yamaha_cp3_2021_2024">Yamaha CP3 · Tracer 9 / MT-09 / XSR900 (2021–2024)</option><option value="yamaha_r9_2026">Yamaha R9 (2026)</option><option value="yamaha_mt07_legacy">Yamaha MT-07 eski forum notları</option><option value="yamaha_mt07_2014_project">Yamaha MT-07 2014 açık kaynak profili</option><option value="yamaha_mt07_abs_notes">Yamaha MT-07 Euro 3 ABS · pasif kayıt</option><option value="ducati_panigale_mitsubishi">Ducati Panigale / Mitsubishi ECU CAN</option></select></div><div id="can_profile_note" class="module-field" style="white-space:normal;min-height:42px">Profil seçilmedi; ham kayıt devam eder.</div></div><div class="title" style="margin-top:12px">ARAŞTIRMA KAYNAKLARI</div><div style="font-size:12px;line-height:1.8;color:#b8c4d0"><a target="_blank" href="https://github.com/collin80/SavvyCAN">SavvyCAN · CAN kayıt / DBC analiz aracı</a> · <a target="_blank" href="https://github.com/talss89/motorcycle-canbus-info">Motosiklet CAN bilgi koleksiyonu</a> · <a target="_blank" href="https://github.com/JackHat1/MT07_CAN_Project">MT-07 CAN projesi</a> · <a target="_blank" href="https://github.com/bratukh/yamaha-cp3-can">Yamaha CP3 CAN / DBC</a> · <a target="_blank" href="https://github.com/DeziderMesko/motocan">Yamaha R9 CAN / DBC kaynak</a> · <a href="/static/can_profiles/yamaha_r9_2026.dbc" download>Yamaha R9 2026 DBC dosyasını indir</a> · <a target="_blank" href="https://github.com/renatobo/DucatiPanigaleCanBus">Ducati Panigale CAN projesi</a> · <a target="_blank" href="https://zggtr.org/index.php?topic=20461.0">Kawasaki Concours CAN kayıt tartışması</a></div><div class="test-block" style="margin:12px 0;border-color:#ffcc80">
       <div class="title">MOTOR ECU / ABS ECU ORTAK KEŞİF VE PROTOKOL ÇÖZÜMLEME</div>
       <p style="color:#b8c4d0">Aynı pasif CAN kaydı motor ECU veya ABS incelemesi için seçilebilir. ISO-TP mesajları birleştirilir; OBD-II / UDS / KWP servis yanıtı adayları, CAN ID sıklığı ve değişen baytlar gösterilir. Bu analiz ECU'ya komut göndermez.</p>
       <div class="module-actions"><select id="ecu_capture_module" class="module-field" style="max-width:220px"><option value="engine">MOTOR ECU</option><option value="abs">ABS ECU</option><option value="general">GENEL / BİLİNMİYOR</option></select><button class="btn test-btn" onclick="canSniffAnalyzeProtocol()">🔬 SEÇİLİ MODÜLÜ ÇÖZÜMLE</button></div>
@@ -2523,30 +2522,6 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 </div></div>
 <div id="tab-gk" class="container"><div class="panel"><h3 style="color:#ffaa00;margin-top:0">🔧 GELİŞMİŞ SERVİS TESTLERİ</h3><div class="test-block"><div class="title">BAĞLANTI (Araç Seçimine Göre)</div><button class="btn test-btn" onclick="gkConnect()">🔌 GELİŞMİŞ BAĞLANTI KUR</button><pre id="gk_conn_out" style="color:#00e5ff;min-height:30px">-</pre></div><div class="test-block"><div class="title">AKTÜATÖR TESTLERİ</div><pre id="gk_test_out" style="color:#ffaa00;min-height:30px">Güvenlik nedeniyle kapalı: model/ECU özel komut profili doğrulanınca etkinleştirilecek.</pre></div><div class="test-block"><div class="title">ABS MODÜLÜ</div><pre id="gk_d07_out" style="color:#ffaa00;min-height:30px">Ayrı ABS bağlantı katmanı hazırlanacak. Genel D07 komutu kullanılmayacak.</pre></div></div></div>
 
-<div id="tab-savvycan" class="container">
- <div class="panel">
-  <div class="module-head"><h2 style="color:#80cbc4">🧩 SAVVYCAN · CAN ANALİZ MERKEZİ</h2><span class="module-status">V220 · WINDOWS X64 · KURULUMA DAHİL</span></div>
-  <p style="color:#aab5c2">SavvyCAN, MOTO DIAG PRO Windows kurulumuyla birlikte gelir. Bu bölümden programı açabilir ve Seyfi Usta'nın pasif CAN kaydını ASC biçiminde dışa aktarabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda kullanamayabilir; açmadan önce CAN dinlemesini durdurun.</p>
-  <div class="test-block" style="margin-top:14px;border-color:#80cbc4">
-      <div class="title">SAVVYCAN · CAN TERSİNE MÜHENDİSLİK ENTEGRASYONU</div>
-      <p style="color:#b8c4d0">MOTO DIAG PRO Windows kurulum paketi SavvyCAN V220'yi uygulama klasörüne birlikte kurar. Ayrı kurulum yapmanız gerekmez. CAN dinleme kaydını Vector ASC biçiminde dışa aktarabilir veya SavvyCAN'i buradan açabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda açamayabilir; önce Seyfi Usta dinlemesini durdurun.</p>
-      <div class="module-actions"><button class="btn test-btn" onclick="canSniffDownloadAsc()">⬇ SAVVYCAN VECTOR ASC İNDİR</button><button class="btn test-btn" onclick="canToolStatus()">ARAÇ DURUMUNU KONTROL ET</button><button class="btn test-btn" onclick="canToolLaunch('savvycan')">SAVVYCAN'I AÇ</button><span class="btn test-btn" style="cursor:default">PAKETE DAHİL · V220 · 64-BIT</span></div>
-      <pre id="can_tool_status" style="white-space:pre-wrap;color:#80cbc4">SavvyCAN durumu henüz kontrol edilmedi. Windows kurulumuyla birlikte gelir.</pre>
-     </div>
- </div>
-</div>
-<div id="tab-css" class="container">
- <div class="panel">
-  <div class="module-head"><h2 style="color:#90caf9">📁 CSS ELECTRONICS / CANEDGE</h2><span class="module-status">MF4 / MDF4 · ASAMMDF · CSV</span></div>
-  <p style="color:#aab5c2">MF4/MDF4 kayıt işleme bileşeni ve asammdf Python kütüphanesi MOTO DIAG PRO kurulumuna dahil edilir. CANedge kayıtlarını açıp CSV'ye aktarabilir, desteklenen DBC profiliyle sinyalleri çözümleyebilirsiniz. Bu modül dosya analizi yapar; CSS CANedge donanımına doğrudan bağlantı kurmaz.</p>
-  <div class="test-block" style="margin-top:14px;border-color:#90caf9">
-      <div class="title">CSS ELECTRONICS / ASAMMDF · MF4 KAYIT İŞLEME</div>
-      <p style="color:#b8c4d0">CANedge MF4 kayıtlarını CSV'ye aktarır; isteğe bağlı Yamaha R9 2026 DBC çözümlemesi uygular. Bu dosya tabanlı entegrasyondur; CSS cihazına doğrudan bağlantı kurmaz.</p>
-      <div class="module-actions"><input id="css_mf4_file" type="file" accept=".mf4,.mdf" class="module-field"><select id="css_mf4_dbc" class="module-field" style="max-width:260px"><option value="">DBC olmadan ham dışa aktar</option><option value="yamaha_r9_2026">Yamaha R9 2026 DBC ile çöz</option></select><button class="btn test-btn" onclick="cssMf4Process()">MF4 ANALİZ ET / CSV İNDİR</button><a class="btn test-btn" href="https://www.csselectronics.com/pages/can-bus-software-api-tools" target="_blank" rel="noopener">CSS ELECTRONICS ARAÇLARI</a><a class="btn test-btn" href="https://www.csselectronics.com/pages/asammdf-gui-api-mdf4-mf4" target="_blank" rel="noopener">ASAMMDF KILAVUZU</a></div>
-      <pre id="css_mf4_status" style="white-space:pre-wrap;color:#90caf9">MF4 işleme modülü MOTO DIAG PRO kurulumuna dahildir. Dosyanızı seçip analiz edebilirsiniz.</pre>
-     </div>
- </div>
-</div>
 <script>
 var socket = io();
 function ecuLabEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -2722,7 +2697,7 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
    if(!d.connected||String(d.protocol).toLowerCase()!=='can'){document.getElementById('can_sniff_error').textContent='Önce Protokol alanından CAN · 500 kbit/s (ham/pasif) seçin ve BAĞLAN düğmesine basın. Mevcut kanal: '+(d.protocol||'kapalı');return;}
    canSniffActive=true;canSniffStartMs=Date.now();document.getElementById('can_sniff_status').textContent='DİNLİYOR';
    document.getElementById('can_sniff_start').disabled=true;document.getElementById('can_sniff_stop').disabled=false;
-   document.getElementById('can_sniff_error').textContent='RX dinleme başladı. Uygulama CAN mesajı göndermiyor.';canSniffPoll();
+   document.getElementById('can_sniff_error').textContent='RX dinleme başladı. Aynı CAN çerçeveleri SavvyCAN CAN ANALİZ sekmesine aktarılıyor; SavvyCAN TX şimdilik kapalı.';canSniffPoll();
   }).catch(e=>document.getElementById('can_sniff_error').textContent='J2534 durum hatası: '+e);
  }
  function canSniffStop(){canSniffActive=false;document.getElementById('can_sniff_status').textContent='DURDURULDU';document.getElementById('can_sniff_start').disabled=false;document.getElementById('can_sniff_stop').disabled=true;canSniffRender();}
@@ -2730,6 +2705,7 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   if(!canSniffActive||canSniffBusy)return;canSniffBusy=true;
   try{
    const r=await fetch('/api/j2534/read?timeout_ms=200'),d=await r.json();if(!d.ok)throw new Error(d.error||'J2534 RX okuma hatası');
+   if((d.frames||[]).length)fetch('/api/savvycan/frames',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:d.frames})}).catch(()=>{});
    (d.frames||[]).forEach(f=>{
     const oct=(f.data||'').trim().split(/\s+/).filter(Boolean).map(v=>parseInt(v,16));if(oct.length<4)return;
     const rawId=oct[0]*16777216+oct[1]*65536+oct[2]*256+oct[3],id=(rawId>>>0).toString(16).toUpperCase().padStart(rawId>2047?8:3,'0');
@@ -2753,28 +2729,6 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   a.href=url;a.download='MOTO_DIAG_CAN_SNIFF_'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
  }
 
-function canSniffDownloadAsc(){
- if(!canSniffFrames.length){document.getElementById('can_sniff_error').textContent='ASC dışa aktarmak için önce CAN kaydı alın.';return;}
- const now=new Date(),date=now.toDateString()+' '+now.toTimeString().split(' ')[0]+'.000';
- const lines=['date '+date,'base hex timestamps absolute','internal events logged','Begin Triggerblock'];
- canSniffFrames.forEach(x=>{const data=(x.data||'').trim().split(/\\s+/).filter(Boolean).slice(0,8),id=parseInt(x.id,16);if(!Number.isFinite(id)||!data.length)return;lines.push(' '+Number(x.t||0).toFixed(6)+' 1 '+id.toString(16).toUpperCase().padStart(3,'0')+' Rx d '+data.length+' '+data.join(' '));});
- lines.push('End TriggerBlock');
- const blob=new Blob([lines.join('\\r\\n')+'\\r\\n'],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
- a.href=url;a.download='MOTO_DIAG_SAVVYCAN_'+new Date().toISOString().replace(/[:.]/g,'-')+'.asc';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
-}
-function canToolStatus(){
- const out=document.getElementById('can_tool_status');out.textContent='Kontrol ediliyor...';
- fetch('/api/can-tools/status').then(r=>r.json()).then(d=>{out.textContent='SavvyCAN: '+(d.savvycan_found?'PAKETTE HAZIR · '+d.savvycan_path:'BULUNAMADI · MOTO DIAG PRO kurulumunu onarın / yeniden kurun')+'\\nasammdf: '+(d.asammdf_available?'KURULU · MF4 işleme hazır':'KURULU DEĞİL · py -m pip install asammdf')+'\\nMF4 / DBC işleme: '+(d.mf4_processing?'Hazır':'asammdf kurulumu gerekli');}).catch(e=>out.textContent='Araç kontrol hatası: '+e);
-}
-function canToolLaunch(tool){
- if(tool!=='savvycan')return;if(canSniffActive)canSniffStop();
- fetch('/api/can-tools/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:'savvycan'})}).then(r=>r.json()).then(d=>{document.getElementById('can_tool_status').textContent=d.message||d.error||JSON.stringify(d);}).catch(e=>document.getElementById('can_tool_status').textContent='SavvyCAN açılamadı: '+e);
-}
-function cssMf4Process(){
- const file=document.getElementById('css_mf4_file').files[0],out=document.getElementById('css_mf4_status');if(!file){out.textContent='Önce .MF4 / .MDF kayıt dosyasını seçin.';return;}if(file.size>50*1024*1024){out.textContent='Dosya 50 MB sınırını aşıyor.';return;}
- const form=new FormData();form.append('file',file);form.append('dbc_profile',document.getElementById('css_mf4_dbc').value);out.textContent='MF4 dosyası inceleniyor; DBC seçildiyse sinyaller çözümleniyor...';
- fetch('/api/css/mf4/export',{method:'POST',body:form}).then(async r=>{if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'MF4 işleme başarısız');}const blob=await r.blob(),name=r.headers.get('X-Export-Filename')||'CSS_ELECTRONICS_MF4.csv';const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);out.textContent='CSV dışa aktarıldı: '+name+'\\nİşleme: '+(r.headers.get('X-MF4-Mode')||'ham MF4')+'\\nDosya boyutu: '+blob.size+' bayt';}).catch(e=>out.textContent='CSS / MF4 hata: '+e.message);
-}
 function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
 function j2534ClearDtc(){
  if(!confirm('UYARI: Bu işlem standart OBD-II motor/emisyon ECU arıza hafızasını siler ve hazır olma monitörlerini sıfırlayabilir. ABS arızalarını silmez. Önce arıza raporunu kaydettiniz mi?'))return;
@@ -3041,6 +2995,21 @@ def api_j2534_read():
         write_log("J2534 RX", f"{result['count']} mesaj alindi.")
     return jsonify(result), (200 if result.get("ok") else 400)
 
+@app.route('/api/savvycan/frames', methods=['POST'])
+def api_savvycan_frames():
+    state = j2534_status()
+    if not state.get("connected") or str(state.get("protocol") or "").lower() != "can":
+        return jsonify({"ok": False, "error": "SavvyCAN aktarımı için önce J2534 CAN ham kanalını açın."}), 409
+    payload = request.get_json(silent=True) or {}
+    frames = payload.get("frames", [])
+    if not isinstance(frames, list):
+        return jsonify({"ok": False, "error": "frames listesi geçersiz."}), 400
+    forwarded = publish_j2534_frames(frames)
+    return jsonify({"ok": True, "received": len(frames), "forwarded": forwarded,
+                    "tx_enabled": False,
+                    "note": "J2534 CAN RX çerçeveleri SavvyCAN'e aktarıldı. SavvyCAN üzerinden TX güvenlik doğrulaması tamamlanana kadar kapalıdır."})
+
+
 @app.route('/api/j2534/obd/live', methods=['POST'])
 def api_j2534_obd_live():
     result = j2534_read_obd_live_data()
@@ -3069,95 +3038,6 @@ def api_ecu_monitor_analyze():
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
-
-def _savvycan_executable():
-    candidates=[]
-    env=os.environ.get("SAVVYCAN_EXE") or os.environ.get("SAVVYCAN_PATH")
-    if env: candidates.append(env)
-    found=shutil.which("SavvyCAN") or shutil.which("savvycan")
-    if found: candidates.append(found)
-    if sys.platform=="win32":
-        app_dir=os.path.dirname(os.path.abspath(sys.executable if getattr(sys,"frozen",False) else sys.argv[0]))
-        for base in (app_dir, os.environ.get("ProgramFiles",r"C:\\Program Files"),
-                     os.environ.get("ProgramFiles(x86)",r"C:\\Program Files (x86)")):
-            candidates.extend([os.path.join(base,"SavvyCAN","SavvyCAN.exe"),
-                               os.path.join(base,"SavvyCAN.exe"),
-                               os.path.join(base,"savvycan.exe")])
-    return next((p for p in candidates if os.path.isfile(p)),None)
-
-@app.route('/api/can-tools/status', methods=['GET'])
-def api_can_tools_status():
-    import importlib.util
-    exe=_savvycan_executable()
-    asammdf_available=importlib.util.find_spec("asammdf") is not None
-    return jsonify({"ok":True,"savvycan_found":bool(exe),"savvycan_path":exe,
-                    "asammdf_available":asammdf_available,"mf4_processing":asammdf_available,
-                    "note":"SavvyCAN bağımsız masaüstü uygulamasıdır; MF4 işlemesi asammdf Python API üzerinden yapılır."})
-
-@app.route('/api/can-tools/launch', methods=['POST'])
-def api_can_tools_launch():
-    payload=request.get_json(silent=True) or {}
-    if payload.get("tool")!="savvycan":
-        return jsonify({"ok":False,"error":"Yalnızca SavvyCAN başlatma destekleniyor."}),400
-    exe=_savvycan_executable()
-    if not exe:
-        return jsonify({"ok":False,"error":"SavvyCAN uygulama paketinde bulunamadı. MOTO DIAG PRO kurulumunu onarın veya yeniden kurun."}),404
-    try:
-        subprocess.Popen([exe],cwd=os.path.dirname(exe) or None,
-                         creationflags=(getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0) if sys.platform=="win32" else 0))
-        write_log("SAVVYCAN BAŞLATILDI",exe)
-        return jsonify({"ok":True,"message":"SavvyCAN başlatıldı. Önceki CAN dinlemesi durduruldu; J2534 arayüzünü SavvyCAN içinden seçebilirsiniz."})
-    except Exception as exc:
-        return jsonify({"ok":False,"error":"SavvyCAN başlatılamadı: "+str(exc)}),500
-
-@app.route('/api/css/mf4/export', methods=['POST'])
-def api_css_mf4_export():
-    uploaded=request.files.get("file")
-    if uploaded is None or not uploaded.filename:
-        return jsonify({"ok":False,"error":"MF4 dosyası seçilmedi."}),400
-    if os.path.splitext(uploaded.filename)[1].lower() not in (".mf4",".mdf"):
-        return jsonify({"ok":False,"error":"Yalnızca .MF4 veya .MDF dosyası kabul edilir."}),400
-    dbc_profile=str(request.form.get("dbc_profile") or "").strip()
-    if dbc_profile not in ("","yamaha_r9_2026"):
-        return jsonify({"ok":False,"error":"Bilinmeyen DBC profili."}),400
-    source_path=output_path=None
-    try:
-        import importlib.util
-        if importlib.util.find_spec("asammdf") is None:
-            return jsonify({"ok":False,"error":"asammdf kurulu değil. Kurulum: py -m pip install asammdf"}),503
-        raw=uploaded.read(50*1024*1024+1)
-        if len(raw)>50*1024*1024:
-            return jsonify({"ok":False,"error":"MF4 dosyası 50 MB sınırını aşıyor."}),413
-        with tempfile.NamedTemporaryFile(prefix="seyfi_mf4_",suffix=".mf4",delete=False) as tmp:
-            tmp.write(raw);source_path=tmp.name
-        from asammdf import MDF
-        with MDF(source_path) as mdf:
-            exported=mdf
-            mode="ham MF4 dışa aktarımı"
-            if dbc_profile=="yamaha_r9_2026":
-                dbc_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),"static","can_profiles","yamaha_r9_2026.dbc")
-                if not os.path.isfile(dbc_path): raise FileNotFoundError("Yamaha R9 DBC dosyası bulunamadı.")
-                exported=mdf.extract_can_logging(dbc_path,ignore_invalid_signals=True)
-                mode="Yamaha R9 2026 DBC çözümlemesi"
-            fd,output_path=tempfile.mkstemp(prefix="seyfi_mf4_export_",suffix=".csv");os.close(fd)
-            exported.export("csv",filename=output_path,single_time_base=True)
-        download_name=os.path.splitext(os.path.basename(uploaded.filename))[0]+"_CSS_ELECTRONICS.csv"
-        response=send_file(output_path,as_attachment=True,download_name=download_name,mimetype="text/csv")
-        response.headers["X-Export-Filename"]=download_name
-        response.headers["X-MF4-Mode"]=mode
-        response.call_on_close(lambda p=output_path: os.path.exists(p) and os.remove(p))
-        output_path=None
-        write_log("CSS ELECTRONICS MF4 İŞLEME",f"{os.path.basename(uploaded.filename)} → {download_name} | {mode}")
-        return response
-    except Exception as exc:
-        return jsonify({"ok":False,"error":"MF4/DBC işleme hatası: "+str(exc)}),400
-    finally:
-        if source_path:
-            try: os.remove(source_path)
-            except OSError: pass
-        if output_path:
-            try: os.remove(output_path)
-            except OSError: pass
 
 @app.route('/api/j2534/obd/clear', methods=['POST'])
 def api_j2534_obd_clear():
@@ -3532,7 +3412,7 @@ def view_logs():
         with open(LOG_FILE, "r", encoding="utf-8") as f: return f"<pre style='color:black; background:white; padding:20px;'>{f.read()}</pre>"
     return "Log yok."
 
-def run_flask(): socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+def run_flask(host='127.0.0.1', port=5000): socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)
 @app.route('/')
 def index_page(): return render_template_string(HTML_CODE)
 
@@ -3727,7 +3607,6 @@ MOTO_KNOWLEDGE_SOURCES = {
     "yamaha_fz8_manual": "https://biker.ee/manuals/yamaha/YAMAHA-FZ8-SA-Service-Manual.pdf",
     "kawasaki_z750s_manual": "https://sd8fb8245db0f2e8b.jimcontent.com/download/version/1648048271/module/16278494722/name/Kawasaki%20Z750S%20Service%20Manual.pdf",
     "honda_nc700_manual": "https://ipv4.cyclechaos.com/images/5/58/Honda_NC700_Service_Manual.pdf",
-    "css_motorcycle_can": "https://www.csselectronics.com/pages/motorcycle-reverse-engineering-can-bus",
 }
 MOTO_CAN_PROFILES = [
     {
