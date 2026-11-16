@@ -118,6 +118,11 @@ def main() -> None:
                  "    ui->setupUi(this);\n" + integration,
                  "MainWindow constructor integration")
 
+    replace_once(cpp,
+                 '    this->setWindowTitle("Savvy CAN V" + QString::number(VERSION) + " [Built " + QString(__DATE__) +"]");',
+                 '    this->setWindowTitle("MOTO DIAG PRO | SavvyCAN V" + QString::number(VERSION));',
+                 "unified application window title")
+
     target_backend = root / "backend" / "MOTO-DIAG-PRO-Backend.exe"
     target_backend.parent.mkdir(parents=True, exist_ok=True)
     target_backend.write_bytes(backend.read_bytes())
