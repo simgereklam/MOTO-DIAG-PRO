@@ -1,4 +1,5 @@
 # Build the unified Windows desktop installer
+# Rebuild after correcting the qmake release output copy path.
 name: Build MOTO DIAG PRO Windows Installer
 
 on:
