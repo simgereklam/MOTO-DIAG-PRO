@@ -2239,6 +2239,8 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <button id="nav-dct" onclick="switchTab('dct')">⚙️ HONDA DCT</button>
 <button id="nav-dyno" onclick="switchTab('dyno')">📈 DYNO</button>
 <button id="nav-ecu-lab" onclick="switchTab('ecu-lab')">📡 ECU ANALİZ LAB</button>
+<button id="nav-savvycan" onclick="switchTab('savvycan')">🧩 SAVVYCAN</button>
+<button id="nav-css" onclick="switchTab('css')">📁 CSS / CANEDGE</button>
 </div>
 <div id="tab-arac" class="container active"><div class="panel" style="max-width:800px;margin:0 auto;">
 <h3 style="color:#00e5ff;margin-top:0">🚗 ARAÇ SEÇİMİ VE OTOMATİK YAPILANDIRMA</h3>
@@ -2336,18 +2338,6 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
       <pre id="ecu_capture_analysis" style="white-space:pre-wrap;color:#ffcc80;max-height:300px;overflow:auto">Önce CAN dinleme kaydı alın, ardından Motor ECU veya ABS ECU seçerek analiz edin.</pre>
      </div>
      <div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
-     <div class="test-block" style="margin-top:14px;border-color:#80cbc4">
-      <div class="title">SAVVYCAN · CAN TERSİNE MÜHENDİSLİK ENTEGRASYONU</div>
-      <p style="color:#b8c4d0">MOTO DIAG PRO Windows kurulum paketi SavvyCAN V220'yi uygulama klasörüne birlikte kurar. Ayrı kurulum yapmanız gerekmez. CAN dinleme kaydını Vector ASC biçiminde dışa aktarabilir veya SavvyCAN'i buradan açabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda açamayabilir; önce Seyfi Usta dinlemesini durdurun.</p>
-      <div class="module-actions"><button class="btn test-btn" onclick="canSniffDownloadAsc()">⬇ SAVVYCAN VECTOR ASC İNDİR</button><button class="btn test-btn" onclick="canToolStatus()">ARAÇ DURUMUNU KONTROL ET</button><button class="btn test-btn" onclick="canToolLaunch('savvycan')">SAVVYCAN'I AÇ</button><span class="btn test-btn" style="cursor:default">PAKETE DAHİL · V220 · 64-BIT</span></div>
-      <pre id="can_tool_status" style="white-space:pre-wrap;color:#80cbc4">SavvyCAN durumu henüz kontrol edilmedi. Windows kurulumuyla birlikte gelir.</pre>
-     </div>
-     <div class="test-block" style="margin-top:14px;border-color:#90caf9">
-      <div class="title">CSS ELECTRONICS / ASAMMDF · MF4 KAYIT İŞLEME</div>
-      <p style="color:#b8c4d0">CANedge MF4 kayıtlarını CSV'ye aktarır; isteğe bağlı Yamaha R9 2026 DBC çözümlemesi uygular. Bu dosya tabanlı entegrasyondur; CSS cihazına doğrudan bağlantı kurmaz.</p>
-      <div class="module-actions"><input id="css_mf4_file" type="file" accept=".mf4,.mdf" class="module-field"><select id="css_mf4_dbc" class="module-field" style="max-width:260px"><option value="">DBC olmadan ham dışa aktar</option><option value="yamaha_r9_2026">Yamaha R9 2026 DBC ile çöz</option></select><button class="btn test-btn" onclick="cssMf4Process()">MF4 ANALİZ ET / CSV İNDİR</button><a class="btn test-btn" href="https://www.csselectronics.com/pages/can-bus-software-api-tools" target="_blank" rel="noopener">CSS ELECTRONICS ARAÇLARI</a><a class="btn test-btn" href="https://www.csselectronics.com/pages/asammdf-gui-api-mdf4-mf4" target="_blank" rel="noopener">ASAMMDF KILAVUZU</a></div>
-      <pre id="css_mf4_status" style="white-space:pre-wrap;color:#90caf9">MF4 dosyası bekleniyor. İşleme için asammdf Python paketi gerekir.</pre>
-     </div>
      <div class="module-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
       <div class="module-card"><div class="k">Dinleme durumu</div><div class="v" id="can_sniff_status">Hazır değil</div></div><div class="module-card"><div class="k">Toplam çerçeve</div><div class="v" id="can_sniff_count">0</div></div><div class="module-card"><div class="k">Farklı CAN ID</div><div class="v" id="can_sniff_ids">0</div></div><div class="module-card"><div class="k">Kayıt süresi</div><div class="v" id="can_sniff_duration">0.0 sn</div></div>
      </div>
@@ -2532,6 +2522,31 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
  <div class="test-block"><div class="title">SON ÖLÇÜM DETAYI</div><pre id="dyno_last_sample" style="color:#00ff99;white-space:pre-wrap">Henüz ölçüm yok.</pre></div>
 </div></div>
 <div id="tab-gk" class="container"><div class="panel"><h3 style="color:#ffaa00;margin-top:0">🔧 GELİŞMİŞ SERVİS TESTLERİ</h3><div class="test-block"><div class="title">BAĞLANTI (Araç Seçimine Göre)</div><button class="btn test-btn" onclick="gkConnect()">🔌 GELİŞMİŞ BAĞLANTI KUR</button><pre id="gk_conn_out" style="color:#00e5ff;min-height:30px">-</pre></div><div class="test-block"><div class="title">AKTÜATÖR TESTLERİ</div><pre id="gk_test_out" style="color:#ffaa00;min-height:30px">Güvenlik nedeniyle kapalı: model/ECU özel komut profili doğrulanınca etkinleştirilecek.</pre></div><div class="test-block"><div class="title">ABS MODÜLÜ</div><pre id="gk_d07_out" style="color:#ffaa00;min-height:30px">Ayrı ABS bağlantı katmanı hazırlanacak. Genel D07 komutu kullanılmayacak.</pre></div></div></div>
+
+<div id="tab-savvycan" class="container">
+ <div class="panel">
+  <div class="module-head"><h2 style="color:#80cbc4">🧩 SAVVYCAN · CAN ANALİZ MERKEZİ</h2><span class="module-status">V220 · WINDOWS X64 · KURULUMA DAHİL</span></div>
+  <p style="color:#aab5c2">SavvyCAN, MOTO DIAG PRO Windows kurulumuyla birlikte gelir. Bu bölümden programı açabilir ve Seyfi Usta'nın pasif CAN kaydını ASC biçiminde dışa aktarabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda kullanamayabilir; açmadan önce CAN dinlemesini durdurun.</p>
+  <div class="test-block" style="margin-top:14px;border-color:#80cbc4">
+      <div class="title">SAVVYCAN · CAN TERSİNE MÜHENDİSLİK ENTEGRASYONU</div>
+      <p style="color:#b8c4d0">MOTO DIAG PRO Windows kurulum paketi SavvyCAN V220'yi uygulama klasörüne birlikte kurar. Ayrı kurulum yapmanız gerekmez. CAN dinleme kaydını Vector ASC biçiminde dışa aktarabilir veya SavvyCAN'i buradan açabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda açamayabilir; önce Seyfi Usta dinlemesini durdurun.</p>
+      <div class="module-actions"><button class="btn test-btn" onclick="canSniffDownloadAsc()">⬇ SAVVYCAN VECTOR ASC İNDİR</button><button class="btn test-btn" onclick="canToolStatus()">ARAÇ DURUMUNU KONTROL ET</button><button class="btn test-btn" onclick="canToolLaunch('savvycan')">SAVVYCAN'I AÇ</button><span class="btn test-btn" style="cursor:default">PAKETE DAHİL · V220 · 64-BIT</span></div>
+      <pre id="can_tool_status" style="white-space:pre-wrap;color:#80cbc4">SavvyCAN durumu henüz kontrol edilmedi. Windows kurulumuyla birlikte gelir.</pre>
+     </div>
+ </div>
+</div>
+<div id="tab-css" class="container">
+ <div class="panel">
+  <div class="module-head"><h2 style="color:#90caf9">📁 CSS ELECTRONICS / CANEDGE</h2><span class="module-status">MF4 / MDF4 · ASAMMDF · CSV</span></div>
+  <p style="color:#aab5c2">MF4/MDF4 kayıt işleme bileşeni ve asammdf Python kütüphanesi MOTO DIAG PRO kurulumuna dahil edilir. CANedge kayıtlarını açıp CSV'ye aktarabilir, desteklenen DBC profiliyle sinyalleri çözümleyebilirsiniz. Bu modül dosya analizi yapar; CSS CANedge donanımına doğrudan bağlantı kurmaz.</p>
+  <div class="test-block" style="margin-top:14px;border-color:#90caf9">
+      <div class="title">CSS ELECTRONICS / ASAMMDF · MF4 KAYIT İŞLEME</div>
+      <p style="color:#b8c4d0">CANedge MF4 kayıtlarını CSV'ye aktarır; isteğe bağlı Yamaha R9 2026 DBC çözümlemesi uygular. Bu dosya tabanlı entegrasyondur; CSS cihazına doğrudan bağlantı kurmaz.</p>
+      <div class="module-actions"><input id="css_mf4_file" type="file" accept=".mf4,.mdf" class="module-field"><select id="css_mf4_dbc" class="module-field" style="max-width:260px"><option value="">DBC olmadan ham dışa aktar</option><option value="yamaha_r9_2026">Yamaha R9 2026 DBC ile çöz</option></select><button class="btn test-btn" onclick="cssMf4Process()">MF4 ANALİZ ET / CSV İNDİR</button><a class="btn test-btn" href="https://www.csselectronics.com/pages/can-bus-software-api-tools" target="_blank" rel="noopener">CSS ELECTRONICS ARAÇLARI</a><a class="btn test-btn" href="https://www.csselectronics.com/pages/asammdf-gui-api-mdf4-mf4" target="_blank" rel="noopener">ASAMMDF KILAVUZU</a></div>
+      <pre id="css_mf4_status" style="white-space:pre-wrap;color:#90caf9">MF4 işleme modülü MOTO DIAG PRO kurulumuna dahildir. Dosyanızı seçip analiz edebilirsiniz.</pre>
+     </div>
+ </div>
+</div>
 <script>
 var socket = io();
 function ecuLabEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
