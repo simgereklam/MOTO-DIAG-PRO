@@ -1700,7 +1700,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div class="test-block" id="can-sniffer-lab" style="margin-top:14px;border-color:#00e5ff">
      <div class="title">📡 CAN VERİ DİNLEME VE ÇÖZÜMLEME · SNIFFER</div>
      <p style="color:#aab5c2">Protokolü CAN · 500 kbit/s (ham/pasif) seçip J2534 kanalını açın. Ardından dinlemeyi başlatın. Uygulama CAN çerçevesi göndermez; yalnızca gelen kayıtları okur. Adaptörün elektriksel listen-only/ACK davranışı cihaz desteğine bağlıdır.</p>
-     <div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
+     <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;margin:10px 0"><div><label class="title" for="can_profile">MOTOSİKLET CAN PROFİLİ</label><select id="can_profile" class="module-field" onchange="canSniffRenderDecoded()"><option value="none">Genel / bilinmeyen model</option><option value="yamaha_cp3_2021_2024">Yamaha CP3 · Tracer 9 / MT-09 / XSR900 (2021–2024)</option><option value="yamaha_r9_2026">Yamaha R9 (2026)</option></select></div><div id="can_profile_note" class="module-field" style="white-space:normal;min-height:42px">Profil seçilmedi; ham kayıt devam eder.</div></div><div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
      <div class="module-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
       <div class="module-card"><div class="k">Dinleme durumu</div><div class="v" id="can_sniff_status">Hazır değil</div></div><div class="module-card"><div class="k">Toplam çerçeve</div><div class="v" id="can_sniff_count">0</div></div><div class="module-card"><div class="k">Farklı CAN ID</div><div class="v" id="can_sniff_ids">0</div></div><div class="module-card"><div class="k">Kayıt süresi</div><div class="v" id="can_sniff_duration">0.0 sn</div></div>
      </div>
@@ -1870,6 +1870,33 @@ function j2534Open(){var p=document.getElementById('j2534_protocol').value,b=doc
 function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).then(d=>{document.getElementById('j2534_output').innerText=JSON.stringify(d,null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Okuma hatası: '+e);}
  // J2534 ham CAN sniffer: yalnizca RX okur, uygulama TX yapmaz.
  let canSniffActive=false,canSniffBusy=false,canSniffStartMs=0,canSniffFrames=[],canSniffMarkers=[],canSniffStats={};
+ const CAN_SIGNAL_PROFILES={
+ yamaha_cp3_2021_2024:{applicability:'2022 Tracer 9 üzerinde yayımlanmış; 2021+ MT-09 ve XSR900 aynı platform olarak belirtilmiş. Başka yıl/model için doğrulanmış sayılmaz.',source:'https://racechrono.com/forum/d/2853-yamaha-tracer-9-mt-09-2021-2024-can-ids-and-formulas',signals:{
+ '209':[{name:'Motor devri',fn:b=>b.length>=2?{v:(((b[0]<<8)|b[1])*25/64).toFixed(0),u:'rpm'}:null},{name:'Vites',fn:b=>b.length>=5?{v:(b[4]&7)===7?'Vites geçişi':(b[4]&7)===0?'N':String(b[4]&7),u:''}:null}],
+ '205':[{name:'Ön / arka teker hızı',fn:b=>b.length>=4?{v:(((b[0]<<8)|b[1])/101).toFixed(1)+' / '+(((b[2]<<8)|b[3])/101).toFixed(1),u:'km/h'}:null}],
+ '215':[{name:'Gaz kolu ham değeri',fn:b=>b.length>=4?{v:String((b[2]<<8)|b[3]),u:'raw'}:null}],
+ '260':[{name:'Ön fren basıncı',fn:b=>b.length>=2?{v:String((b[0]<<8)|b[1]),u:'raw'}:null}],
+ '268':[{name:'ABS / arka fren durumu',fn:b=>b.length>=5?{v:'Arka ABS: '+((b[4]&1)?'aktif':'pasif')+' · Ön ABS: '+((b[4]&2)?'aktif':'pasif')+' · Arka pedal: '+((b[4]&4)?'basılı':'basılı değil'),u:''}:null}],
+ '254':[{name:'Yaw rate',fn:b=>b.length>=6?{v:((((b[4]<<8)|b[5])-30000)/100).toFixed(2),u:'deg/s'}:null}]
+ }},
+ yamaha_r9_2026:{applicability:'2026 R9 üzerinde tek motosiklette yayımlanmış yayın verileri; tanımlı teşhis soketi hattına özgüdür. Üç ayrı CAN çifti olduğu bildirilmiştir.',source:'https://racechrono.com/forum/d/2840-yamaha-r9-2026-12-signals-decoded-captures-and-dbc-on-github',signals:{
+ '27C':[{name:'Motor devri',fn:b=>b.length>=2?{v:(((b[0]<<8)|b[1])*100/256).toFixed(0),u:'rpm'}:null},{name:'Vites',fn:b=>b.length>=5?{v:(b[4]&7)===7?'Vites geçişi':(b[4]&7)===0?'N':String(b[4]&7),u:''}:null},{name:'ECU vites bilgisi',fn:b=>b.length>=4?{v:String((b[3]>>5)&7),u:''}:null}],
+ '383':[{name:'Fren anahtarı',fn:b=>b.length>=5?{v:((b[4]>>3)&1)?'Fren basılı':'Fren basılı değil',u:''}:null}],
+ '512':[{name:'Soğutma / hava sıcaklığı',fn:b=>b.length>=2?{v:(b[0]*0.625-30).toFixed(1)+' / '+(b[1]*0.625-30).toFixed(1),u:'°C (su / hava)'}:null}],
+ '751':[{name:'Nötr bilgisi',fn:b=>b.length>=7?{v:(b[6]===0x60||b[6]===0x70)?'Nötr':'Viteste / belirsiz',u:''}:null}],
+ '758':[{name:'Gaz kelebeği (TPS)',fn:b=>b.length>=3?{v:((((b[0]>>4)<<8)|b[2])*100/2310.4).toFixed(1),u:'% · forumda sıfır noktası geçici'}:null}],
+ '759':[{name:'Komutlanan gaz kelebeği',fn:b=>b.length>=3?{v:((((b[0]>>4)<<4)|(b[2]>>4))*100/144.4).toFixed(1),u:'%'}:null}],
+ '76D':[{name:'Cruise düğmeleri',fn:b=>b.length>=6?{v:'RES+: '+((b[3]&1)?'basılı':'—')+' · SET−: '+((b[5]>>4&1)?'basılı':'—'),u:''}:null}],
+ '76E':[{name:'Sürüş modu ekranı',fn:b=>b.length>=3?{v:b[2]===0x10?'Track':b[2]===0x20?'Normal':'Bilinmiyor',u:''}:null}]
+ }}
+ };
+ function canSniffRenderDecoded(){
+  const profile=document.getElementById('can_profile')?.value||'none',box=document.getElementById('can_sniff_decoded'),note=document.getElementById('can_profile_note');if(!box)return;
+  if(profile==='none'){note.textContent='Profil seçilmedi. Ham CAN kayıtları tutulur; sinyal isimleri atanmaz.';box.textContent='Genel / bilinmeyen model: çözümleme yapılmıyor.';return;}
+  const p=CAN_SIGNAL_PROFILES[profile];note.textContent=p.applicability+' Kaynak: '+p.source;
+  const latest={};canSniffFrames.forEach(f=>{const b=(f.data||'').split(/\\s+/).filter(Boolean).map(x=>parseInt(x,16));(p.signals[f.id.toUpperCase()]||[]).forEach(sig=>{const v=sig.fn(b);if(v)latest[sig.name]={name:sig.name,value:v.v,unit:v.u};});});
+  const rows=Object.values(latest);box.innerHTML=rows.length?'<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th>Sinyal</th><th>Son değer</th><th>Birim / not</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>'+x.name+'</td><td style="color:#00e5ff;font-weight:bold">'+x.value+'</td><td>'+x.unit+'</td></tr>').join('')+'</tbody></table>':'Seçili profile ait CAN ID henüz görülmedi.';
+ }
  function canSniffRender(){
   const count=document.getElementById('can_sniff_count');if(!count)return;
   count.textContent=canSniffFrames.length;document.getElementById('can_sniff_ids').textContent=Object.keys(canSniffStats).length;
@@ -1879,6 +1906,7 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   const recent=canSniffFrames.slice(-60).reverse();
   document.getElementById('can_sniff_frames').innerHTML=recent.length?'<table style="width:100%;border-collapse:collapse;font:12px Consolas,monospace"><thead><tr><th>Zaman</th><th>CAN ID</th><th>DLC</th><th>Ham veri</th><th>RX durum</th></tr></thead><tbody>'+recent.map(x=>'<tr><td>'+x.t.toFixed(3)+'</td><td>0x'+x.id+'</td><td>'+x.dlc+'</td><td>'+x.data+'</td><td>'+x.rx_status+'</td></tr>').join('')+'</tbody></table>':'CAN çerçevesi alınmadı.';
   document.getElementById('can_sniff_markers').textContent=canSniffMarkers.length?canSniffMarkers.map(x=>x.t.toFixed(3)+' sn  |  '+x.label).join('\n'):'Henüz olay işareti yok.';
+  canSniffRenderDecoded();
  }
  function canSniffStart(){
   if(canSniffActive)return;
