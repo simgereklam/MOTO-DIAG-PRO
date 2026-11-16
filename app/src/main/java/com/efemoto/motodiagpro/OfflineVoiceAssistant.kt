@@ -127,17 +127,29 @@ class OfflineVoiceAssistant(
                         val offlineTurkish = turkishVoices.filter {
                             !it.isNetworkConnectionRequired
                         }
-                        val selected = offlineTurkish.firstOrNull { voice ->
+                        fun isMaleVoice(voice: android.speech.tts.Voice): Boolean {
                             val details = (voice.name + " " +
                                 voice.features.orEmpty().joinToString(" "))
                                 .lowercase(Locale.ROOT)
-                            details.contains("male") || details.contains("erkek")
-                        } ?: offlineTurkish.firstOrNull()
+                            return details.contains("male") || details.contains("erkek")
+                        }
 
+                        // Önce çevrimdışı Türkçe erkek sesi; yoksa çevrimdışı herhangi
+                        // bir Türkçe ses; o da yoksa telefondaki Türkçe ağ sesini seç.
+                        // Önceki kod çevrimdışı Türkçe ses yokken varsayılan motor sesini
+                        // bırakıyordu; bu ses Türkçe olmayabilir veya kullanılamayabilirdi.
+                        val selected = offlineTurkish.firstOrNull(::isMaleVoice)
+                            ?: offlineTurkish.firstOrNull()
+                            ?: turkishVoices.firstOrNull(::isMaleVoice)
+                            ?: turkishVoices.firstOrNull()
+
+                        var selectedVoiceName = "Android varsayılan Türkçe sesi"
                         if (selected != null) {
                             val voiceResult = engine.setVoice(selected)
                             if (voiceResult == TextToSpeech.ERROR) {
-                                reportStatus("Türkçe ses seçilemedi: ${selected.name}")
+                                reportStatus("Türkçe ses seçilemedi: ${selected.name}; varsayılan ses deneniyor.")
+                            } else {
+                                selectedVoiceName = selected.name
                             }
                         }
 
@@ -187,12 +199,14 @@ class OfflineVoiceAssistant(
                         reportStatus(
                             when {
                                 !ttsReady -> "Türkçe metin okuma dili telefonda yüklü değil."
+                                selected != null && selected.isNetworkConnectionRequired ->
+                                    "SEYFİ TTS HAZIR: $selectedVoiceName (internet gerektirir); medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
                                 selected != null ->
-                                    "SEYFİ TTS HAZIR: ${selected.name}; medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
-                                offlineTurkish.isEmpty() && turkishVoices.isEmpty() ->
+                                    "SEYFİ TTS HAZIR: $selectedVoiceName (çevrimdışı); medya ses çıkışı ${if (audioResult == TextToSpeech.SUCCESS) "hazır" else "kontrol edilmeli"}."
+                                turkishVoices.isEmpty() ->
                                     "Türkçe TTS sesi bulunamadı. Telefona Türkçe ses paketi yüklenmeli."
                                 else ->
-                                    "Türkçe TTS hazır; çevrimdışı Türkçe ses bulunamadı."
+                                    "Türkçe TTS hazır; varsayılan ses kullanılacak."
                             }
                         )
                     } catch (e: Exception) {

@@ -2,6 +2,10 @@
 name: MOTO DIAG PRO APK
 
 on:
+  pull_request:
+    branches:
+      - main
+      - master
   push:
     branches:
       - main
