@@ -3569,9 +3569,10 @@ class App:
     def begin_adapter_search(self):
         if self._searching or self._active_run_id is not None: return
         self._searching = True
+        self._candidate_queue = []
         self.btn_real.config(text="🔍 ARANIYOR...", state="disabled")
         self.set_status("BAĞLANTI CİHAZI ARANIYOR")
-        self.log("Wi-Fi ELM327 ve USB/COM adaptörleri taranıyor...")
+        self.log("Wi-Fi ELM327, J2534 ve USB/COM adaptörleri taranıyor...")
         safe_speak("Bağlantı cihazı aranıyor.")
         threading.Thread(target=self._search_and_connect, daemon=True).start()
 
@@ -3582,19 +3583,34 @@ class App:
     def _search_done(self, candidates):
         self._searching = False
         self.btn_real.config(state="normal")
-        self._candidate_queue = candidates or []
-        if not candidates:
+        self._candidate_queue = list(candidates or [])
+        if not self._candidate_queue:
             self.addr_var.set("otomatik")
             self.set_status("BAĞLANTI BULUNAMADI", "#ff5252")
-            self.log("BAĞLANTI BULUNAMADI. Wi-Fi ELM327 veya USB/COM adaptörü tespit edilemedi.")
+            self.log("BAĞLANTI BULUNAMADI. Wi-Fi ELM327, J2534 DLL/cihaz veya USB/COM adaptörü tespit edilemedi.")
             safe_speak("Bağlantı cihazı bulunamadı. Lütfen bağlantı cihazınızı bilgisayara ve motosiklete bağlayın. Bağladınız mı?")
             self.root.after(1200, self.ask_device_connected)
             return
-        kind, target, desc = candidates[0]
+        self.log(f"{len(self._candidate_queue)} olası bağlantı arayüzü bulundu. Her biri ECU yanıtı verene kadar sırayla denenecek.")
+        self._try_next_candidate()
+
+    def _try_next_candidate(self):
+        if not self._candidate_queue:
+            self.set_status("TÜM ADAYLARDA ECU YANITI YOK", "#ff5252")
+            self.log("Tüm bulunan adaptör/port adayları denendi; hiçbirinden gerçek ECU yanıtı alınamadı.")
+            safe_speak("Adaptör adaylarının hiçbiri motosiklet kontrol ünitesinden yanıt alamadı.")
+            self.root.after(500, lambda: messagebox.askyesno(
+                "ECU yanıt vermedi",
+                "Bulunan tüm bağlantı arayüzleri denendi ancak ECU yanıt vermedi.\n\n"
+                "Kontak açık mı, motosiklet soketi doğru mu ve adaptör kablosu tam takılı mı?\n\n"
+                "Kontrol ettikten sonra yeniden tarayayım mı?",
+                parent=self.root) and self.begin_adapter_search())
+            return
+        kind, target, desc = self._candidate_queue.pop(0)
         self.addr_var.set(target)
-        self.log(f"ADAPTÖR TESPİT EDİLDİ: {desc} ({target}). Şimdi ECU yanıtı doğrulanacak.")
-        self.set_status("ADAPTÖR BULUNDU · ECU BAĞLANTISI SINANIYOR")
-        safe_speak("Bağlantı cihazı bulundu. Şimdi motosiklet kontrol ünitesiyle haberleşmeyi deniyorum.")
+        self.log(f"ADAPTÖR ADAYI DENENİYOR: {desc} ({target}). Önce gerçek ECU yanıtı doğrulanacak.")
+        self.set_status("ADAPTÖR BULUNDU · ECU YANITI BEKLENİYOR")
+        safe_speak("Bağlantı arayüzü bulundu. ECU yanıtını kontrol ediyorum.")
         self._start_real(target)
 
     def ask_device_connected(self):
@@ -3621,6 +3637,7 @@ class App:
         target = self.addr_var.get().strip()
         if not target or target.lower() == "otomatik":
             self.begin_adapter_search(); return
+        self._candidate_queue = []
         self._start_real(target)
 
     def _start_real(self, target):
@@ -3645,12 +3662,27 @@ class App:
             safe_speak("Motosiklet kontrol ünitesiyle bağlantı kuruldu. Teşhise hazırım.")
             return
         if tries == 0:
-            _cancel_runs(); self._active_run_id = None
+            _cancel_runs()
+            self._active_run_id = None
+            try:
+                close_obd()
+            except Exception:
+                pass
             self.btn_real.config(text="🔌 BAĞLAN", bg="#00e5ff", fg="black")
+            self.log("Bu adaptör adayından gerçek ECU yanıtı alınamadı; bağlantı kapatıldı.")
+            if self._candidate_queue:
+                self.log("Sıradaki adaptör/COM/J2534 adayı deneniyor...")
+                self.root.after(250, self._try_next_candidate)
+                return
             self.set_status("ECU YANIT VERMEDİ", "#ff5252")
-            self.log("Adaptör/port görüldü ancak ECU yanıtı doğrulanamadı. Kontak, kablo, soket ve doğru adaptör kontrol edilmeli.")
-            safe_speak("Adaptör bulundu ancak motosiklet kontrol ünitesi yanıt vermedi. Kontak açık mı ve bağlantı kablosu takılı mı? Kontrol edip tekrar deneyelim.")
-            self.root.after(500, lambda: messagebox.askyesno("ECU yanıt vermedi", "Adaptör bulundu fakat ECU yanıt vermedi.\n\nMotosiklet kontağı açık mı ve adaptör motosiklete takılı mı?\n\nKontrol ettiniz mi?", parent=self.root) and self.begin_adapter_search())
+            self.log("Tüm adaylar başarısız. Kontak, kablo, soket ve doğru adaptör kontrol edilmeli.")
+            safe_speak("Bulunan bağlantı arayüzlerinden ECU yanıtı alamadım. Kontak ve kabloları kontrol edelim.")
+            self.root.after(500, lambda: messagebox.askyesno(
+                "ECU yanıt vermedi",
+                "Bulunan bağlantı arayüzleri denendi ancak ECU yanıt vermedi.\n\n"
+                "Motosiklet kontağı açık mı ve adaptör motosiklete takılı mı?\n\n"
+                "Kontrol ettikten sonra yeniden tarayayım mı?",
+                parent=self.root) and self.begin_adapter_search())
             return
         self.root.after(1000, lambda: self._watch_connection(run_id, tries - 1))
 
