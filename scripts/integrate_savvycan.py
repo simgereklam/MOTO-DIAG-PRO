@@ -54,6 +54,37 @@ def main() -> None:
         raise SystemExit("Expected MSVC OpenGL library declaration is missing")
     if unconditional_gnu_flag in pro:
         raise SystemExit("Unconditional GNU OpenGL linker flag remains")
+
+    # QT6WIP's qmake project omits several implementation files that are
+    # referenced by mainwindow.cpp. The compiler can build the objects that
+    # are listed, but the final MSVC link then fails with unresolved symbols.
+    required_sources = [
+        "bus_protocols/handler_factory.cpp",
+        "croplogdialog.cpp",
+        "re/searchwindow.cpp",
+    ]
+    required_headers = [
+        "bus_protocols/handler_factory.h",
+        "croplogdialog.h",
+        "re/searchwindow.h",
+    ]
+    required_forms = ["ui/searchwindow.ui"]
+    for relative in required_sources + required_headers + required_forms:
+        if not (root / relative).is_file():
+            raise SystemExit(f"Required SavvyCAN project file is missing: {relative}")
+
+    for relative in required_sources:
+        if relative not in pro:
+            pro = pro.replace("    pcaplite.cpp", f"    pcaplite.cpp \\\\n    {relative}", 1)
+    for relative in required_headers:
+        if relative not in pro:
+            pro = pro.replace("    pcaplite.h", f"    pcaplite.h \\\\n    {relative}", 1)
+    for relative in required_forms:
+        if relative not in pro:
+            pro = pro.replace(
+                "    ui/udsfirmwareuploaderwindow.ui",
+                f"    ui/udsfirmwareuploaderwindow.ui \\\\n    {relative}", 1
+            )
     project.write_text(pro, encoding="utf-8")
 
     includes = """// MOTO DIAG PRO embedded workspace integration
