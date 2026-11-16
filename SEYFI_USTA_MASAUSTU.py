@@ -439,6 +439,64 @@ def j2534_open_passive(protocol="can", baud=None):
             _j2534_state["last_error"] = str(exc)
             return False, f"J2534 DLL yukleme/API hatasi: {exc}"
 
+def j2534_initialize_kline(init_type="five_baud", target_address=0x33, source_address=0xF1):
+    """J2534 ISO9141 5-baud veya ISO14230 KWP fast-init; sadece acik K-Line kanalinda."""
+    with _j2534_lock:
+        dll = _j2534_state.get("dll")
+        channel = _j2534_state.get("channel_id")
+        protocol = _j2534_state.get("protocol")
+        if dll is None or channel is None:
+            return {"ok": False, "error": "J2534 K-Line kanali acik degil."}
+        init_type = str(init_type or "").lower().strip()
+        if init_type == "five_baud":
+            if protocol != "iso9141":
+                return {"ok": False, "error": "5-baud init icin ISO9141 kanali acik olmali."}
+            class _J2534ByteArray(ctypes.Structure):
+                _fields_ = [("NumOfBytes", ctypes.c_uint32),
+                            ("BytePtr", ctypes.POINTER(ctypes.c_ubyte))]
+            target = ctypes.c_ubyte(int(target_address) & 0xFF)
+            keys = (ctypes.c_ubyte * 2)()
+            inp = _J2534ByteArray(1, ctypes.cast(ctypes.pointer(target), ctypes.POINTER(ctypes.c_ubyte)))
+            out = _J2534ByteArray(2, ctypes.cast(keys, ctypes.POINTER(ctypes.c_ubyte)))
+            ioctl = dll.PassThruIoctl
+            ioctl.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
+            ioctl.restype = ctypes.c_long
+            rc = int(ioctl(channel, 0x04, ctypes.byref(inp), ctypes.byref(out)))
+            if rc != 0:
+                return {"ok": False, "error": "FIVE_BAUD_INIT: " + J2534_STATUS.get(rc, str(rc))}
+            response = bytes(keys[:min(int(out.NumOfBytes), 2)])
+            _ecu_lab_record("J2534-ISO9141", "INIT-RX", response.hex(" ").upper(),
+                            "5-baud target 0x%02X" % int(target_address))
+            return {"ok": True, "init": "five_baud", "target": "0x%02X" % int(target_address),
+                    "keyword_bytes": response.hex(" ").upper(), "note": "Yalnizca ISO9141 baslatma anahtar baytlari alindi; OEM servis/protokol uyumlulugu ayrica gerekir."}
+        if init_type == "fast_init":
+            if protocol != "kwp2000":
+                return {"ok": False, "error": "Fast init icin KWP2000 / ISO14230 kanali acik olmali."}
+            target = int(target_address) & 0xFF
+            source = int(source_address) & 0xFF
+            msg_in = _J2534Msg()
+            msg_out = _J2534Msg()
+            msg_in.ProtocolID = J2534_PROTOCOLS["kwp2000"]["id"]
+            msg_in.TxFlags = 0
+            msg_in.DataSize = 4
+            for i, value in enumerate((0xC1, target, source, 0x81)):
+                msg_in.Data[i] = value
+            ioctl = dll.PassThruIoctl
+            ioctl.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_void_p]
+            ioctl.restype = ctypes.c_long
+            rc = int(ioctl(channel, 0x05, ctypes.byref(msg_in), ctypes.byref(msg_out)))
+            if rc != 0:
+                return {"ok": False, "error": "FAST_INIT: " + J2534_STATUS.get(rc, str(rc)),
+                        "request": "C1 %02X %02X 81" % (target, source)}
+            response = bytes(msg_out.Data[:min(int(msg_out.DataSize), 4128)])
+            _ecu_lab_record("J2534-KWP2000", "INIT-RX", response.hex(" ").upper(),
+                            "FAST_INIT target 0x%02X source 0x%02X" % (target, source))
+            return {"ok": True, "init": "fast_init", "request": "C1 %02X %02X 81" % (target, source),
+                    "response": response.hex(" ").upper(),
+                    "note": "KWP StartCommunication cevabi alindi. Bu, Honda DCT veya ABS protokolunun dogrulandigi anlamina gelmez."}
+        return {"ok": False, "error": "init_type five_baud veya fast_init olmali."}
+
+
 def j2534_read_passive(timeout_ms=250, max_messages=16):
     """Yalnizca hattan gelen J2534 mesajlarini okur; TX API'si cagirilmaz."""
     with _j2534_lock:
@@ -2712,6 +2770,18 @@ def api_j2534_open():
     ok, msg = j2534_open_passive(payload.get("protocol", "can"), payload.get("baud"))
     write_log("J2534 PASIF KANAL", msg)
     return jsonify({"ok": ok, "message": msg, "status": j2534_status()}), (200 if ok else 400)
+
+@app.route('/api/j2534/kline/init', methods=['POST'])
+def api_j2534_kline_init():
+    payload = request.get_json(silent=True) or {}
+    try:
+        target = int(str(payload.get('target_address') or '33'), 16)
+        source = int(str(payload.get('source_address') or 'F1'), 16)
+        result = j2534_initialize_kline(payload.get('init_type', 'five_baud'), target, source)
+        write_log('J2534 K-LINE INIT', json.dumps(result, ensure_ascii=False))
+        return jsonify(result), (200 if result.get('ok') else 400)
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
 
 @app.route('/api/j2534/read', methods=['GET'])
 def api_j2534_read():
