@@ -525,6 +525,95 @@ def j2534_send_obd_mode03(timeout_ms=2500):
             return None, "J2534 Mode 03 hatasi: " + str(exc)
 
 
+def j2534_send_obd_pid(pid, timeout_ms=1800):
+    """SAE J1979 Mode 01 PID sorgusu; yalnizca standart motor/emisyon OBD-II CAN ECU'su."""
+    pid = int(pid)
+    if pid < 0 or pid > 255:
+        return None, "PID 0-255 araliginda olmali."
+    with _j2534_lock:
+        dll = _j2534_state.get("dll")
+        channel = _j2534_state.get("channel_id")
+        if dll is None or channel is None or _j2534_state.get("protocol") != "iso15765":
+            return None, "J2534 ISO15765 kanali acik degil."
+        try:
+            write_fn = dll.PassThruWriteMsgs
+            write_fn.argtypes = [ctypes.c_uint32, ctypes.POINTER(_J2534Msg),
+                                 ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32]
+            write_fn.restype = ctypes.c_uint32
+            msg = _J2534Msg()
+            msg.ProtocolID = J2534_PROTOCOLS["iso15765"]["id"]
+            msg.TxFlags = 0x40
+            payload = bytes((0x00, 0x00, 0x07, 0xDF, 0x02, 0x01, pid))
+            msg.DataSize = len(payload)
+            for i, value in enumerate(payload):
+                msg.Data[i] = value
+            count = ctypes.c_uint32(1)
+            rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+            if rc != 0 or count.value != 1:
+                return None, "Mode 01 PID yazma hatasi: " + J2534_STATUS.get(rc, str(rc))
+            deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 6000) / 1000.0)
+            while time.monotonic() < deadline:
+                result = j2534_read_passive(timeout_ms=200, max_messages=24)
+                if not result.get("ok"):
+                    if "ERR_TIMEOUT" in str(result.get("error")):
+                        continue
+                    return None, result.get("error", "J2534 RX hatasi")
+                for frame in result.get("frames", []):
+                    try:
+                        raw = bytes.fromhex(frame.get("data", "").replace(" ", ""))
+                    except ValueError:
+                        continue
+                    if len(raw) < 7:
+                        continue
+                    can_id = int.from_bytes(raw[:4], "big")
+                    if not 0x7E8 <= can_id <= 0x7EF:
+                        continue
+                    body = raw[4:]
+                    if body and body[0] <= len(body) - 1:
+                        body = body[1:1 + body[0]]
+                    if len(body) >= 3 and body[0] == 0x41 and body[1] == pid:
+                        return bytes(body[2:]), "ECU 0x%03X PID %02X" % (can_id, pid)
+                    if len(body) >= 3 and body[0] == 0x7F and body[1] == 0x01:
+                        return None, "ECU negatif cevap verdi: " + body.hex(" ").upper()
+            return None, "PID %02X icin ECU yaniti alinmadi." % pid
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return None, "Mode 01 PID hatasi: " + str(exc)
+
+
+def j2534_read_obd_live_data():
+    """Desteklenen temel SAE J1979 PID'lerini tek tek sorgular; standart OBD motor verisidir."""
+    definitions = {
+        0x0C: ("RPM", "rpm"), 0x0D: ("Hiz", "km/h"),
+        0x05: ("Motor sogutma sicakligi", "°C"),
+        0x0B: ("Emme manifoldu basinci", "kPa"),
+        0x11: ("Gaz kelebegi", "%"), 0x0F: ("Emme havasi sicakligi", "°C"),
+        0x42: ("Kontrol modulu voltaji", "V"), 0x06: ("Kisa yakit duzeltmesi", "%"),
+        0x14: ("O2 B1S1", "V"),
+    }
+    values, errors = [], []
+    for pid, (label, unit) in definitions.items():
+        data, detail = j2534_send_obd_pid(pid)
+        if not data:
+            errors.append("%02X: %s" % (pid, detail))
+            continue
+        a = data[0]
+        value = None
+        if pid == 0x0C and len(data) >= 2: value = (a * 256 + data[1]) / 4.0
+        elif pid == 0x0D: value = float(a)
+        elif pid in (0x05, 0x0F): value = float(a - 40)
+        elif pid == 0x0B: value = float(a)
+        elif pid == 0x11: value = round(a * 100.0 / 255.0, 2)
+        elif pid == 0x42 and len(data) >= 2: value = round((a * 256 + data[1]) / 1000.0, 3)
+        elif pid == 0x06: value = round((a - 128) * 100.0 / 128.0, 2)
+        elif pid == 0x14: value = round(a / 200.0, 3)
+        if value is not None:
+            values.append({"pid": "%02X" % pid, "name": label, "value": value, "unit": unit})
+    return {"ok": bool(values), "values": values, "errors": errors,
+            "scope": "standard_engine_emissions_obd_only",
+            "note": "Yalnizca ECU'nun destekledigi standart OBD-II PID'leri. ABS/DCT/marka-ozel veri degildir."}
+
+
 def j2534_clear_obd_mode04(timeout_ms=2500):
     """SAE J1979 Mode 04: yalnizca standart motor/emisyon OBD DTC hafizasini siler."""
     with _j2534_lock:
@@ -2158,7 +2247,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   <div class="test-block" style="border-color:#00ff99"><div class="title">3 · J2534 PASİF CAN / K-LINE / ISO15765 KANALI</div>
    <p style="color:#aab5c2">J2534 kanalını seçip açın. HAT MESAJI OKU yalnızca sürücünün RX kuyruğunu okur. CAN ham çerçeve; ISO15765 OBD/CAN taşıması; ISO9141/KWP2000 K-Line sürücü desteği gerektirir.</p>
    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px"><select id="ecu_lab_j2534_protocol" class="module-field"><option value="can">CAN · ham RX</option><option value="iso15765">ISO15765 · OBD/CAN</option><option value="iso9141">ISO9141 · K-Line</option><option value="kwp2000">KWP2000 · K-Line</option></select><input id="ecu_lab_j2534_baud" class="module-field" type="number" placeholder="Baud (boş = varsayılan)"></div>
-   <div class="module-actions"><button class="btn test-btn" onclick="ecuLabJ2534Open()">KANALI AÇ</button><button class="btn test-btn" onclick="ecuLabJ2534Read()">HAT MESAJI OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Close()">KANALI KAPAT</button></div><pre id="ecu_lab_j2534_status" style="color:#00ff99;white-space:pre-wrap">J2534 kanalı henüz açılmadı.</pre>
+   <div class="module-actions"><button class="btn test-btn" onclick="ecuLabJ2534Open()">KANALI AÇ</button><button class="btn test-btn" onclick="ecuLabJ2534Read()">HAM RX OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Live()">MOTOR CANLI PID OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Close()">KANALI KAPAT</button></div><pre id="ecu_lab_j2534_status" style="color:#00ff99;white-space:pre-wrap">J2534 kanalı henüz açılmadı.</pre>
   </div>
   <div class="test-block"><div class="title">SON HABERLEŞME KAYITLARI</div><div class="module-actions"><button class="btn test-btn" onclick="ecuLabRefreshLog()">YENİLE</button><button class="btn test-btn" onclick="ecuLabClearLog()">BELLEK KAYDINI TEMİZLE</button></div><div id="ecu_lab_log_table" style="overflow:auto;max-height:520px;color:#ddd">Henüz kayıt yok.</div></div>
  </div>
@@ -2178,6 +2267,7 @@ function ecuLabSerialPorts(){fetch('/api/ecu-lab/serial/ports').then(r=>r.json()
 function ecuLabSerialStart(){const port=document.getElementById('ecu_lab_com').value,baud=document.getElementById('ecu_lab_baud').value;if(!port){alert('Önce kullanılacak COM portunu seçin.');return;}fetch('/api/ecu-lab/serial/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port:port,baud:baud})}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_serial_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Başlatma hatası: '+e);}
 function ecuLabSerialStop(){fetch('/api/ecu-lab/serial/stop',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_serial_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Durdurma hatası: '+e);}
 function ecuLabJ2534Open(){const protocol=document.getElementById('ecu_lab_j2534_protocol').value,baud=document.getElementById('ecu_lab_j2534_baud').value;fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:protocol,baud:baud||null})}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message+'\n'+JSON.stringify(d.status||{},null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='J2534 hata: '+e);}
+function ecuLabJ2534Live(){fetch('/api/j2534/obd/live',{method:'POST'}).then(r=>r.json()).then(d=>{let lines=['KAPSAM: '+d.scope,d.note||'',...(d.values||[]).map(x=>x.name+': '+x.value+' '+x.unit),'',...(d.errors||[])];document.getElementById('ecu_lab_j2534_status').textContent=lines.join('\n')||JSON.stringify(d,null,2);}).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Canlı PID hatası: '+e);}
 function ecuLabJ2534Read(){fetch('/api/j2534/read?timeout_ms=1000').then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=JSON.stringify(d,null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Okuma hatası: '+e);}
 function ecuLabJ2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Kapatma hatası: '+e);}
 function switchTab(t){document.querySelectorAll('.container').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.nav button').forEach(e=>e.classList.remove('active'));document.getElementById('tab-'+t).classList.add('active');document.getElementById('nav-'+t).classList.add('active')}
@@ -2447,6 +2537,12 @@ def api_j2534_read():
     result = j2534_read_passive(request.args.get("timeout_ms", 250))
     if result.get("frames"):
         write_log("J2534 RX", f"{result['count']} mesaj alindi.")
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+@app.route('/api/j2534/obd/live', methods=['POST'])
+def api_j2534_obd_live():
+    result = j2534_read_obd_live_data()
+    write_log("J2534 MOTOR OBD CANLI VERI", json.dumps(result, ensure_ascii=False))
     return jsonify(result), (200 if result.get("ok") else 400)
 
 @app.route('/api/j2534/obd/dtc', methods=['POST'])
