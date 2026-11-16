@@ -1265,6 +1265,46 @@ _live_data_lock = threading.Lock(); _last_live_data = {}
 _run_id = 0; _run_lock = threading.Lock(); _last_alert_time = 0
 _last_spoken_alert = {'text': '', 'time': 0.0}
 
+# ECU laboratory TX/RX capture and passive serial receive monitor.
+_ECU_LAB_LOG = []
+_ECU_LAB_LOCK = threading.RLock()
+_ECU_SERIAL_LOCK = threading.RLock()
+_ECU_SERIAL_STATE = {'thread': None, 'stop': None, 'port': None, 'baud': None, 'connected': False, 'error': ''}
+
+def _ecu_lab_record(transport, direction, payload, detail=''):
+    entry = {'time': datetime.now().astimezone().isoformat(timespec='milliseconds'),
+             'transport': str(transport), 'direction': str(direction),
+             'payload': str(payload), 'detail': str(detail)}
+    with _ECU_LAB_LOCK:
+        _ECU_LAB_LOG.append(entry)
+        if len(_ECU_LAB_LOG) > 5000:
+            del _ECU_LAB_LOG[:-5000]
+    return entry
+
+def _ecu_serial_worker(port_name, baud_rate, stop_event):
+    try:
+        if not PYSERIAL_OK:
+            raise RuntimeError('pyserial kurulu degil. py -m pip install pyserial')
+        with serial.Serial(port=port_name, baudrate=baud_rate, timeout=0.2) as ser:
+            with _ECU_SERIAL_LOCK:
+                _ECU_SERIAL_STATE.update({'connected': True, 'error': ''})
+            _ecu_lab_record('SERIAL-RX', 'INFO', 'Port acildi', f'{port_name} / {baud_rate} baud; TX kapali')
+            while not stop_event.is_set():
+                data = ser.read(4096)
+                if data:
+                    _ecu_lab_record('SERIAL-RX', 'RX', data.hex(' ').upper(),
+                                    data.decode('ascii', errors='replace').replace(chr(13), '<CR>').replace(chr(10), '<LF>'))
+    except Exception as exc:
+        with _ECU_SERIAL_LOCK:
+            _ECU_SERIAL_STATE['error'] = str(exc)
+        _ecu_lab_record('SERIAL-RX', 'ERROR', str(exc))
+    finally:
+        with _ECU_SERIAL_LOCK:
+            _ECU_SERIAL_STATE['connected'] = False
+            _ECU_SERIAL_STATE['thread'] = None
+            _ECU_SERIAL_STATE['stop'] = None
+        _ecu_lab_record('SERIAL-RX', 'INFO', 'Port kapandi')
+
 def _is_current_run(rid):
     with _run_lock: return rid == _run_id
 def _cancel_runs():
@@ -1387,6 +1427,7 @@ class ELM327TcpConnection:
             raise ConnectionError('Adaptör soketi kapalı.')
         wait = self.timeout if wait is None else wait
         with self._lock:
+            _ecu_lab_record('ELM327-TCP', 'TX', command.strip(), f'{self.host}:{self.port}')
             self.sock.sendall((command.strip() + '\r').encode('ascii'))
             deadline = time.monotonic() + wait
             chunks = []
@@ -1404,7 +1445,9 @@ class ELM327TcpConnection:
                         continue
                 except OSError as exc:
                     raise ConnectionError(f'Adaptör iletişim hatası: {exc}') from exc
-            return ''.join(chunks).replace('>', '').strip()
+            response = ''.join(chunks).replace('>', '').strip()
+            _ecu_lab_record('ELM327-TCP', 'RX', response, command.strip())
+            return response
 
     def is_connected(self):
         return not self._closed
@@ -1868,6 +1911,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <button id="nav-abs" onclick="switchTab('abs')">🛑 ABS ECU</button>
 <button id="nav-dct" onclick="switchTab('dct')">⚙️ HONDA DCT</button>
 <button id="nav-dyno" onclick="switchTab('dyno')">📈 DYNO</button>
+<button id="nav-ecu-lab" onclick="switchTab('ecu-lab')">📡 ECU ANALİZ LAB</button>
 </div>
 <div id="tab-arac" class="container active"><div class="panel" style="max-width:800px;margin:0 auto;">
 <h3 style="color:#00e5ff;margin-top:0">🚗 ARAÇ SEÇİMİ VE OTOMATİK YAPILANDIRMA</h3>
@@ -2098,6 +2142,27 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   </div>
  </div>
 </div>
+<div id="tab-ecu-lab" class="container">
+ <div class="panel">
+  <div class="module-head"><h2 style="color:#00e5ff">📡 GELİŞMİŞ ECU HABERLEŞME LABORATUVARI</h2><span class="module-status">ELM327 · K-LINE/SERIAL · J2534</span></div>
+  <p style="color:#aab5c2">Bu bölüm gerçek adaptörlerden gelen haberleşmeyi kaydeder. ELM327 kaydı uygulamanın gönderdiği OBD komutları ve gerçek cevaplarıdır; tam CAN hattı dinlemesi değildir. Seri/K-Line ekranı yalnızca RX dinler ve ECU'ya komut göndermez. J2534 ekranı sürücünün verdiği mesajları okur.</p>
+  <div class="test-block" style="border-color:#00e5ff"><div class="title">1 · VIECAR / ELM327 WI-FI TX/RX KAYDI</div>
+   <div class="module-actions"><button class="btn test-btn" onclick="ecuLabRefreshLog()">TX/RX KAYDINI YENİLE</button><button class="btn test-btn" onclick="ecuLabExport()">KAYDI CSV İNDİR</button></div>
+   <pre id="ecu_lab_elm_status" style="color:#00e5ff;white-space:pre-wrap">Gerçek ELM327 bağlantısı açıldığında gönderilen komutlar ve cevaplar burada görünür.</pre>
+  </div>
+  <div class="test-block" style="border-color:#ffaa00"><div class="title">2 · K-LINE / COM HAM RX DİNLEYİCİ · GÖNDERİM YOK</div>
+   <p style="color:#aab5c2">COM portu ve baud hızını seçin. Bu mod yalnızca seri hattan gelen baytları kaydeder; 5-baud/fast-init veya ECU sorgusu yapmaz. K-Line hattında veri görmek için başka bir teşhis cihazının sorgu başlatması gerekebilir.</p>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px"><select id="ecu_lab_com" class="module-field"><option value="">COM portları yükleniyor...</option></select><select id="ecu_lab_baud" class="module-field"><option>10400</option><option>9600</option><option>4800</option><option>19200</option><option>38400</option><option>115200</option></select></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="ecuLabSerialPorts()">PORTLARI TARA</button><button class="btn test-btn" onclick="ecuLabSerialStart()">RX DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" onclick="ecuLabSerialStop()">DİNLEMEYİ DURDUR</button></div><pre id="ecu_lab_serial_status" style="color:#ffaa00;white-space:pre-wrap">Seri port bekleniyor.</pre>
+  </div>
+  <div class="test-block" style="border-color:#00ff99"><div class="title">3 · J2534 PASİF CAN / K-LINE / ISO15765 KANALI</div>
+   <p style="color:#aab5c2">J2534 kanalını seçip açın. HAT MESAJI OKU yalnızca sürücünün RX kuyruğunu okur. CAN ham çerçeve; ISO15765 OBD/CAN taşıması; ISO9141/KWP2000 K-Line sürücü desteği gerektirir.</p>
+   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px"><select id="ecu_lab_j2534_protocol" class="module-field"><option value="can">CAN · ham RX</option><option value="iso15765">ISO15765 · OBD/CAN</option><option value="iso9141">ISO9141 · K-Line</option><option value="kwp2000">KWP2000 · K-Line</option></select><input id="ecu_lab_j2534_baud" class="module-field" type="number" placeholder="Baud (boş = varsayılan)"></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="ecuLabJ2534Open()">KANALI AÇ</button><button class="btn test-btn" onclick="ecuLabJ2534Read()">HAT MESAJI OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Close()">KANALI KAPAT</button></div><pre id="ecu_lab_j2534_status" style="color:#00ff99;white-space:pre-wrap">J2534 kanalı henüz açılmadı.</pre>
+  </div>
+  <div class="test-block"><div class="title">SON HABERLEŞME KAYITLARI</div><div class="module-actions"><button class="btn test-btn" onclick="ecuLabRefreshLog()">YENİLE</button><button class="btn test-btn" onclick="ecuLabClearLog()">BELLEK KAYDINI TEMİZLE</button></div><div id="ecu_lab_log_table" style="overflow:auto;max-height:520px;color:#ddd">Henüz kayıt yok.</div></div>
+ </div>
+</div>
 <div id="tab-dyno" class="container"><div class="panel"><h3 style="color:#00ff00">📈 DYNO / PERFORMANS KAYDI</h3><p>Bu bölüm ECU'ya evrensel bir "dyno modu" komutu göndermeyecek. Önce gerçek RPM, hız, gaz konumu ve mümkünse harici dinamometre yük/tork verisi kaydedilecek.</p><div class="test-block"><div class="title">DYNO DURUMU</div><pre style="color:#ffaa00">VERİ KAYDI ALTYAPISI BEKLİYOR — şu an dinamometre cihazı bağlantısı yok.</pre></div><div class="test-block"><div class="title">PLANLANAN ÖLÇÜMLER</div><pre>• RPM / hız / TPS zaman serisi
 • Harici dinamometre varsa tekerlek gücü ve tork
 • Aynı koşullarda önce/sonra karşılaştırması
@@ -2105,6 +2170,16 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 <div id="tab-gk" class="container"><div class="panel"><h3 style="color:#ffaa00;margin-top:0">🔧 GELİŞMİŞ SERVİS TESTLERİ</h3><div class="test-block"><div class="title">BAĞLANTI (Araç Seçimine Göre)</div><button class="btn test-btn" onclick="gkConnect()">🔌 GELİŞMİŞ BAĞLANTI KUR</button><pre id="gk_conn_out" style="color:#00e5ff;min-height:30px">-</pre></div><div class="test-block"><div class="title">AKTÜATÖR TESTLERİ</div><pre id="gk_test_out" style="color:#ffaa00;min-height:30px">Güvenlik nedeniyle kapalı: model/ECU özel komut profili doğrulanınca etkinleştirilecek.</pre></div><div class="test-block"><div class="title">ABS MODÜLÜ</div><pre id="gk_d07_out" style="color:#ffaa00;min-height:30px">Ayrı ABS bağlantı katmanı hazırlanacak. Genel D07 komutu kullanılmayacak.</pre></div></div></div>
 <script>
 var socket = io();
+function ecuLabEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function ecuLabRefreshLog(){fetch('/api/ecu-lab/log?limit=300').then(r=>r.json()).then(d=>{const rows=d.entries||[],out=document.getElementById('ecu_lab_log_table');if(!rows.length){out.textContent='Henüz TX/RX kaydı yok. Gerçek ELM327 bağlantısı açıp sorgu çalıştırın.';return;}out.innerHTML='<table style="width:100%;border-collapse:collapse;font:12px Consolas,monospace"><thead><tr><th>ZAMAN</th><th>TAŞIMA</th><th>YÖN</th><th>VERİ</th><th>DETAY</th></tr></thead><tbody>'+rows.slice().reverse().map(x=>'<tr style="border-bottom:1px solid #333"><td>'+ecuLabEsc(x.time)+'</td><td>'+ecuLabEsc(x.transport)+'</td><td>'+ecuLabEsc(x.direction)+'</td><td style="max-width:420px;overflow-wrap:anywhere">'+ecuLabEsc(x.payload)+'</td><td>'+ecuLabEsc(x.detail||'')+'</td></tr>').join('')+'</tbody></table>';document.getElementById('ecu_lab_elm_status').textContent='Toplam kayıt: '+d.total+' · Gösterilen: '+rows.length+' · ELM327 TX/RX + seri RX.';}).catch(e=>document.getElementById('ecu_lab_elm_status').textContent='Kayıt okunamadı: '+e);}
+function ecuLabExport(){fetch('/api/ecu-lab/log?limit=5000').then(r=>r.json()).then(d=>{const cols=['time','transport','direction','payload','detail'];const csv=[cols.join(',')].concat((d.entries||[]).map(x=>cols.map(k=>'"'+String(x[k]||'').replace(/"/g,'""')+'"').join(','))).join('\r\n');const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}));a.download='seyfi_usta_ecu_haberlesme.csv';a.click();URL.revokeObjectURL(a.href);}).catch(e=>alert('CSV oluşturulamadı: '+e));}
+function ecuLabClearLog(){if(!confirm('Bellekteki haberleşme kaydı temizlensin mi?'))return;fetch('/api/ecu-lab/log/clear',{method:'POST'}).then(()=>ecuLabRefreshLog());}
+function ecuLabSerialPorts(){fetch('/api/ecu-lab/serial/ports').then(r=>r.json()).then(d=>{const sel=document.getElementById('ecu_lab_com');sel.innerHTML='';(d.ports||[]).forEach(p=>{const o=document.createElement('option');o.value=p.device;o.textContent=p.device+' · '+(p.description||'Seri port');sel.appendChild(o);});if(!d.ports||!d.ports.length){const o=document.createElement('option');o.value='';o.textContent=d.available?'COM port bulunamadı':'pyserial kurulu değil';sel.appendChild(o);}document.getElementById('ecu_lab_serial_status').textContent=d.available?'Bulunan port: '+(d.ports||[]).length:'pyserial bulunamadı. py -m pip install pyserial';}).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Port tarama hatası: '+e);}
+function ecuLabSerialStart(){const port=document.getElementById('ecu_lab_com').value,baud=document.getElementById('ecu_lab_baud').value;if(!port){alert('Önce kullanılacak COM portunu seçin.');return;}fetch('/api/ecu-lab/serial/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port:port,baud:baud})}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_serial_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Başlatma hatası: '+e);}
+function ecuLabSerialStop(){fetch('/api/ecu-lab/serial/stop',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_serial_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Durdurma hatası: '+e);}
+function ecuLabJ2534Open(){const protocol=document.getElementById('ecu_lab_j2534_protocol').value,baud=document.getElementById('ecu_lab_j2534_baud').value;fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:protocol,baud:baud||null})}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message+'\n'+JSON.stringify(d.status||{},null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='J2534 hata: '+e);}
+function ecuLabJ2534Read(){fetch('/api/j2534/read?timeout_ms=1000').then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=JSON.stringify(d,null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Okuma hatası: '+e);}
+function ecuLabJ2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Kapatma hatası: '+e);}
 function switchTab(t){document.querySelectorAll('.container').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.nav button').forEach(e=>e.classList.remove('active'));document.getElementById('tab-'+t).classList.add('active');document.getElementById('nav-'+t).classList.add('active')}
 function toggleManualModel() { var sel = document.getElementById('sel_model'); var box = document.getElementById('manual_model_box'); if (sel.value === 'diger') { box.style.display = 'block'; } else { box.style.display = 'none'; } }
 const rpmLedsContainer=document.getElementById('rpm-leds');const totalLeds=40;for(let i=0;i<totalLeds;i++){let led=document.createElement('div');led.className='led';rpmLedsContainer.appendChild(led)}const leds=document.querySelectorAll('.led');
@@ -2297,6 +2372,64 @@ def handle_arac_sec(data):
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
 
 
+
+@app.route('/api/ecu-lab/log', methods=['GET'])
+def api_ecu_lab_log():
+    try:
+        limit = max(1, min(int(request.args.get('limit', 300)), 5000))
+    except (TypeError, ValueError):
+        limit = 300
+    with _ECU_LAB_LOCK:
+        entries = list(_ECU_LAB_LOG[-limit:])
+        total = len(_ECU_LAB_LOG)
+    return jsonify({'ok': True, 'total': total, 'entries': entries})
+
+@app.route('/api/ecu-lab/log/clear', methods=['POST'])
+def api_ecu_lab_log_clear():
+    with _ECU_LAB_LOCK:
+        _ECU_LAB_LOG.clear()
+    return jsonify({'ok': True, 'message': 'Bellek kaydı temizlendi.'})
+
+@app.route('/api/ecu-lab/serial/ports', methods=['GET'])
+def api_ecu_lab_serial_ports():
+    if not PYSERIAL_OK:
+        return jsonify({'ok': False, 'available': False, 'ports': [], 'error': 'pyserial kurulu degil.'})
+    ports = [{'device': p.device, 'description': p.description or ''} for p in serial.tools.list_ports.comports()]
+    return jsonify({'ok': True, 'available': True, 'ports': ports})
+
+@app.route('/api/ecu-lab/serial/start', methods=['POST'])
+def api_ecu_lab_serial_start():
+    payload = request.get_json(silent=True) or {}
+    port_name = str(payload.get('port') or '').strip()
+    try:
+        baud_rate = int(payload.get('baud') or 10400)
+        if not port_name or baud_rate < 300 or baud_rate > 1000000:
+            raise ValueError('Gecerli COM portu ve baud hizi secin.')
+        if not PYSERIAL_OK:
+            raise RuntimeError('pyserial kurulu degil. py -m pip install pyserial')
+        with _ECU_SERIAL_LOCK:
+            if _ECU_SERIAL_STATE.get('thread') is not None:
+                raise RuntimeError('Seri dinleyici zaten calisiyor.')
+            stop_event = threading.Event()
+            worker = threading.Thread(target=_ecu_serial_worker, args=(port_name, baud_rate, stop_event),
+                                      daemon=True, name='ECU-Serial-RX')
+            _ECU_SERIAL_STATE.update({'thread': worker, 'stop': stop_event, 'port': port_name,
+                                      'baud': baud_rate, 'connected': False, 'error': ''})
+            worker.start()
+        return jsonify({'ok': True, 'message': f'{port_name} / {baud_rate} baud RX dinleyicisi baslatildi. TX gonderilmiyor.'})
+    except Exception as exc:
+        return jsonify({'ok': False, 'message': str(exc)}), 400
+
+@app.route('/api/ecu-lab/serial/stop', methods=['POST'])
+def api_ecu_lab_serial_stop():
+    with _ECU_SERIAL_LOCK:
+        stop_event = _ECU_SERIAL_STATE.get('stop')
+        worker = _ECU_SERIAL_STATE.get('thread')
+        if stop_event is not None:
+            stop_event.set()
+    if worker is not None:
+        worker.join(timeout=1.5)
+    return jsonify({'ok': True, 'message': 'Seri dinleyici durdurma istendi.'})
 
 @app.route('/api/j2534/status', methods=['GET'])
 def api_j2534_status():
