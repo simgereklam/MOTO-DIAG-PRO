@@ -47,12 +47,12 @@ def main() -> None:
     # win32-g++ block. qmake/MSVC turns that into a nonexistent
     # libopengl32.obj input. Keep the correct MSVC opengl32.lib entry and
     # remove only the stray unconditional GNU linker flag.
-    bad_linker_entry = "\\n   LIBS += libopengl32\\n\\nunix {"
+    bad_linker_entry = "\n   LIBS += libopengl32\n\nunix {"
     if bad_linker_entry in pro:
-        pro = pro.replace(bad_linker_entry, "\\nunix {", 1)
+        pro = pro.replace(bad_linker_entry, "\nunix {", 1)
     if "win32-msvc*" in pro and "LIBS += opengl32.lib" not in pro:
         raise SystemExit("Expected MSVC OpenGL library declaration is missing")
-    if "libopengl32" in pro.replace("win32-g++", ""):
+    if bad_linker_entry in pro:
         raise SystemExit("Unconditional GNU OpenGL linker flag remains")
     project.write_text(pro, encoding="utf-8")
 
