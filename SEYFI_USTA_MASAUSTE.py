@@ -3850,6 +3850,22 @@ MOTO_IMMOBILIZER_PROFILES = [
         "note": "HISS için gösterge lambası, yedek anahtar ile karşılaştırma ve ECM/PCM-kombine gösterge haberleşme hattı kontrolleri dokümante edilmiş; evrensel HISS hata kodu varsayılmaz."
     },
 ]
+def _moto_year_matches(requested_year, year_scope):
+    """Yıl aralığını doğru değerlendir; belirsiz kapsamı yanlışlıkla reddetme."""
+    if not requested_year:
+        return True
+    try:
+        requested = int(requested_year)
+    except (TypeError, ValueError):
+        return False
+    scope = str(year_scope or "")
+    ranges = re.findall(r"((?:19|20)\\d{2})\\s*[-–]\\s*((?:19|20)\\d{2})", scope)
+    if ranges:
+        return any(int(start) <= requested <= int(end) for start, end in ranges)
+    exact_years = [int(x) for x in re.findall(r"(?<!\\d)(?:19|20)\\d{2}(?!\\d)", scope)]
+    return not exact_years or requested in exact_years
+
+
 def moto_knowledge_lookup(brand="", model="", year=None):
     """Kaynakli pasif CAN ve immobilizer ariza bilgisini marka/model bazinda listeler."""
     b = str(brand or "").strip().casefold()
@@ -3862,7 +3878,7 @@ def moto_knowledge_lookup(brand="", model="", year=None):
             continue
         if m and not any(m in x.casefold() or x.casefold() in m for x in profile["models"]):
             continue
-        if y and y not in profile["years"]:
+        if not _moto_year_matches(y, profile.get("years")):
             continue
         can.append(profile)
     for profile in MOTO_IMMOBILIZER_PROFILES:
@@ -3870,7 +3886,7 @@ def moto_knowledge_lookup(brand="", model="", year=None):
             continue
         if m and not any(m in x.casefold() or x.casefold() in m for x in profile["models"]):
             continue
-        if y and y not in profile["years"]:
+        if not _moto_year_matches(y, profile.get("years")):
             continue
         immobilizer.append(profile)
     return {
