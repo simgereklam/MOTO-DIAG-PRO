@@ -16,6 +16,7 @@ import sys
 import tempfile
 from datetime import datetime
 import csv
+import io
 import traceback
 
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
@@ -2512,6 +2513,88 @@ def handle_arac_sec(data):
     except Exception as e: socketio.emit('arac_sec_result', {'ok': False, 'msg': str(e)})
 
 
+
+@app.route('/api/dyno/status', methods=['GET'])
+def api_dyno_status():
+    return jsonify({'ok': True, **_dyno_public_state()})
+
+@app.route('/api/dyno/start', methods=['POST'])
+def api_dyno_start():
+    payload = request.get_json(silent=True) or {}
+    mode = str(payload.get('mode') or 'standard').strip().lower()
+    if mode not in ('standard', 'honda_dct'):
+        return jsonify({'ok': False, 'error': 'DYNO modu gecersiz.'}), 400
+    with _conn_lock:
+        conn = _connection if _mode == 'real' else None
+    if conn is None or not conn.is_connected():
+        return jsonify({'ok': False, 'error': 'Gercek ECU telemetrisi icin once motor ECU baglantisini kurun.'}), 409
+    try:
+        radius = float(payload.get('wheel_radius_m') or 0.30)
+        if not 0.05 <= radius <= 1.0:
+            raise ValueError('Roller yaricapi 0.05-1.00 metre araliginda olmali.')
+        model = str(payload.get('model') or '').strip()
+        year = int(payload.get('year')) if payload.get('year') else None
+        dct_confirmed = bool(payload.get('dct_mode_confirmed'))
+        if mode == 'honda_dct' and not dct_confirmed:
+            return jsonify({'ok': False, 'error': 'Honda DCT dyno modu henuz etkin oldugu dogrulanmadi. Uygun Honda HDS veya DCT Dyno araci ile modu etkinlestirip onaylayin. Bu uygulama dogrulanmamis DCT komutu gondermez.'}), 409
+        with _DYNO_LOCK:
+            if _DYNO_STATE['active']:
+                return jsonify({'ok': False, 'error': 'Bir DYNO oturumu zaten calisiyor.'}), 409
+            _DYNO_STATE.update({'active': True, 'mode': mode, 'model': model, 'year': year,
+                'started_at': datetime.now().astimezone().isoformat(timespec='seconds'),
+                'start_monotonic': time.monotonic(), 'samples': [], 'wheel_radius_m': radius,
+                'load_force_n': None, 'dct_mode_confirmed': dct_confirmed, 'last_sample': None})
+        write_log('DYNO OTURUMU BASLADI', f'{mode} | {model} {year or ""} | radius={radius}m')
+        return jsonify({'ok': True, 'message': 'Gercek ECU telemetri kaydi baslatildi.', **_dyno_public_state()})
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+@app.route('/api/dyno/load', methods=['POST'])
+def api_dyno_load():
+    payload = request.get_json(silent=True) or {}
+    try:
+        force = payload.get('force_n')
+        force = None if force in (None, '') else float(force)
+        if force is not None and not 0 <= force <= 10000:
+            raise ValueError('Yuk kuvveti 0-10000 N araliginda olmali.')
+        radius = float(payload.get('wheel_radius_m') or 0.30)
+        if not 0.05 <= radius <= 1.0:
+            raise ValueError('Roller yaricapi 0.05-1.00 metre araliginda olmali.')
+        with _DYNO_LOCK:
+            if not _DYNO_STATE['active']:
+                return jsonify({'ok': False, 'error': 'Aktif DYNO oturumu yok.'}), 409
+            _DYNO_STATE['load_force_n'] = force
+            _DYNO_STATE['wheel_radius_m'] = radius
+        return jsonify({'ok': True, **_dyno_public_state()})
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+@app.route('/api/dyno/stop', methods=['POST'])
+def api_dyno_stop():
+    with _DYNO_LOCK:
+        if not _DYNO_STATE['active']:
+            return jsonify({'ok': False, 'error': 'Aktif DYNO oturumu yok.'}), 409
+        count = len(_DYNO_STATE['samples'])
+        _DYNO_STATE['active'] = False
+        _DYNO_STATE['start_monotonic'] = None
+    write_log('DYNO OTURUMU TAMAMLANDI', f'{count} gercek ECU ornegi kaydedildi.')
+    return jsonify({'ok': True, 'message': f'DYNO kaydi durduruldu. {count} ornek kaydedildi.', **_dyno_public_state()})
+
+@app.route('/api/dyno/export', methods=['GET'])
+def api_dyno_export():
+    with _DYNO_LOCK:
+        rows = list(_DYNO_STATE['samples'])
+        mode = _DYNO_STATE['mode']
+        year = _DYNO_STATE['year']
+    output = io.StringIO()
+    fields = ['time','elapsed_s','source','rpm','speed_kmh','tps_pct','coolant_c','map_kpa','voltage_v',
+              'load_force_n','roller_radius_m','roller_rpm','wheel_torque_nm','wheel_power_kw','wheel_power_hp']
+    writer = csv.DictWriter(output, fieldnames=fields, extrasaction='ignore')
+    writer.writeheader()
+    writer.writerows(rows)
+    response = app.response_class(output.getvalue(), mimetype='text/csv; charset=utf-8')
+    response.headers['Content-Disposition'] = 'attachment; filename="seyfi_dyno_%s_%s.csv"' % (mode, year or 'session')
+    return response
 
 @app.route('/api/ecu-lab/log', methods=['GET'])
 def api_ecu_lab_log():
