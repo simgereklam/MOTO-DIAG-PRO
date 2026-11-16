@@ -2303,10 +2303,33 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   <div class="test-block"><div class="title">SON HABERLEŞME KAYITLARI</div><div class="module-actions"><button class="btn test-btn" onclick="ecuLabRefreshLog()">YENİLE</button><button class="btn test-btn" onclick="ecuLabClearLog()">BELLEK KAYDINI TEMİZLE</button></div><div id="ecu_lab_log_table" style="overflow:auto;max-height:520px;color:#ddd">Henüz kayıt yok.</div></div>
  </div>
 </div>
-<div id="tab-dyno" class="container"><div class="panel"><h3 style="color:#00ff00">📈 DYNO / PERFORMANS KAYDI</h3><p>Bu bölüm ECU'ya evrensel bir "dyno modu" komutu göndermeyecek. Önce gerçek RPM, hız, gaz konumu ve mümkünse harici dinamometre yük/tork verisi kaydedilecek.</p><div class="test-block"><div class="title">DYNO DURUMU</div><pre style="color:#ffaa00">VERİ KAYDI ALTYAPISI BEKLİYOR — şu an dinamometre cihazı bağlantısı yok.</pre></div><div class="test-block"><div class="title">PLANLANAN ÖLÇÜMLER</div><pre>• RPM / hız / TPS zaman serisi
-• Harici dinamometre varsa tekerlek gücü ve tork
-• Aynı koşullarda önce/sonra karşılaştırması
-• ECU'dan okunan veri ile harici ölçümü ayrı etiketleme</pre></div></div></div>
+<div id="tab-dyno" class="container"><div class="panel">
+ <div class="module-head"><h2 style="color:#00ff00">📈 DYNO / PERFORMANS TESTİ</h2><span class="module-status">GERÇEK ECU TELEMETRİ KAYDI</span></div>
+ <p style="color:#aab5c2">Canlı ECU verisi zaman damgasıyla kaydedilir. Teker gücü/tork hesabı için ayrıca gerçek dinamometre yük kuvveti ve teker/roller hızı gerekir. Yalnızca motor RPM'sinden beygir veya tork üretilmez.</p>
+ <div class="module-grid">
+  <div class="module-card"><div class="k">OTURUM</div><div class="v" id="dyno_state">Hazır değil</div><div class="hint">Gerçek ECU bağlantısı gerekir</div></div>
+  <div class="module-card"><div class="k">KAYITLI ÖRNEK</div><div class="v" id="dyno_samples">0</div><div class="hint">Zaman damgalı telemetri</div></div>
+  <div class="module-card"><div class="k">SON RPM / HIZ</div><div class="v" id="dyno_rpm_speed">—</div><div class="hint">ECU yanıtından</div></div>
+  <div class="module-card"><div class="k">TEKER GÜCÜ / TORK</div><div class="v" id="dyno_power_torque">Ölçüm yok</div><div class="hint">Harici yük sensörü olmadan hesaplanmaz</div></div>
+ </div>
+ <div class="test-block"><div class="title">TEST PROFİLİ</div>
+  <div class="module-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+   <div><label class="title">DYNO TİPİ</label><select id="dyno_mode" class="module-field"><option value="standard">Standart motosiklet</option><option value="honda_dct">Honda DCT dinamometre</option></select></div>
+   <div><label class="title">MODEL</label><input id="dyno_model" class="module-field" placeholder="NC750X DCT"></div>
+   <div><label class="title">YIL</label><input id="dyno_year" class="module-field" type="number" placeholder="2020"></div>
+  </div>
+  <div class="module-grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+   <div><label class="title">ROLLER YARIÇAPI (metre)</label><input id="dyno_radius" class="module-field" type="number" step="0.001" value="0.300"></div>
+   <div><label class="title">HARİCİ YÜK KUVVETİ (Newton)</label><input id="dyno_force" class="module-field" type="number" step="0.1" placeholder="Yük sensörü ölçümü"></div>
+  </div>
+  <p style="color:#aab5c2">Yük kuvveti girişi şimdilik manuel ölçümdür. Otomatik yük hücresi entegrasyonu için dinamometre cihazının seri veri protokolü gerekir.</p>
+  <div id="dyno_dct_warning" class="module-note" style="display:none;border-color:#ff9800"><b>HONDA DCT GÜVENLİK KONTROLÜ:</b> DCT dyno modu bu uygulama tarafından henüz etkinleştirilmiyor. Honda HDS veya uyumlu DCT Dyno aracıyla modun etkin olduğunu doğrulamadan DCT testini başlatmayın. Üretici kılavuzundaki model özel talimatlarını izleyin. <a href="https://www.techmoto.de/anleitungen/DCT_Manual_en.pdf" target="_blank" rel="noopener">DCT Dyno Tool kılavuzu</a></div>
+  <label style="display:flex;gap:10px;align-items:center;color:#ddd;margin:12px 0"><input type="checkbox" id="dyno_dct_confirm"> DCT dyno modunun uyumlu ekipmanla etkin olduğunu ve motosikletin dinamometreye güvenli bağlandığını doğruluyorum.</label>
+  <div class="module-actions"><button class="btn test-btn" onclick="dynoStart()">▶ GERÇEK DYNO KAYDINI BAŞLAT</button><button class="btn test-btn" onclick="dynoStop()">■ KAYDI DURDUR</button><button class="btn test-btn" onclick="dynoLoadApply()">YÜK / ROLLER BİLGİSİNİ UYGULA</button><button class="btn test-btn" onclick="dynoExport()">CSV RAPORU İNDİR</button></div>
+  <pre id="dyno_message" style="color:#00e5ff;white-space:pre-wrap">Önce motor ECU'suna gerçek bağlantı kurun. Sonra test profilini seçin.</pre>
+ </div>
+ <div class="test-block"><div class="title">SON ÖLÇÜM DETAYI</div><pre id="dyno_last_sample" style="color:#00ff99;white-space:pre-wrap">Henüz ölçüm yok.</pre></div>
+</div></div>
 <div id="tab-gk" class="container"><div class="panel"><h3 style="color:#ffaa00;margin-top:0">🔧 GELİŞMİŞ SERVİS TESTLERİ</h3><div class="test-block"><div class="title">BAĞLANTI (Araç Seçimine Göre)</div><button class="btn test-btn" onclick="gkConnect()">🔌 GELİŞMİŞ BAĞLANTI KUR</button><pre id="gk_conn_out" style="color:#00e5ff;min-height:30px">-</pre></div><div class="test-block"><div class="title">AKTÜATÖR TESTLERİ</div><pre id="gk_test_out" style="color:#ffaa00;min-height:30px">Güvenlik nedeniyle kapalı: model/ECU özel komut profili doğrulanınca etkinleştirilecek.</pre></div><div class="test-block"><div class="title">ABS MODÜLÜ</div><pre id="gk_d07_out" style="color:#ffaa00;min-height:30px">Ayrı ABS bağlantı katmanı hazırlanacak. Genel D07 komutu kullanılmayacak.</pre></div></div></div>
 <script>
 var socket = io();
@@ -2321,6 +2344,31 @@ function ecuLabJ2534Open(){const protocol=document.getElementById('ecu_lab_j2534
 function ecuLabJ2534Live(){fetch('/api/j2534/obd/live',{method:'POST'}).then(r=>r.json()).then(d=>{let lines=['KAPSAM: '+d.scope,d.note||'',...(d.values||[]).map(x=>x.name+': '+x.value+' '+x.unit),'',...(d.errors||[])];document.getElementById('ecu_lab_j2534_status').textContent=lines.join('\n')||JSON.stringify(d,null,2);}).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Canlı PID hatası: '+e);}
 function ecuLabJ2534Read(){fetch('/api/j2534/read?timeout_ms=1000').then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=JSON.stringify(d,null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Okuma hatası: '+e);}
 function ecuLabJ2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Kapatma hatası: '+e);}
+function dynoRefresh(){
+ fetch('/api/dyno/status').then(r=>r.json()).then(d=>{
+  document.getElementById('dyno_state').textContent=d.active?'KAYIT AKTİF':'DURDURULDU / HAZIR';
+  document.getElementById('dyno_samples').textContent=d.sample_count||0;
+  const x=d.last_sample;
+  if(x){
+   document.getElementById('dyno_rpm_speed').textContent=(x.rpm==null?'—':x.rpm+' rpm')+' / '+(x.speed_kmh==null?'—':x.speed_kmh+' km/h');
+   document.getElementById('dyno_power_torque').textContent=x.wheel_power_kw==null?'Yük verisi yok':x.wheel_power_kw+' kW / '+x.wheel_torque_nm+' Nm';
+   document.getElementById('dyno_last_sample').textContent=JSON.stringify(x,null,2);
+  }
+  if(d.note)document.getElementById('dyno_message').textContent=d.note;
+ }).catch(e=>document.getElementById('dyno_message').textContent='DYNO durum hatası: '+e);
+}
+function dynoStart(){
+ const mode=document.getElementById('dyno_mode').value;
+ const payload={mode:mode,model:document.getElementById('dyno_model').value,year:document.getElementById('dyno_year').value,
+  wheel_radius_m:document.getElementById('dyno_radius').value,dct_mode_confirmed:document.getElementById('dyno_dct_confirm').checked};
+ if(mode==='honda_dct'&&!payload.dct_mode_confirmed){alert('Honda DCT dyno modunun uyumlu ekipmanla etkin olduğunu doğrulamadan test başlatılamaz.');return;}
+ fetch('/api/dyno/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(async r=>{const d=await r.json();document.getElementById('dyno_message').textContent=d.message||d.error||JSON.stringify(d);if(!r.ok)throw new Error(d.error||'DYNO başlatılamadı');dynoRefresh();}).catch(e=>document.getElementById('dyno_message').textContent='DYNO başlatma hatası: '+e);
+}
+function dynoStop(){fetch('/api/dyno/stop',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('dyno_message').textContent=d.message||d.error||JSON.stringify(d);dynoRefresh();}).catch(e=>document.getElementById('dyno_message').textContent='DYNO durdurma hatası: '+e);}
+function dynoLoadApply(){fetch('/api/dyno/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({force_n:document.getElementById('dyno_force').value,wheel_radius_m:document.getElementById('dyno_radius').value})}).then(r=>r.json()).then(d=>{document.getElementById('dyno_message').textContent=d.ok?'Yük/roller bilgisi uygulandı.':d.error;dynoRefresh();}).catch(e=>document.getElementById('dyno_message').textContent='Yük bilgisi hatası: '+e);}
+function dynoExport(){window.location.href='/api/dyno/export';}
+document.getElementById('dyno_mode')?.addEventListener('change',function(){document.getElementById('dyno_dct_warning').style.display=this.value==='honda_dct'?'block':'none';});
+setInterval(dynoRefresh,1000);
 function switchTab(t){document.querySelectorAll('.container').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.nav button').forEach(e=>e.classList.remove('active'));document.getElementById('tab-'+t).classList.add('active');document.getElementById('nav-'+t).classList.add('active')}
 function toggleManualModel() { var sel = document.getElementById('sel_model'); var box = document.getElementById('manual_model_box'); if (sel.value === 'diger') { box.style.display = 'block'; } else { box.style.display = 'none'; } }
 const rpmLedsContainer=document.getElementById('rpm-leds');const totalLeds=40;for(let i=0;i<totalLeds;i++){let led=document.createElement('div');led.className='led';rpmLedsContainer.appendChild(led)}const leds=document.querySelectorAll('.led');
