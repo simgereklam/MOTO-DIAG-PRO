@@ -12,6 +12,7 @@ on:
       - desktop_requirements.txt
       - scripts/prepare_desktop_assets.py
       - installer/MOTO_DIAG_PRO.iss
+      - third_party/SavvyCAN/**
       - .github/workflows/desktop-installer.yml
 
 permissions:
