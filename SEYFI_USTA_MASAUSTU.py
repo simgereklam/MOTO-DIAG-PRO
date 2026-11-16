@@ -1071,6 +1071,143 @@ def arac_konfigurasyonu_hesapla(marka, model, yil, konnektor, manuel_model=""):
         ),
     }
 
+
+
+# ==================== ORTAK ECU / ABS PASIF CAN COZUMLEYICI ====================
+# Bu katman motor ECU ve ABS ECU icin ayni CAN/ISO-TP gozlem motorunu kullanir.
+# Yalnizca kullanicinin topladigi RX kaydini analiz eder; CAN TX yapmaz.
+ECU_CAPTURE_MAX_FRAMES = 20000
+ECU_UDS_POSITIVE_SERVICES = {0x50, 0x51, 0x59, 0x62, 0x67, 0x6E, 0x6F, 0x71, 0x74, 0x76, 0x77}
+ECU_OBD_POSITIVE_SERVICES = {0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E}
+
+def _ecu_hex_bytes(value):
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    if isinstance(value, list):
+        try:
+            return bytes(int(x) & 0xFF for x in value)
+        except Exception:
+            return b""
+    raw = str(value or "").strip().replace(",", " ").replace("-", " ")
+    try:
+        return bytes(int(x, 16) for x in raw.split())
+    except Exception:
+        return b""
+
+def _ecu_classify_payload(payload):
+    if not payload:
+        return None
+    sid = payload[0]
+    if sid in ECU_OBD_POSITIVE_SERVICES:
+        return {"family": "SAE J1979 / OBD-II", "service": f"0x{sid:02X}",
+                "meaning": {0x41:"Canli veri cevabi",0x42:"Freeze-frame cevabi",
+                            0x43:"Kayitli motor DTC cevabi",0x49:"Arac bilgisi / VIN cevabi"}.get(sid,"OBD-II pozitif servis cevabi")}
+    if sid in ECU_UDS_POSITIVE_SERVICES:
+        return {"family": "UDS / ISO 14229", "service": f"0x{sid:02X}",
+                "meaning": {0x50:"DiagnosticSessionControl cevabi",0x59:"DTC bilgisi cevabi",
+                            0x62:"ReadDataByIdentifier cevabi",0x67:"SecurityAccess cevabi",
+                            0x71:"RoutineControl cevabi",0x76:"TransferData cevabi"}.get(sid,"UDS pozitif servis cevabi")}
+    if sid == 0x7F and len(payload) >= 3:
+        return {"family":"UDS/KWP negatif cevap", "service":f"0x{payload[1]:02X}",
+                "meaning":f"Negatif yanit NRC 0x{payload[2]:02X}"}
+    if sid in (0xC1, 0xC2, 0xC3, 0xC4, 0xC5, 0xC6, 0xC7, 0xC8):
+        return {"family":"KWP / ISO 14230 adayi", "service":f"0x{sid:02X}",
+                "meaning":"KWP oturum/servis cevabi adayi; hedef ECU ve checksum dogrulanmali"}
+    return None
+
+def analyze_ecu_can_capture(frames, module="general"):
+    """J2534 CAN RX kaydinda ID, zamanlama, degisen bayt ve ISO-TP servislerini inceler."""
+    module = str(module or "general").lower()
+    if module not in ("engine", "abs", "general"):
+        raise ValueError("Modul engine, abs veya general olmali.")
+    if not isinstance(frames, list):
+        raise ValueError("CAN cerceve listesi gecersiz.")
+    frames = frames[-ECU_CAPTURE_MAX_FRAMES:]
+    ids = {}
+    iso = {}
+    decoded = []
+    malformed = 0
+    for frame in frames:
+        if not isinstance(frame, dict):
+            malformed += 1
+            continue
+        can_id = str(frame.get("id", "UNKNOWN")).upper().strip()
+        data = _ecu_hex_bytes(frame.get("data"))
+        if not data:
+            malformed += 1
+            continue
+        try:
+            stamp = float(frame.get("t", 0.0))
+        except (TypeError, ValueError):
+            stamp = 0.0
+        stat = ids.setdefault(can_id, {"count":0,"last_t":None,"periods":[],"last":None,
+                                        "changed":set(),"dlc":set()})
+        stat["count"] += 1
+        if stat["last_t"] is not None and stamp >= stat["last_t"]:
+            period = (stamp-stat["last_t"])*1000.0
+            if period > 0 and len(stat["periods"]) < 3000:
+                stat["periods"].append(period)
+        stat["last_t"] = stamp
+        stat["dlc"].add(len(data))
+        if stat["last"] is not None:
+            for index,(old,new) in enumerate(zip(stat["last"],data)):
+                if old != new:
+                    stat["changed"].add(index)
+        stat["last"] = data
+
+        # ISO-TP PCI: single frame / first frame / consecutive frame.
+        pci_type = (data[0] >> 4) & 0x0F
+        state = iso.setdefault(can_id, {"expected":0,"payload":bytearray(),"next_seq":None})
+        message = None
+        if pci_type == 0:
+            size = data[0] & 0x0F
+            if size and len(data) >= size+1:
+                message = data[1:1+size]
+            state.update(expected=0,payload=bytearray(),next_seq=None)
+        elif pci_type == 1 and len(data) >= 2:
+            size = ((data[0] & 0x0F) << 8) | data[1]
+            if 0 < size <= 4095:
+                state["expected"] = size
+                state["payload"] = bytearray(data[2:])
+                state["next_seq"] = 1
+                if len(state["payload"]) >= size:
+                    message = bytes(state["payload"][:size])
+                    state.update(expected=0,payload=bytearray(),next_seq=None)
+        elif pci_type == 2 and state["expected"]:
+            seq = data[0] & 0x0F
+            if seq == state["next_seq"]:
+                state["payload"].extend(data[1:])
+                state["next_seq"] = (seq+1) & 0x0F
+                if len(state["payload"]) >= state["expected"]:
+                    message = bytes(state["payload"][:state["expected"]])
+                    state.update(expected=0,payload=bytearray(),next_seq=None)
+            else:
+                state.update(expected=0,payload=bytearray(),next_seq=None)
+        # PCI=3 flow-control is transport metadata, not an ECU service payload.
+        if message:
+            info = _ecu_classify_payload(message)
+            if info:
+                decoded.append({"can_id":can_id,"payload":message.hex(" ").upper(),**info})
+    rows=[]
+    for can_id,st in sorted(ids.items(),key=lambda item:item[1]["count"],reverse=True):
+        periods=st["periods"]
+        rows.append({"can_id":can_id,"count":st["count"],
+            "mean_period_ms":round(sum(periods)/len(periods),2) if periods else None,
+            "min_period_ms":round(min(periods),2) if periods else None,
+            "max_period_ms":round(max(periods),2) if periods else None,
+            "dlc":sorted(st["dlc"]),
+            "changing_bytes":sorted(st["changed"]),
+            "last_data":st["last"].hex(" ").upper() if st["last"] else ""})
+    return {"ok":True,"module":module,"frame_count":len(frames),
+        "unique_can_ids":len(ids),"malformed_frames":malformed,
+        "can_ids":rows[:100],"diagnostic_messages":decoded[-250:],
+        "module_note":("Motor ECU secimi: bu etiket yalnizca kullanici secimidir; CAN ID tek basina motor ECU oldugunu kanitlamaz."
+          if module=="engine" else
+          "ABS ECU secimi: bu etiket yalnizca kullanici secimidir; CAN ID tek basina ABS ECU oldugunu kanitlamaz."
+          if module=="abs" else
+          "Genel kesif: moduller otomatik olarak kesin tanimlanmadi."),
+        "limitations":"Yalnizca CAN RX kaydi. ISO-TP coklu cerceveler birlestirilir. Pasif dinleme tek basina ECU kimligi, DTC silme yetkisi veya aktüator test guvenligi saglamaz; K-Line ham zamanlama/ELM monitoru bu analiz endpointine dahil degildir."}
+
 # ==================== FLASK & SOCKETIO ====================
 app = Flask(__name__); app.config['SECRET_KEY'] = 'efe_moto_r25'
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
@@ -1773,7 +1910,13 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div class="test-block" id="can-sniffer-lab" style="margin-top:14px;border-color:#00e5ff">
      <div class="title">📡 CAN VERİ DİNLEME VE ÇÖZÜMLEME · SNIFFER</div>
      <p style="color:#aab5c2">Protokolü CAN · 500 kbit/s (ham/pasif) seçip J2534 kanalını açın. Ardından dinlemeyi başlatın. Uygulama CAN çerçevesi göndermez; yalnızca gelen kayıtları okur. Adaptörün elektriksel listen-only/ACK davranışı cihaz desteğine bağlıdır.</p>
-     <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;margin:10px 0"><div><label class="title" for="can_profile">MOTOSİKLET CAN PROFİLİ</label><select id="can_profile" class="module-field" onchange="canSniffRenderDecoded()"><option value="none">Genel / bilinmeyen model</option><option value="yamaha_cp3_2021_2024">Yamaha CP3 · Tracer 9 / MT-09 / XSR900 (2021–2024)</option><option value="yamaha_r9_2026">Yamaha R9 (2026)</option><option value="yamaha_mt07_legacy">Yamaha MT-07 eski forum notları · doğrulanmamış</option><option value="yamaha_mt07_abs_notes">Yamaha MT-07 Euro 3 ABS forum analizi · komut gönderilmez</option></select></div><div id="can_profile_note" class="module-field" style="white-space:normal;min-height:42px">Profil seçilmedi; ham kayıt devam eder.</div></div><div class="title" style="margin-top:12px">ARAŞTIRMA KAYNAKLARI</div><div style="font-size:12px;line-height:1.8;color:#b8c4d0"><a target="_blank" href="https://github.com/CSS-Electronics/can-bus-reverse-engineering-skills">CSS Electronics · CAN tersine mühendislik yöntemi</a> · <a target="_blank" href="https://github.com/collin80/SavvyCAN">SavvyCAN · CAN kayıt / DBC analiz aracı</a> · <a target="_blank" href="https://github.com/talss89/motorcycle-canbus-info">Motosiklet CAN bilgi koleksiyonu</a> · <a target="_blank" href="https://github.com/JackHat1/MT07_CAN_Project">MT-07 CAN projesi</a> · <a target="_blank" href="https://github.com/bratukh/yamaha-cp3-can">Yamaha CP3 CAN / DBC</a> · <a target="_blank" href="https://github.com/DeziderMesko/motocan">Yamaha R9 CAN / DBC</a> · <a target="_blank" href="https://github.com/renatobo/DucatiPanigaleCanBus">Ducati Panigale CAN projesi</a> · <a target="_blank" href="https://zggtr.org/index.php?topic=20461.0">Kawasaki Concours CAN kayıt tartışması</a></div><div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
+     <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;margin:10px 0"><div><label class="title" for="can_profile">MOTOSİKLET CAN PROFİLİ</label><select id="can_profile" class="module-field" onchange="canSniffRenderDecoded()"><option value="none">Genel / bilinmeyen model</option><option value="yamaha_cp3_2021_2024">Yamaha CP3 · Tracer 9 / MT-09 / XSR900 (2021–2024)</option><option value="yamaha_r9_2026">Yamaha R9 (2026)</option><option value="yamaha_mt07_legacy">Yamaha MT-07 eski forum notları · doğrulanmamış</option><option value="yamaha_mt07_abs_notes">Yamaha MT-07 Euro 3 ABS forum analizi · komut gönderilmez</option></select></div><div id="can_profile_note" class="module-field" style="white-space:normal;min-height:42px">Profil seçilmedi; ham kayıt devam eder.</div></div><div class="title" style="margin-top:12px">ARAŞTIRMA KAYNAKLARI</div><div style="font-size:12px;line-height:1.8;color:#b8c4d0"><a target="_blank" href="https://github.com/CSS-Electronics/can-bus-reverse-engineering-skills">CSS Electronics · CAN tersine mühendislik yöntemi</a> · <a target="_blank" href="https://github.com/collin80/SavvyCAN">SavvyCAN · CAN kayıt / DBC analiz aracı</a> · <a target="_blank" href="https://github.com/talss89/motorcycle-canbus-info">Motosiklet CAN bilgi koleksiyonu</a> · <a target="_blank" href="https://github.com/JackHat1/MT07_CAN_Project">MT-07 CAN projesi</a> · <a target="_blank" href="https://github.com/bratukh/yamaha-cp3-can">Yamaha CP3 CAN / DBC</a> · <a target="_blank" href="https://github.com/DeziderMesko/motocan">Yamaha R9 CAN / DBC</a> · <a target="_blank" href="https://github.com/renatobo/DucatiPanigaleCanBus">Ducati Panigale CAN projesi</a> · <a target="_blank" href="https://zggtr.org/index.php?topic=20461.0">Kawasaki Concours CAN kayıt tartışması</a></div><div class="test-block" style="margin:12px 0;border-color:#ffcc80">
+      <div class="title">MOTOR ECU / ABS ECU ORTAK KEŞİF VE PROTOKOL ÇÖZÜMLEME</div>
+      <p style="color:#b8c4d0">Aynı pasif CAN kaydı motor ECU veya ABS incelemesi için seçilebilir. ISO-TP mesajları birleştirilir; OBD-II / UDS / KWP servis yanıtı adayları, CAN ID sıklığı ve değişen baytlar gösterilir. Bu analiz ECU'ya komut göndermez.</p>
+      <div class="module-actions"><select id="ecu_capture_module" class="module-field" style="max-width:220px"><option value="engine">MOTOR ECU</option><option value="abs">ABS ECU</option><option value="general">GENEL / BİLİNMİYOR</option></select><button class="btn test-btn" onclick="canSniffAnalyzeProtocol()">🔬 SEÇİLİ MODÜLÜ ÇÖZÜMLE</button></div>
+      <pre id="ecu_capture_analysis" style="white-space:pre-wrap;color:#ffcc80;max-height:300px;overflow:auto">Önce CAN dinleme kaydı alın, ardından Motor ECU veya ABS ECU seçerek analiz edin.</pre>
+     </div>
+     <div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
      <div class="module-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
       <div class="module-card"><div class="k">Dinleme durumu</div><div class="v" id="can_sniff_status">Hazır değil</div></div><div class="module-card"><div class="k">Toplam çerçeve</div><div class="v" id="can_sniff_count">0</div></div><div class="module-card"><div class="k">Farklı CAN ID</div><div class="v" id="can_sniff_ids">0</div></div><div class="module-card"><div class="k">Kayıt süresi</div><div class="v" id="can_sniff_duration">0.0 sn</div></div>
      </div>
@@ -1994,6 +2137,25 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   document.getElementById('can_sniff_markers').textContent=canSniffMarkers.length?canSniffMarkers.map(x=>x.t.toFixed(3)+' sn  |  '+x.label).join('\n'):'Henüz olay işareti yok.';
   canSniffRenderDecoded();
  }
+ async function canSniffAnalyzeProtocol(){
+  const out=document.getElementById('ecu_capture_analysis');
+  const module=document.getElementById('ecu_capture_module').value;
+  if(!canSniffFrames.length){out.textContent='Analiz edilecek CAN kaydı yok. Önce dinleme başlatıp kayıt alın.';return;}
+  out.textContent='ISO-TP / OBD-II / UDS / KWP adayları çözümleniyor...';
+  try{
+   const r=await fetch('/api/ecu-monitor/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({module:module,frames:canSniffFrames})});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Analiz başarısız');
+   const lines=[(module==='engine'?'MOTOR ECU':module==='abs'?'ABS ECU':'GENEL')+' PASİF ANALİZİ',
+    'Çerçeve: '+d.frame_count+' | CAN ID: '+d.unique_can_ids+' | Hatalı kayıt: '+d.malformed_frames,
+    d.module_note,'','EN YOĞUN CAN ID / ZAMANLAMA / DEĞİŞEN BAYTLAR'];
+   (d.can_ids||[]).slice(0,30).forEach(x=>lines.push(x.can_id+'  adet='+x.count+'  periyot='+((x.mean_period_ms===null)?'-':x.mean_period_ms+' ms')+'  DLC='+x.dlc.join('/')+'  değişen bayt='+x.changing_bytes.join(',')+'  son='+x.last_data));
+   lines.push('','TANINAN SERVİS YANITI ADAYLARI');
+   if(!(d.diagnostic_messages||[]).length)lines.push('Bu kayıtta ISO-TP üzerinden tanınan OBD/UDS servis cevabı bulunmadı. Bu, ECU arızalı veya erişilemez demek değildir.');
+   (d.diagnostic_messages||[]).slice(-100).forEach(x=>lines.push(x.can_id+' | '+x.family+' | '+x.service+' | '+x.meaning+' | '+x.payload));
+   lines.push('','SINIRLAR: '+d.limitations);
+   out.textContent=lines.join('\n');
+  }catch(e){out.textContent='Çözümleme hatası: '+e.message;}
+ }
  function canSniffStart(){
   if(canSniffActive)return;
   fetch('/api/j2534/status').then(r=>r.json()).then(d=>{
@@ -2110,6 +2272,16 @@ def api_j2534_obd_dtc():
               "note": "Bu sonuç ABS veya Honda DCT arıza taraması değildir."}
     write_log("J2534 OBD-II DTC", detail + "\\n" + ("\\n".join(x["code"] for x in result["codes"]) or "Kod bulunamadi."))
     return jsonify(result)
+
+@app.route('/api/ecu-monitor/analyze', methods=['POST'])
+def api_ecu_monitor_analyze():
+    payload = request.get_json(silent=True) or {}
+    try:
+        result = analyze_ecu_can_capture(payload.get("frames", []), payload.get("module", "general"))
+        write_log("ECU/ABS PASIF CAN ANALIZ", f"{result['module']} | {result['frame_count']} frame | {result['unique_can_ids']} CAN ID")
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
 
 @app.route('/api/j2534/close', methods=['POST'])
 def api_j2534_close():
