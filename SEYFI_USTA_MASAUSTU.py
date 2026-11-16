@@ -2355,7 +2355,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div><label class="title">Model / kasa kodu</label><input class="module-field" id="abs_model" placeholder="Örn. XMAX 300 / NC750X / MT-09"></div>
     <div><label class="title">Model yılı</label><input class="module-field" id="abs_year" type="number" min="1980" max="2035" placeholder="2020"></div>
    </div>
-   <div class="module-actions"><button class="btn test-btn" onclick="absCheckProfile()">🧭 ABS PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="Araç ve adaptör için doğrulanmış ABS iletişim profili gerekli">🔌 ABS ECU'YA BAĞLAN</button><button class="btn test-btn" disabled title="Gerçek ABS ECU bağlantısı ve doğrulanmış okuma servisi gerekli">🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled title="Model özelinde silme servisi doğrulanmadan kapalı">🗑 ABS ARIZALARINI SİL</button></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="absCheckProfile()">🧭 ABS PROFİLİNİ KONTROL ET</button><button class="btn test-btn" onclick="absPassiveListenStart()">📡 ABS CAN PASİF DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" disabled title="Araç ve adaptör için doğrulanmış ABS iletişim profili gerekli">🔌 ABS ECU'YA BAĞLAN</button><button class="btn test-btn" disabled title="Gerçek ABS ECU bağlantısı ve doğrulanmış okuma servisi gerekli">🔍 ABS ARIZA TARA</button><button class="btn test-btn" disabled title="Model özelinde silme servisi doğrulanmadan kapalı">🗑 ABS ARIZALARINI SİL</button></div>
    <div class="test-block" style="margin-top:12px;border-color:#ffb74d">
     <div class="title">ABS TAM İŞLEV KAPSAMI · MODEL BAZLI</div>
     <p style="color:#b8c4d0">Ortak bölüm: ECU kimliği, DTC okuma/silme, canlı veri, freeze-frame, sensör kontrolü, aktüatör testi ve servis prosedürleri. Her satır yalnızca seçilen motorun doğrulanmış profili destekliyorsa etkinleşir.</p>
@@ -2728,6 +2728,23 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
   }).catch(e=>out.textContent='ABS kapsam hatası: '+e.message);
  }
  function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
+
+ function absPassiveListenStart(){
+  const module=document.getElementById('ecu_capture_module');
+  const protocol=document.getElementById('j2534_protocol');
+  if(module)module.value='abs';
+  if(protocol)protocol.value='can';
+  const note=document.getElementById('ecu_capture_analysis');
+  if(note)note.textContent='ABS pasif CAN dinleme seçildi. J2534 kanalını CAN protokolünde açın; ardından dinleme başlatılacaktır. Bu işlem CAN mesajı göndermez.';
+  fetch('/api/j2534/status').then(r=>r.json()).then(d=>{
+   if(!d.connected||String(d.protocol).toLowerCase()!=='can'){
+    document.getElementById('can_sniff_error').textContent='ABS pasif dinleme hazırlandı. Üstte Protokol = CAN · 500 kbit/s seçildi. Şimdi BAĞLAN düğmesine basın; kanal açılınca ABS CAN PASİF DİNLEMEYİ BAŞLAT düğmesine tekrar basın.';
+    document.getElementById('can_sniff_status').textContent='J2534 CAN kanalı bekleniyor';
+    return;
+   }
+   canSniffStart();
+  }).catch(e=>{document.getElementById('can_sniff_error').textContent='ABS dinleme başlatılamadı: '+e;});
+ }
  function absDecodeDtc(){var data={brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value,code:document.getElementById('abs_dtc_code').value};var out=document.getElementById('abs_dtc_result');out.innerText='Yerel ABS kod sözlüğü aranıyor...';socket.emit('abs_decode_dtc',data)}
  socket.on('abs_decode_dtc_result',function(d){var out=document.getElementById('abs_dtc_result');out.innerText=(d.ok?'✓ ':'! ')+(d.code||'')+' — '+(d.description||d.message||'');out.style.color=d.found?'#00e5ff':'#ffcc80';if(d.source)out.innerText+='\\nKaynak: '+d.source;});
  socket.on('abs_profile_result',function(d){var out=document.getElementById('abs_profile_result');out.innerText=(d.status||'ABS PROFİLİ')+' | '+(d.message||'');document.getElementById('abs_conn_state').innerText=d.verified?'Profil mevcut · ECU bağlantısı henüz yok':'Bağlı değil';document.getElementById('abs_ecu_id').innerText=d.profile_id||'Henüz okunmadı';document.getElementById('abs_protocol').innerText=d.protocol||'Doğrulanmadı';out.style.color=d.verified?'#ffaa00':'#ffcc80';var ev=document.getElementById('abs_hardware_evidence');if(d.hardware_evidence){var h=d.hardware_evidence;ev.innerText=h.title+'\\n'+h.connector+'\\n'+h.can_h+'\\n'+h.can_l+'\\n\\nDOĞRULANMAYANLAR: '+h.unknown+'\\nGÜVENLİ SONRAKİ ADIM: '+h.next_step+'\\nKAYNAK: '+h.source;}else{ev.innerText='Bu marka/model/yıl için belgelenmiş fiziksel ABS soket ve hat bilgisi henüz eklenmedi.';}});
