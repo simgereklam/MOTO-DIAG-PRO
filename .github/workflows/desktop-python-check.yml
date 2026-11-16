@@ -1,0 +1,23 @@
+name: Desktop Python syntax check
+
+on:
+  pull_request:
+    paths:
+      - "SEYFI_USTA_MASAUSTE.py"
+      - ".github/workflows/desktop-python-check.yml"
+  push:
+    branches:
+      - desktop-universal-abs-foundation
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile desktop application
+        run: python -m py_compile SEYFI_USTA_MASAUSTE.py
