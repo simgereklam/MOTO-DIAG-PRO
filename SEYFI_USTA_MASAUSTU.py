@@ -2685,7 +2685,7 @@ MOTO_CAN_PROFILES = [
             {"id": "0x215", "name": "Gaz kelebeği kolu", "formula": "(B2 << 8) | B3", "unit": "ham değer; 0 kapalı, yaklaşık 690 tam açık"},
             {"id": "0x260", "name": "Ön fren basıncı", "formula": "(B0 << 8) | B1", "unit": "ham değer"},
             {"id": "0x268", "name": "ABS/fren durum bitleri", "formula": "bit0 arka ABS, bit1 ön ABS, bit2 arka fren pedalı", "unit": "bit alanı"},
-            {"id": "0x254", "name": "Yaw rate", "formula": "(((B4 << 8) | B5) - 30000) / 300", "unit": "deg/s (kaynakta yaklaşık formül; doğrulama gerekli)"},
+            {"id": "0x254", "name": "Yaw rate", "formula": "ham = (B4 << 8) | B5; offset/ölçek henüz doğrulanmadı", "unit": "ham değer; fiziksel birime çevrilmez"},
         ],
         "source": MOTO_KNOWLEDGE_SOURCES["yamaha_cp3_racechrono"],
         "evidence": "Bir 2022 Tracer 9 üzerinde kullanıcı tarafından GPS/araç verisiyle karşılaştırılmış; diğer yıl ve modellerde otomatik genellenmez.",
