@@ -518,9 +518,12 @@ def j2534_read_passive(timeout_ms=250, max_messages=16):
             frames = []
             for msg in list(messages)[:received.value]:
                 size = min(int(msg.DataSize), 4128)
+                raw_hex = bytes(msg.Data[:size]).hex(" ").upper()
                 frames.append({"protocol_id": int(msg.ProtocolID),
                     "rx_status": int(msg.RxStatus), "timestamp": int(msg.Timestamp),
-                    "data": bytes(msg.Data[:size]).hex(" ").upper(), "length": size})
+                    "data": raw_hex, "length": size})
+                _ecu_lab_record("J2534-" + str(_j2534_state.get("protocol") or "RX"),
+                                "RX", raw_hex, "ProtocolID=%s Timestamp=%s" % (msg.ProtocolID, msg.Timestamp))
             return {"ok": True, "frames": frames, "count": len(frames),
                     "note": "J2534 RX kaydi; ECU istegi gonderilmedi."}
         except Exception as exc:
@@ -549,6 +552,7 @@ def j2534_send_obd_mode03(timeout_ms=2500):
                 msg.Data[i] = value
             count = ctypes.c_uint32(1)
             rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+            _ecu_lab_record("J2534-ISO15765", "TX", payload.hex(" ").upper(), "SAE J1979 Mode 03 functional request")
             if rc != 0 or count.value != 1:
                 return None, "PassThruWriteMsgs basarisiz: " + J2534_STATUS.get(rc, str(rc))
             deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 10000) / 1000.0)
@@ -608,6 +612,7 @@ def j2534_send_obd_pid(pid, timeout_ms=1800):
                 msg.Data[i] = value
             count = ctypes.c_uint32(1)
             rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+            _ecu_lab_record("J2534-ISO15765", "TX", payload.hex(" ").upper(), "SAE J1979 Mode 01 PID %02X" % pid)
             if rc != 0 or count.value != 1:
                 return None, "Mode 01 PID yazma hatasi: " + J2534_STATUS.get(rc, str(rc))
             deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 6000) / 1000.0)
