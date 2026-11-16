@@ -45,11 +45,22 @@ def prepare_vosk():
         shutil.rmtree(target)
     if model_root.resolve() != target.resolve():
         shutil.move(str(model_root), str(target))
-    # Vosk supports both legacy flat v1 and nested v2 model layouts.
-    valid_flat = (target / "final.mdl").is_file() and (target / "mfcc.conf").is_file()
-    valid_nested = (target / "am" / "final.mdl").is_file() and (target / "conf" / "model.conf").is_file()
+    # Vosk model archives use more than one directory layout. The Turkish
+    # small-tr model may place mfcc.conf under conf/ even when final.mdl is
+    # at the model root, so accept the supported flat and nested variants.
+    has_mfcc = ((target / "mfcc.conf").is_file()
+                or (target / "conf" / "mfcc.conf").is_file())
+    has_model_config = ((target / "conf" / "model.conf").is_file()
+                        or (target / "model.conf").is_file())
+    valid_flat = (target / "final.mdl").is_file() and has_mfcc
+    valid_nested = (target / "am" / "final.mdl").is_file() and has_mfcc and has_model_config
     if not (valid_flat or valid_nested):
-        raise RuntimeError("Vosk model extraction is incomplete (legacy or v2 layout).")
+        found = [str(p.relative_to(target)) for p in target.rglob("*")
+                 if p.is_file() and p.name in {"final.mdl", "mfcc.conf", "model.conf"}]
+        raise RuntimeError(
+            "Vosk model extraction is incomplete. Found model files: "
+            + (", ".join(found) if found else "none")
+        )
 
 def prepare_tts():
     target = MODELS / "pocket-tts-turkish"
