@@ -1427,7 +1427,7 @@ _DYNO_LOCK = threading.RLock()
 _DYNO_STATE = {'active': False, 'mode': 'standard', 'model': '', 'year': None,
                'started_at': None, 'start_monotonic': None, 'samples': [],
                'wheel_radius_m': 0.30, 'load_force_n': None,
-               'dct_mode_confirmed': False, 'last_sample': None}
+               'dct_mode_confirmed': False, 'last_sample': None, 'source': None, 'worker': None, 'stop_event': None}
 _DYNO_MAX_SAMPLES = 100000
 
 def _dyno_record_ecu_sample(data):
@@ -1445,7 +1445,7 @@ def _dyno_record_ecu_sample(data):
         except (TypeError, ValueError):
             speed = None
         sample = {'time': datetime.now().astimezone().isoformat(timespec='milliseconds'),
-                  'elapsed_s': round(now - started, 3), 'source': 'ECU telemetry',
+                  'elapsed_s': round(now - started, 3), 'source': data.get('_source', 'ECU telemetry'),
                   'rpm': data.get('rpm'), 'speed_kmh': speed, 'tps_pct': data.get('tps'),
                   'coolant_c': data.get('temp'), 'map_kpa': data.get('map'), 'voltage_v': data.get('volt'),
                   'load_force_n': force, 'roller_radius_m': radius, 'wheel_torque_nm': None,
@@ -1460,6 +1460,30 @@ def _dyno_record_ecu_sample(data):
         if len(_DYNO_STATE['samples']) < _DYNO_MAX_SAMPLES:
             _DYNO_STATE['samples'].append(sample)
 
+def _dyno_j2534_worker(stop_event):
+    """J2534 ISO15765 uzerinden standart motor OBD PID telemetrisi toplar."""
+    pid_specs = (0x0C, 0x0D, 0x11, 0x05, 0x0B, 0x42)
+    while not stop_event.is_set():
+        values = {}
+        for pid in pid_specs:
+            if stop_event.is_set():
+                break
+            raw, detail = j2534_send_obd_pid(pid, timeout_ms=650)
+            if not raw:
+                continue
+            a = raw[0]
+            if pid == 0x0C and len(raw) >= 2: values['rpm'] = (a * 256 + raw[1]) / 4.0
+            elif pid == 0x0D: values['speed'] = float(a)
+            elif pid == 0x11: values['tps'] = round(a * 100.0 / 255.0, 2)
+            elif pid == 0x05: values['temp'] = float(a - 40)
+            elif pid == 0x0B: values['map'] = float(a)
+            elif pid == 0x42 and len(raw) >= 2: values['volt'] = round((a * 256 + raw[1]) / 1000.0, 3)
+        if values:
+            values['_source'] = 'J2534 ISO15765 OBD'
+            _dyno_record_ecu_sample(values)
+        stop_event.wait(0.05)
+
+
 def _dyno_public_state():
     with _DYNO_LOCK:
         return {'active': bool(_DYNO_STATE['active']), 'mode': _DYNO_STATE['mode'],
@@ -1467,7 +1491,7 @@ def _dyno_public_state():
                 'started_at': _DYNO_STATE['started_at'], 'sample_count': len(_DYNO_STATE['samples']),
                 'last_sample': dict(_DYNO_STATE['last_sample']) if _DYNO_STATE['last_sample'] else None,
                 'wheel_radius_m': _DYNO_STATE['wheel_radius_m'], 'load_force_n': _DYNO_STATE['load_force_n'],
-                'dct_mode_confirmed': _DYNO_STATE['dct_mode_confirmed'],
+                'dct_mode_confirmed': _DYNO_STATE['dct_mode_confirmed'], 'source': _DYNO_STATE.get('source'),
                 'note': ('DCT dyno modu uygulama tarafindan etkinlestirilmedi; Honda HDS veya uyumlu DCT dyno araci ile etkinlestirilip operator tarafindan dogrulanmalidir.'
                          if _DYNO_STATE['mode'] == 'honda_dct' else
                          'Guc/tork yalnizca harici yuk kuvveti ve teker/roller hizi varsa hesaplanir. ECU RPM tek basina dinamometre gucu degildir.')}
@@ -2642,8 +2666,11 @@ def api_dyno_start():
         return jsonify({'ok': False, 'error': 'DYNO modu gecersiz.'}), 400
     with _conn_lock:
         conn = _connection if _mode == 'real' else None
-    if conn is None or not conn.is_connected():
-        return jsonify({'ok': False, 'error': 'Gercek ECU telemetrisi icin once motor ECU baglantisini kurun.'}), 409
+    use_j2534 = bool(_j2534_state.get('dll') is not None and
+                     _j2534_state.get('channel_id') is not None and
+                     _j2534_state.get('protocol') == 'iso15765')
+    if not (conn is not None and conn.is_connected()) and not use_j2534:
+        return jsonify({'ok': False, 'error': 'Gercek ECU telemetrisi icin ELM327/USB-COM baglantisi veya J2534 ISO15765 kanali acin.'}), 409
     try:
         radius = float(payload.get('wheel_radius_m') or 0.30)
         if not 0.05 <= radius <= 1.0:
@@ -2656,11 +2683,20 @@ def api_dyno_start():
         with _DYNO_LOCK:
             if _DYNO_STATE['active']:
                 return jsonify({'ok': False, 'error': 'Bir DYNO oturumu zaten calisiyor.'}), 409
+            stop_event = threading.Event() if use_j2534 else None
+            worker = None
             _DYNO_STATE.update({'active': True, 'mode': mode, 'model': model, 'year': year,
                 'started_at': datetime.now().astimezone().isoformat(timespec='seconds'),
                 'start_monotonic': time.monotonic(), 'samples': [], 'wheel_radius_m': radius,
-                'load_force_n': None, 'dct_mode_confirmed': dct_confirmed, 'last_sample': None})
-        write_log('DYNO OTURUMU BASLADI', f'{mode} | {model} {year or ""} | radius={radius}m')
+                'load_force_n': None, 'dct_mode_confirmed': dct_confirmed, 'last_sample': None,
+                'source': 'J2534 ISO15765' if use_j2534 else 'ELM327 / USB-COM',
+                'worker': None, 'stop_event': stop_event})
+            if use_j2534:
+                worker = threading.Thread(target=_dyno_j2534_worker, args=(stop_event,),
+                                          daemon=True, name='DYNO-J2534-OBD')
+                _DYNO_STATE['worker'] = worker
+                worker.start()
+        write_log('DYNO OTURUMU BASLADI', f'{mode} | {model} {year or ""} | source={_DYNO_STATE["source"]} | radius={radius}m')
         return jsonify({'ok': True, 'message': 'Gercek ECU telemetri kaydi baslatildi.', **_dyno_public_state()})
     except Exception as exc:
         return jsonify({'ok': False, 'error': str(exc)}), 400
@@ -2693,6 +2729,14 @@ def api_dyno_stop():
         count = len(_DYNO_STATE['samples'])
         _DYNO_STATE['active'] = False
         _DYNO_STATE['start_monotonic'] = None
+        stop_event = _DYNO_STATE.get('stop_event')
+        worker = _DYNO_STATE.get('worker')
+        if stop_event is not None:
+            stop_event.set()
+        _DYNO_STATE['stop_event'] = None
+        _DYNO_STATE['worker'] = None
+    if worker is not None:
+        worker.join(timeout=2.0)
     write_log('DYNO OTURUMU TAMAMLANDI', f'{count} gercek ECU ornegi kaydedildi.')
     return jsonify({'ok': True, 'message': f'DYNO kaydi durduruldu. {count} ornek kaydedildi.', **_dyno_public_state()})
 
