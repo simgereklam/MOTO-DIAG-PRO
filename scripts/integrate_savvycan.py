@@ -55,6 +55,7 @@ def main() -> None:
 #include <QTimer>
 #include <QUrl>
 #include <QWebEngineView>
+#include "connections/canconfactory.h"
 """
     replace_once(cpp, '#include "mainwindow.h"\n',
                  '#include "mainwindow.h"\n' + includes,
@@ -74,6 +75,15 @@ def main() -> None:
     unifiedWorkspace->addTab(motoDiagView, tr("MOTO DIAG PRO"));
     setCentralWidget(unifiedWorkspace);
     unifiedWorkspace->setCurrentWidget(motoDiagView);
+
+    // Feed the Python/J2534 CAN RX bridge into SavvyCAN through its native socketcand connection.
+    CANConnection *motoDiagCanBridge = CanConFactory::create(
+        CANCon::KAYAK, "can0@can://127.0.0.1:29536/", "", 0, 500000, false, 0, false, true);
+    if (motoDiagCanBridge)
+    {
+        CANConManager::getInstance()->add(motoDiagCanBridge);
+        motoDiagCanBridge->start();
+    }
 
     const QString backendPath = QDir(QCoreApplication::applicationDirPath())
         .filePath("backend/MOTO-DIAG-PRO-Backend.exe");
