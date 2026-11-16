@@ -3859,10 +3859,10 @@ def _moto_year_matches(requested_year, year_scope):
     except (TypeError, ValueError):
         return False
     scope = str(year_scope or "")
-    ranges = re.findall(r"((?:19|20)\\d{2})\\s*[-–]\\s*((?:19|20)\\d{2})", scope)
+    ranges = re.findall(r"((?:19|20)\d{2})\\s*[-–]\\s*((?:19|20)\d{2})", scope)
     if ranges:
         return any(int(start) <= requested <= int(end) for start, end in ranges)
-    exact_years = [int(x) for x in re.findall(r"(?<!\\d)(?:19|20)\\d{2}(?!\\d)", scope)]
+    exact_years = [int(x) for x in re.findall(r"(?<!\d)(?:19|20)\d{2}(?!\d)", scope)]
     return not exact_years or requested in exact_years
 
 
