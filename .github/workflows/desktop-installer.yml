@@ -84,7 +84,7 @@ jobs:
           Pop-Location
           $target = "dist/MOTO DIAG PRO"
           New-Item -ItemType Directory -Force -Path $target | Out-Null
-          Copy-Item -LiteralPath (Join-Path $source "MOTO_DIAG_PRO.exe") -Destination $target -Force
+          Copy-Item -LiteralPath (Join-Path $source "release/MOTO_DIAG_PRO.exe") -Destination (Join-Path $target "MOTO DIAG PRO.exe") -Force
           New-Item -ItemType Directory -Force -Path (Join-Path $target "backend") | Out-Null
           Copy-Item -Path (Join-Path $source "backend/*") -Destination (Join-Path $target "backend") -Recurse -Force
           windeployqt --release --compiler-runtime --no-translations --webengine --dir $target (Join-Path $target "MOTO DIAG PRO.exe")
