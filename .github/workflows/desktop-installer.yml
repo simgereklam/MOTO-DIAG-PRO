@@ -59,6 +59,11 @@ jobs:
           arch: win64_msvc2022_64
           modules: "qtwebengine qtserialbus qtserialport"
 
+      - name: Prepare MSVC x64 build environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Fetch and patch SavvyCAN as the unified application shell
         shell: pwsh
         run: |
@@ -70,7 +75,7 @@ jobs:
           nmake
           $target = "dist/MOTO DIAG PRO"
           New-Item -ItemType Directory -Force -Path $target | Out-Null
-          Copy-Item -LiteralPath (Join-Path $source "MOTO DIAG PRO.exe") -Destination $target -Force
+          Copy-Item -LiteralPath (Join-Path $source "MOTO_DIAG_PRO.exe") -Destination $target -Force
           New-Item -ItemType Directory -Force -Path (Join-Path $target "backend") | Out-Null
           Copy-Item -Path (Join-Path $source "backend/*") -Destination (Join-Path $target "backend") -Recurse -Force
           windeployqt --release --compiler-runtime --no-translations --webengine --dir $target (Join-Path $target "MOTO DIAG PRO.exe")
