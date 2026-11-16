@@ -58,7 +58,7 @@ jobs:
           host: windows
           target: desktop
           arch: win64_msvc2022_64
-          modules: "qtwebengine qtserialbus qtserialport"
+          modules: "qtwebengine qtwebchannel qtpositioning qtserialbus qtserialport"
 
       - name: Prepare MSVC x64 build environment
         uses: ilammy/msvc-dev-cmd@v1
