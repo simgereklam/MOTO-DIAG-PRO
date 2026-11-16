@@ -39,8 +39,8 @@ def main() -> None:
             raise SystemExit("Unknown SavvyCAN Qt module declaration; refusing unsafe project edit")
         pro = pro.replace("QT = core gui", "QT = core gui webenginewidgets", 1)
     if "TARGET = SavvyCAN" in pro:
-        pro = pro.replace("TARGET = SavvyCAN", 'TARGET = "MOTO DIAG PRO"', 1)
-    elif 'TARGET = "MOTO DIAG PRO"' not in pro:
+        pro = pro.replace("TARGET = SavvyCAN", 'TARGET = MOTO_DIAG_PRO', 1)
+    elif 'TARGET = MOTO_DIAG_PRO' not in pro:
         raise SystemExit("Unknown SavvyCAN target declaration")
     project.write_text(pro, encoding="utf-8")
 
@@ -73,6 +73,7 @@ def main() -> None:
     motoDiagView->setHtml("<html><body style='background:#101820;color:#dce7f2;font-family:sans-serif;padding:28px'><h2>MOTO DIAG PRO</h2><p>Yerel teşhis servisi başlatılıyor...</p></body></html>");
     unifiedWorkspace->addTab(motoDiagView, tr("MOTO DIAG PRO"));
     setCentralWidget(unifiedWorkspace);
+    unifiedWorkspace->setCurrentWidget(motoDiagView);
 
     const QString backendPath = QDir(QCoreApplication::applicationDirPath())
         .filePath("backend/MOTO-DIAG-PRO-Backend.exe");
