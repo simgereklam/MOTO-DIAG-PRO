@@ -1,6 +1,10 @@
 """Protocol smoke test for the loopback socketcand bridge."""
 import socket
 import time
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from savvycan_bridge import publish_j2534_frames, start_socketcand_server
 
@@ -19,7 +23,6 @@ count = publish_j2534_frames([{
 assert count == 1, f"expected one forwarded frame, got {count}"
 message = client.recv(256)
 assert message.startswith(b"< frame 7e8 "), message
-assert message.endswith(b"03 410c1f40 >") is False  # protocol emits contiguous payload hex
-assert b"410c1f40" in message, message
+assert b" 410c1f40 >" in message, message
 client.close()
 print("socketcand handshake and J2534 CAN frame forwarding passed; TX remains disabled.")
