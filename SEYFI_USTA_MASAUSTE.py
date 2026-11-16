@@ -2621,7 +2621,11 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
  '20A':[{name:'RPM mesaj adayı · ham byte 2',fn:b=>b.length>=4?{v:'0x'+b[2].toString(16).toUpperCase().padStart(2,'0')+' ('+b[2]+')',u:'RPM formülü kesin değil; rpm değeri değildir'}:null}]
  }},
  yamaha_mt07_2014_project:{sourceOnly:true,applicability:'2014 MT-07 için açık kaynak ESP32/MCP2515 projesi; 500 kbit/s bildiriyor ve hız, RPM, sıcaklık, vites verilerini çözdüğünü belirtiyor. README byte formüllerini vermediğinden otomatik sayısal çözümleme kapalıdır.',source:'https://github.com/JackHat1/MT07_CAN_Project',signals:{}},
- yamaha_mt07_abs_notes:{sourceOnly:true,applicability:'Euro 3 ABS forum kaydı servis/ABS CAN mesajlarını tartışır; hidrolik test sırasında pompa/valf çalıştırıldığı anlatılır. Bu uygulama yalnızca pasif kayıt yapar; hiçbir ABS/aktüatör komutu eklenmez.',source:'https://www.mt07-forum.de/forum/thread/68226-yamaha-euro-3-can-bus-und-aktivierung-des-abs-moduls',signals:{}},
+ yamaha_mt07_abs_notes:{applicability:'Euro 3 MT-07 forumunda Bosch ABS 9 teşhis cihazıyla kaydedildiği bildirilen pasif CAN oturum gözlemleri. 0x07E3 üzerinde 10 03 isteği ve 0x07EB üzerinde 50 03 yanıtı anlatılır. Bu ekran yalnız kayıtta görülen oturum çerçevelerini işaretler; rutin kontrolü, pompa/valf sürme veya fren havası alma komutu içermez.',source:'https://www.mt07-forum.de/forum/thread/68226-yamaha-euro-3-can-bus-und-aktivierung-des-abs-moduls',signals:{
+ '7DF':[{name:'Yayın teşhis oturumu isteği',fn:b=>b.length>=3&&b[1]===0x10?{v:'SID 0x10 / alt işlev 0x'+b[2].toString(16).toUpperCase().padStart(2,'0'),u:'pasif trace işareti'}:null}],
+ '7E3':[{name:'ABS ECU teşhis oturumu isteği adayı',fn:b=>b.length>=3&&b[1]===0x10?{v:'DiagnosticSessionControl · alt işlev 0x'+b[2].toString(16).toUpperCase().padStart(2,'0'),u:'forum trace yorumu; ECU adresi doğrulanmadı'}:null}],
+ '7EB':[{name:'ABS ECU pozitif oturum yanıtı adayı',fn:b=>b.length>=3&&b[1]===0x50?{v:'SID 0x50 · alt işlev 0x'+b[2].toString(16).toUpperCase().padStart(2,'0'),u:'forum trace yorumu; yanıt eşlemesi doğrulanmadı'}:null}]
+ }},
  yamaha_cp3_2021_2024:{applicability:'2022 Tracer 9 üzerinde yayımlanmış; 2021+ MT-09 ve XSR900 aynı platform olarak belirtilmiş. Başka yıl/model için doğrulanmış sayılmaz.',source:'https://racechrono.com/forum/d/2853-yamaha-tracer-9-mt-09-2021-2024-can-ids-and-formulas',signals:{
  '209':[{name:'Motor devri',fn:b=>b.length>=2?{v:(((b[0]<<8)|b[1])*25/64).toFixed(0),u:'rpm'}:null},{name:'Vites',fn:b=>b.length>=5?{v:(b[4]&7)===7?'Vites geçişi':(b[4]&7)===0?'N':String(b[4]&7),u:''}:null}],
  '205':[{name:'Ön / arka teker hızı',fn:b=>b.length>=4?{v:(((b[0]<<8)|b[1])/101).toFixed(1)+' / '+(((b[2]<<8)|b[3])/101).toFixed(1),u:'km/h'}:null}],
@@ -2639,8 +2643,10 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
  '27C':[{name:'Motor devri',fn:b=>b.length>=2?{v:(((b[0]<<8)|b[1])*100/256).toFixed(0),u:'rpm'}:null},{name:'Vites',fn:b=>b.length>=5?{v:(b[4]&7)===7?'Vites geçişi':(b[4]&7)===0?'N':String(b[4]&7),u:''}:null},{name:'ECU vites bilgisi',fn:b=>b.length>=4?{v:String((b[3]>>5)&7),u:''}:null},{name:'TCS seviyesi',fn:b=>b.length>=4?{v:String((b[3]>>1)&15),u:''}:null},{name:'PWR seviyesi',fn:b=>b.length>=5?{v:String((b[4]>>6)+1),u:''}:null},{name:'Marş sinyali',fn:b=>b.length>=4?{v:(b[3]&1)?'Aktif':'Pasif',u:''}:null}],
  '383':[{name:'Fren anahtarı',fn:b=>b.length>=5?{v:((b[4]>>3)&1)?'Fren basılı':'Fren basılı değil',u:''}:null}],
  '512':[{name:'Soğutma / hava sıcaklığı',fn:b=>b.length>=2?{v:(b[0]*0.625-30).toFixed(1)+' / '+(b[1]*0.625-30).toFixed(1),u:'°C (su / hava)'}:null}],
+ '756':[{name:'Arka teker hızı',fn:b=>b.length>=4?{v:((((b[3]>>4)&15)*4096)+((b[1]&15)*256)+(((b[0]>>4)&15)*16)+((b[2]>>4)&15))/100,u:'km/h · DBC alan birleştirme'}:null}],
+ '765':[{name:'Ön teker hızı',fn:b=>b.length>=7?{v:((((b[0]>>4)&15)*4096)+(((b[2]>>4)&15)*256)+(((b[6]>>4)&15)*16)+(b[3]&15))/100,u:'km/h · DBC alan birleştirme'}:null}],
  '751':[{name:'Nötr bilgisi',fn:b=>b.length>=7?{v:(b[6]===0x60||b[6]===0x70)?'Nötr':'Viteste / belirsiz',u:''}:null}],
- '758':[{name:'Gaz kelebeği (TPS)',fn:b=>b.length>=3?{v:((((b[0]>>4)<<8)|b[2])*100/2310.4).toFixed(1),u:'% · forumda sıfır noktası geçici'}:null}],
+ '758':[{name:'Gaz kelebeği (TPS)',fn:b=>b.length>=3?{v:((((b[0]>>4)<<8)|b[2])*100/2310.4).toFixed(1),u:'% · forumda sıfır noktası geçici'}:null},{name:'Gaz kolu (APS)',fn:b=>b.length>=8?{v:((((b[7]&15)<<12)|((b[6]&15)<<8)|b[5])*100/31672).toFixed(1),u:'% · DBC ham alan birleştirme'}:null}],
  '759':[{name:'Komutlanan gaz kelebeği',fn:b=>b.length>=3?{v:((((b[0]>>4)<<4)|(b[2]>>4))*100/144.4).toFixed(1),u:'%'}:null}],
  '76D':[{name:'Cruise düğmeleri',fn:b=>b.length>=6?{v:'RES+: '+((b[3]&1)?'basılı':'—')+' · SET−: '+((b[5]>>4&1)?'basılı':'—'),u:''}:null}],
  '76E':[{name:'PWR seviyesi',fn:b=>b.length>=2?{v:String(b[1]+1),u:''}:null},{name:'Sürüş modu ekranı',fn:b=>b.length>=3?{v:b[2]===0x10?'Track':b[2]===0x20?'Normal':'Bilinmiyor',u:''}:null}]
@@ -3759,8 +3765,14 @@ MOTO_CAN_PROFILES = [
         "brand": "Yamaha", "models": ["R9"],
         "years": "2026",
         "network": {"bus": "CAN", "bitrate": 500000, "id_format": "11-bit", "note": "Üç ayrı CAN çifti rapor edilmiş; teşhis soketi ECU'nun bulunduğu ağa bağlı."},
-        "known_ids": ["0x27C", "0x512", "0x750-0x76E"],
-        "signals": [],
+        "known_ids": ["0x27C", "0x383", "0x512", "0x751", "0x756", "0x758", "0x759", "0x765", "0x76D", "0x76E"],
+        "signals": [
+            {"id": "0x27C", "name": "Motor devri", "formula": "BE16 * 100 / 256", "unit": "rpm"},
+            {"id": "0x756", "name": "Arka teker hızı", "formula": "((Top*4096)+(Hi*256)+(Mid*16)+Lo)/100", "unit": "km/h"},
+            {"id": "0x765", "name": "Ön teker hızı", "formula": "((Top*4096)+(Hi*256)+(Mid*16)+Lo)/100", "unit": "km/h"},
+            {"id": "0x758", "name": "Gaz kolu / ölçülen kelebek", "formula": "DBC alan birleştirme; ham değer / kaynak ölçeği", "unit": "%"},
+            {"id": "0x512", "name": "Su ve hava sıcaklığı", "formula": "byte * 0.625 - 30", "unit": "°C"}
+        ],
         "source": MOTO_KNOWLEDGE_SOURCES["yamaha_r9_racechrono"],
         "evidence": "Kimlikler ve ham kayıtlar paylaşılmış; bu kaynakta tüm ID'lerin anlamı çözülmüş değildir.",
         "validation": "community_capture_partial"
