@@ -113,9 +113,10 @@ def publish_j2534_frames(frames) -> int:
                 continue
             can_id = int.from_bytes(raw[:4], "big")
             rx_status = int(frame.get("rx_status", 0) or 0)
-            # J2534 CAN_29BIT_ID receive flag.
+            # J2534 CAN_29BIT_ID receive flag. SavvyCAN infers extended format
+            # from IDs above 0x7FF; keep the actual 29-bit identifier, not a flag bit.
             if rx_status & 0x100:
-                can_id |= 0x80000000
+                can_id &= 0x1FFFFFFF
             payload = raw[4:12]
             line = f"< frame {can_id:x} {stamp:.6f} {payload.hex()} >".encode("ascii")
             for client in clients:
