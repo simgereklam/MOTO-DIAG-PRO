@@ -2658,6 +2658,125 @@ class App:
             return
         self.root.after(1000, lambda: self._watch_connection(run_id, tries - 1))
 
+
+# ==================== COK MARKALI MOTOSIKLET BILGI KUTUPHANESI ====================
+# Kaynakli ve kapsam sinirli veri: her profil yalnizca belirtilen model/yil icin gecerlidir.
+# Forum verileri servis dokumani veya fiziksel dogrulama yerine gecmez.
+MOTO_KNOWLEDGE_REGISTRY_VERSION = 1
+MOTO_KNOWLEDGE_SOURCES = {
+    "yamaha_cp3_racechrono": "https://racechrono.com/forum/d/2853-yamaha-tracer-9-mt-09-2021-2024-can-ids-and-formulas",
+    "yamaha_r9_racechrono": "https://racechrono.com/forum/d/2840-yamaha-r9-2026-12-signals-decoded-captures-and-dbc-on-github",
+    "yamaha_xt660z_manual": "https://www.manualslib.com/manual/814158/Yamaha-Xt660z-2008.html?page=362",
+    "yamaha_fz8_manual": "https://biker.ee/manuals/yamaha/YAMAHA-FZ8-SA-Service-Manual.pdf",
+    "kawasaki_z750s_manual": "https://sd8fb8245db0f2e8b.jimcontent.com/download/version/1648048271/module/16278494722/name/Kawasaki%20Z750S%20Service%20Manual.pdf",
+    "honda_nc700_manual": "https://ipv4.cyclechaos.com/images/5/58/Honda_NC700_Service_Manual.pdf",
+    "css_motorcycle_can": "https://www.csselectronics.com/pages/motorcycle-reverse-engineering-can-bus",
+}
+MOTO_CAN_PROFILES = [
+    {
+        "brand": "Yamaha", "models": ["Tracer 9", "MT-09", "XSR900"],
+        "years": "2021-2024 (kaynakta 2022 Tracer 9 üzerinde doğrulanmış)",
+        "network": {"bus": "CAN", "bitrate": 500000, "id_format": "11-bit"},
+        "signals": [
+            {"id": "0x209", "name": "Motor devri", "formula": "((B0 << 8) | B1) * 25 / 64", "unit": "rpm"},
+            {"id": "0x209", "name": "Vites", "formula": "B4 & 0x07", "unit": "vites kodu"},
+            {"id": "0x205", "name": "Ön teker hızı", "formula": "((B0 << 8) | B1) / 101", "unit": "km/h"},
+            {"id": "0x205", "name": "Arka teker hızı", "formula": "((B2 << 8) | B3) / 101", "unit": "km/h"},
+            {"id": "0x215", "name": "Gaz kelebeği kolu", "formula": "(B2 << 8) | B3", "unit": "ham değer; 0 kapalı, yaklaşık 690 tam açık"},
+            {"id": "0x260", "name": "Ön fren basıncı", "formula": "(B0 << 8) | B1", "unit": "ham değer"},
+            {"id": "0x268", "name": "ABS/fren durum bitleri", "formula": "bit0 arka ABS, bit1 ön ABS, bit2 arka fren pedalı", "unit": "bit alanı"},
+            {"id": "0x254", "name": "Yaw rate", "formula": "(((B4 << 8) | B5) - 30000) / 300", "unit": "deg/s (kaynakta yaklaşık formül; doğrulama gerekli)"},
+        ],
+        "source": MOTO_KNOWLEDGE_SOURCES["yamaha_cp3_racechrono"],
+        "evidence": "Bir 2022 Tracer 9 üzerinde kullanıcı tarafından GPS/araç verisiyle karşılaştırılmış; diğer yıl ve modellerde otomatik genellenmez.",
+        "validation": "community_single_vehicle"
+    },
+    {
+        "brand": "Yamaha", "models": ["R9"],
+        "years": "2026",
+        "network": {"bus": "CAN", "bitrate": 500000, "id_format": "11-bit", "note": "Üç ayrı CAN çifti rapor edilmiş; teşhis soketi ECU'nun bulunduğu ağa bağlı."},
+        "known_ids": ["0x27C", "0x512", "0x750-0x76E"],
+        "signals": [],
+        "source": MOTO_KNOWLEDGE_SOURCES["yamaha_r9_racechrono"],
+        "evidence": "Kimlikler ve ham kayıtlar paylaşılmış; bu kaynakta tüm ID'lerin anlamı çözülmüş değildir.",
+        "validation": "community_capture_partial"
+    },
+]
+MOTO_IMMOBILIZER_PROFILES = [
+    {
+        "brand": "Yamaha", "models": ["XT660Z"], "years": "2008 (kaynak doküman kapsamı)",
+        "codes": {
+            "51": "Anahtar ile immobilizer ünitesi arasında kod iletilemiyor.",
+            "52": "Anahtar ve immobilizer ünitesi kodları eşleşmiyor veya tanınmayan transponder algılanıyor.",
+            "53": "ECU ile immobilizer ünitesi arasında kod iletilemiyor.",
+            "54": "ECU ile immobilizer ünitesi arasındaki kodlar eşleşmiyor.",
+        },
+        "source": MOTO_KNOWLEDGE_SOURCES["yamaha_xt660z_manual"],
+        "note": "Belirti/kod açıklamaları servis dokümanından; çözüm için modele ait resmi prosedür izlenmelidir."
+    },
+    {
+        "brand": "Yamaha", "models": ["FZ8", "FZ8-S"],
+        "years": "Kaynak servis kılavuzu kapsamı",
+        "codes": {
+            "55": "Anahtar kodu kayıt işlemi hatası.",
+            "56": "Tanımsız kod alındı; parazit veya bağlantı/kablo sorunu olası.",
+        },
+        "source": MOTO_KNOWLEDGE_SOURCES["yamaha_fz8_manual"],
+        "note": "Bu kayıt anahtar programlama/bypass işlevi sağlamaz; yalnızca arıza açıklamasıdır."
+    },
+    {
+        "brand": "Kawasaki", "models": ["Z750S"],
+        "years": "Kaynak servis kılavuzu kapsamı",
+        "codes": {"36": "Immobilizer anahtar/transponder tanıma hatası veya kayıtlı olmayan anahtar algılandı."},
+        "source": MOTO_KNOWLEDGE_SOURCES["kawasaki_z750s_manual"],
+        "note": "Servis dokümanındaki arıza tanımı; anahtar kodu okuma/kopyalama yapılmaz."
+    },
+    {
+        "brand": "Honda", "models": ["NC700", "NC700X"],
+        "years": "Kaynak servis kılavuzu kapsamı",
+        "codes": {},
+        "source": MOTO_KNOWLEDGE_SOURCES["honda_nc700_manual"],
+        "note": "HISS için gösterge lambası, yedek anahtar ile karşılaştırma ve ECM/PCM-kombine gösterge haberleşme hattı kontrolleri dokümante edilmiş; evrensel HISS hata kodu varsayılmaz."
+    },
+]
+def moto_knowledge_lookup(brand="", model="", year=None):
+    """Kaynakli pasif CAN ve immobilizer ariza bilgisini marka/model bazinda listeler."""
+    b = str(brand or "").strip().casefold()
+    m = str(model or "").strip().casefold()
+    y = str(year or "").strip()
+    can = []
+    immobilizer = []
+    for profile in MOTO_CAN_PROFILES:
+        if b and profile["brand"].casefold() != b:
+            continue
+        if m and not any(m in x.casefold() or x.casefold() in m for x in profile["models"]):
+            continue
+        if y and y not in profile["years"]:
+            continue
+        can.append(profile)
+    for profile in MOTO_IMMOBILIZER_PROFILES:
+        if b and profile["brand"].casefold() != b:
+            continue
+        if m and not any(m in x.casefold() or x.casefold() in m for x in profile["models"]):
+            continue
+        if y and y not in profile["years"]:
+            continue
+        immobilizer.append(profile)
+    return {
+        "ok": True, "registry_version": MOTO_KNOWLEDGE_REGISTRY_VERSION,
+        "brand": brand, "model": model, "year": year,
+        "can_profiles": can, "immobilizer_profiles": immobilizer,
+        "warning": "Kaynak kapsamı dışındaki model/yıllara veri uygulanmaz. Forum verileri bağımsız doğrulama gerektirir. Bu modül yalnızca bilgi/teşhis içindir; immobilizer bypass, anahtar kopyalama veya ECU'ya yazma yapmaz."
+    }
+
+@app.route('/api/knowledge/motorcycle', methods=['GET'])
+def api_motorcycle_knowledge():
+    return jsonify(moto_knowledge_lookup(
+        request.args.get("brand", ""), request.args.get("model", ""),
+        request.args.get("year", "")
+    ))
+
+
 # ==================== MAIN ====================
 if __name__ == "__main__":
     root = None
