@@ -1910,9 +1910,12 @@ def _query_live_values(conn):
         if command is None:
             continue
         try:
+            _ecu_lab_record('PYTHON-OBD', 'TX', command_name, 'USB/COM python-OBD logical PID request')
             with _query_lock:
                 response = conn.query(command)
             value = _obd_value(response)
+            _ecu_lab_record('PYTHON-OBD', 'RX', value if value is not None else 'NO DATA',
+                            command_name + ' -> ' + key)
             if value is not None:
                 result[key] = value
         except Exception:
