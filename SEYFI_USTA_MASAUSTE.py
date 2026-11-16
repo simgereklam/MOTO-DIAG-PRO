@@ -3765,7 +3765,6 @@ MOTO_CAN_PROFILES = [
         "evidence": "Kimlikler ve ham kayıtlar paylaşılmış; bu kaynakta tüm ID'lerin anlamı çözülmüş değildir.",
         "validation": "community_capture_partial"
     },
-]
     {
         "brand": "Yamaha", "models": ["MT-07", "FZ-07"], "years": "2014-2017 (forum kaynak kapsamı)",
         "network": {"bus": "CAN", "bitrate": 500000, "id_format": "11-bit"},
@@ -3801,6 +3800,7 @@ MOTO_CAN_PROFILES = [
         "evidence": "MIT açık kaynak; CAN ID ve byte dönüşümleri Panigale 899 üzerinde test edilen yazılımın kaynak kodundan.",
         "validation": "community_single_vehicle"
     },
+]
 MOTO_IMMOBILIZER_PROFILES = [
     {
         "brand": "Yamaha", "models": ["XT660Z"], "years": "2008 (kaynak doküman kapsamı)",
