@@ -10,6 +10,9 @@ on:
     paths:
       - SEYFI_USTA_MASAUSTU.py
       - desktop_requirements.txt
+      - desktop_backend.py
+      - savvycan_bridge.py
+      - scripts/**
       - installer/MOTO_DIAG_PRO.iss
       - third_party/SavvyCAN/**
       - .github/workflows/desktop-installer.yml
