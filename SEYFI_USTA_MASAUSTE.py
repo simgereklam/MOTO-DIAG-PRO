@@ -3536,41 +3536,11 @@ def run_flask(): socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkz
 @app.route('/')
 def index_page(): return render_template_string(HTML_CODE)
 
-# ==================== SEYFI USTA YEREL SES SISTEMI ====================
-# TTS + Vosk ASR ayrı, tamamen yerel modellerle çalışır.
-VOICE_ENGINE = None
-_VOICE_UNAVAILABLE_REPORTED = False
+# ==================== SESSIZ ÇALIŞMA ====================
+# Sesli komut ve konuşma özellikleri kullanıcı talebiyle tamamen devre dışıdır.
+def safe_speak(_phrase):
+    return False
 
-def speak(phrase):
-    """Konuşma isteğini yerel SeyfiVoice motoruna aktar; motor yoksa logla."""
-    global _VOICE_UNAVAILABLE_REPORTED
-    engine = VOICE_ENGINE
-    if engine is None:
-        if not _VOICE_UNAVAILABLE_REPORTED:
-            _VOICE_UNAVAILABLE_REPORTED = True
-            try:
-                write_log("SEYFİ SES MOTORU", "Ses motoru başlatılmadı; çevrimdışı konuşma kullanılamıyor.")
-            except Exception:
-                print("SEYFİ SES MOTORU: Ses motoru başlatılmadı.")
-        return False
-    try:
-        engine.speak(phrase)
-        return True
-    except Exception as exc:
-        try:
-            write_log("SEYFİ SES MOTORU HATASI", str(exc))
-        except Exception:
-            print("SEYFİ SES MOTORU HATASI:", exc)
-        return False
-
-def start_speech_worker():
-    # Geriye dönük uyumluluk: ses işçileri SeyfiVoice tarafından başlatılır.
-    return True
-
-def local_ai_greeting():
-    return ("Merhaba, ben Seyfi Usta. MOTO DIAG PRO çevrimdışı teşhis sistemine hoş geldiniz. "
-            "Şimdi bağlantı cihazınızı kontrol ediyorum. Bana seslenerek arıza taraması "
-            "yapmamı, canlı verileri yorumlamamı veya test ekranını açmamı söyleyebilirsiniz.")
 
 def discover_adapter_candidates():
     """Önce bilinen Wi-Fi ELM327 uçlarını, sonra görünen seri/USB portlarını bulur.
@@ -3620,20 +3590,18 @@ class App:
     def __init__(self, root):
         self.root = root; root.title("Seyfi Usta - Akıllı Motosiklet Teşhis"); root.geometry("1050x650"); root.configure(bg="#121212")
         self.running = True; self.log_buffer = []; self._active_run_id = None; self._searching = False
-        self._candidate_queue = []; self._ai_ready = False; self._startup_done = False
+        self._candidate_queue = []
         frm_top = tk.Frame(root, bg="#1e1e1e", pady=10); frm_top.pack(fill="x")
         tk.Label(frm_top, text="ADAPTÖR:", bg="#1e1e1e", fg="#ccc", font=("Arial", 10, "bold")).pack(side="left", padx=(15, 3))
         self.addr_var = tk.StringVar(value="192.168.0.10:35000")
         tk.Entry(frm_top, textvariable=self.addr_var, width=20, bg="#2a2a2a", fg="#00e5ff", insertbackground="#00e5ff").pack(side="left")
         self.btn_real = tk.Button(frm_top, text="🔌 BAĞLAN", bg="#00e5ff", fg="black", font=("Arial", 10, "bold"), command=self.toggle_real); self.btn_real.pack(side="left", padx=10)
-        tk.Button(frm_top, text="🤖 AI / SESİ TEKRARLA", bg="#673ab7", fg="white", font=("Arial", 9, "bold"), command=self.repeat_greeting).pack(side="left", padx=5)
         tk.Button(frm_top, text="🌐 WEB ARAYÜZÜ", bg="#00ff00", fg="black", font=("Arial", 10, "bold"), command=lambda: webbrowser.open("http://localhost:5000")).pack(side="left", padx=10)
         tk.Button(frm_top, text="💾 LOG KAYDET", bg="#ffaa00", fg="black", font=("Arial", 10, "bold"), command=self.save_log).pack(side="left", padx=10)
         self.lbl_status = tk.Label(frm_top, text="DURUM: BAĞLANTI ARANIYOR", bg="#1e1e1e", fg="#ffaa00", font=("Arial", 10, "bold")); self.lbl_status.pack(side="right", padx=15)
         self.txt_log = scrolledtext.ScrolledText(root, height=20, bg="#000000", fg="#00ff00", font=("Consolas", 10)); self.txt_log.pack(fill="both", expand=True, padx=20, pady=10)
-        self.log("Seyfi Usta hazır. Sesli asistan ve yerel AI kontrolü başlatılıyor.")
-        start_speech_worker()
-        self.root.after(500, self.startup_assistant)
+        self.log("MOTO DIAG PRO hazır. Sessiz çalışma modu etkin.")
+        self.root.after(500, self.begin_adapter_search)
 
     def log(self, msg):
         entry = f"[{datetime.now().strftime('%H:%M:%S')}] {msg}"
@@ -3641,108 +3609,6 @@ class App:
 
     def set_status(self, text, color="#ffaa00"):
         self.lbl_status.config(text="DURUM: " + text, fg=color)
-
-    def repeat_greeting(self):
-        if self._ai_ready:
-            phrase = "Seyfi Usta akıllı teşhis asistanı hazır. Adaptör bağlantısını kontrol ediyorum."
-        else:
-            phrase = "Merhaba, Seyfi Usta akıllı motosiklet teşhis sistemine hoş geldiniz. Ses ve komut motorları hazırlanıyor."
-        safe_speak(phrase)
-
-    def _handle_voice_status(self, message):
-        self.log(message)
-        if message.startswith("Türkçe çevrimdışı ses motoru hazır"):
-            self._voice_tts_ready = True
-        elif message.startswith("MİKROFON/KOMUT TANIMA HATASI"):
-            self._voice_asr_ready = False
-        elif message.startswith("Seyfi Usta mikrofonu dinliyor"):
-            self._voice_asr_ready = True
-        elif message.startswith("SES MOTORU HATASI"):
-            self._voice_tts_ready = False
-        self._ai_ready = self._voice_tts_ready and self._voice_asr_ready
-
-    def startup_assistant(self):
-        if self._startup_done: return
-        self._startup_done = True
-        self._voice_tts_ready = False
-        self._voice_asr_ready = False
-        self._ai_ready = False
-        self.set_status("ÇEVRİMDIŞI TEŞHİS HAZIR")
-        self.log("Yerel teşhis kuralları hazır; internet veya harici AI servisi kullanılmıyor.")
-        try:
-            global VOICE_ENGINE
-            from seyfi_voice import SeyfiVoice
-            VOICE_ENGINE = SeyfiVoice(
-                on_command=lambda phrase: self.root.after(0, lambda p=phrase: self.handle_voice_command(p)),
-                on_status=lambda message: self.root.after(0, lambda m=message: self._handle_voice_status(m)),
-            )
-            VOICE_ENGINE.start(local_ai_greeting())
-            self.log("Seyfi Usta yerel ses ve Türkçe komut motorları başlatılıyor.")
-        except Exception as exc:
-            self.log("SEYFİ SES/KOMUT MOTORU BAŞLATILAMADI: " + str(exc)[:220])
-        self.root.after(0, self.begin_adapter_search)
-
-    def handle_voice_command(self, phrase):
-        """Türkçe çevrimdışı ses komutlarını güvenli uygulama işlemlerine yönlendirir."""
-        import unicodedata
-        raw = str(phrase or "").strip().lower()
-        normalized = "".join(ch for ch in unicodedata.normalize("NFKD", raw)
-                             if not unicodedata.combining(ch))
-        normalized = normalized.replace("ı", "i")
-        self.log("SES KOMUTU: " + raw)
-        if any(x in normalized for x in ("yardim", "komutlar")):
-            safe_speak("Şu komutları anlayabiliyorum: bağlan, bağlantıyı kes, arıza tara, arızaları oku, arızaları sil, canlı verileri oku, test yap ve durumu söyle.")
-        elif normalized in ("seyfi", "seyfi usta", "usta"):
-            safe_speak("Dinliyorum. Buyurun.")
-        elif "baglantiyi kes" in normalized or "baglantiyi durdur" in normalized:
-            if self._active_run_id is not None: self._stop_real()
-            else: safe_speak("Şu anda aktif ECU bağlantısı yok.")
-        elif "baglan" in normalized or "tekrar baglan" in normalized or "yeniden baglan" in normalized:
-            if self._active_run_id is None: self.begin_adapter_search()
-            else: safe_speak("Adaptör bağlantısı zaten aktif.")
-        elif any(x in normalized for x in ("arizalari sil", "ariza kodlarini sil")):
-            if _get_mode() != "real":
-                safe_speak("Arıza silebilmem için önce gerçek ECU bağlantısı kurulmalı.")
-            elif messagebox.askyesno("Seyfi Usta", "ECU arıza hafızasını silmek istiyor musunuz?", parent=self.root):
-                safe_speak("Arıza silme isteğini gönderiyorum ve sonucu ECU'dan doğrulayacağım.")
-                threading.Thread(target=handle_clear, daemon=True).start()
-            else:
-                safe_speak("Arıza silme işlemi iptal edildi.")
-        elif any(x in normalized for x in ("tara", "arizalari oku", "ariza kodlarini oku")):
-            if _get_mode() == "real":
-                safe_speak("Gerçek ECU arıza hafızasını okuyorum.")
-                threading.Thread(target=handle_scan, daemon=True).start()
-            else:
-                safe_speak("Henüz ECU bağlantısı yok. Önce adaptöre bağlanıyorum.")
-                self.begin_adapter_search()
-        elif "canli verileri oku" in normalized or "motor verilerini oku" in normalized:
-            with _live_data_lock: snapshot = dict(_last_live_data)
-            if not snapshot:
-                safe_speak("Henüz ECU'dan canlı veri gelmedi. Önce gerçek bağlantı kurulmalı.")
-            else:
-                parts = []
-                labels = (("rpm", "motor devri", "devir"), ("tps", "gaz kelebeği", "yüzde"),
-                          ("temp", "motor sıcaklığı", "derece"), ("map", "emme basıncı", "kilopaskal"),
-                          ("volt", "akü voltajı", "volt"), ("stft", "kısa dönem yakıt düzeltmesi", "yüzde"))
-                for key, label, unit in labels:
-                    if key in snapshot: parts.append(f"{label} {snapshot[key]} {unit}")
-                safe_speak("Canlı ECU ölçümleri: " + ". ".join(parts))
-        elif "rapor olustur" in normalized:
-            self.save_log()
-            safe_speak("Servis kayıt raporunu kaydetme işlemini başlattım.")
-        elif "test yap" in normalized or "testleri ac" in normalized:
-            safe_speak("Test ve servis ekranını açıyorum.")
-            webbrowser.open("http://localhost:5000")
-        elif "durumu soyle" in normalized or "seyfi" == normalized or "seyfi usta" == normalized:
-            if _get_mode() == "real":
-                safe_speak("ECU bağlantısı aktif. Canlı veri akışını izliyorum.")
-            else:
-                safe_speak("Teşhis sistemi hazır, ancak ECU bağlantısı henüz doğrulanmadı.")
-        else:
-            safe_speak("Komutu tam anlayamadım. Yardım veya komutlar diyerek kullanabileceğiniz komutları dinleyebilirsiniz.")
-
-    def _check_ai_then_scan(self):
-        self.startup_assistant()
 
     def begin_adapter_search(self):
         if self._searching or self._active_run_id is not None: return
@@ -4056,8 +3922,6 @@ if __name__ == "__main__":
         def on_closing():
             app_gui.running = False
             _cancel_runs()
-            if VOICE_ENGINE is not None:
-                VOICE_ENGINE.stop()
             root.after(200, lambda: (close_obd(), root.destroy()))
 
         root.protocol("WM_DELETE_WINDOW", on_closing)
