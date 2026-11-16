@@ -43,16 +43,16 @@ def main() -> None:
     elif 'TARGET = MOTO_DIAG_PRO' not in pro:
         raise SystemExit("Unknown SavvyCAN target declaration")
 
-    # QT6WIP has an unconditional GNU-style -lopengl32 entry after its
-    # win32-g++ block. qmake/MSVC turns that into a nonexistent
-    # libopengl32.obj input. Keep the correct MSVC opengl32.lib entry and
-    # remove only the stray unconditional GNU linker flag.
-    bad_linker_entry = "\n   LIBS += libopengl32\n\nunix {"
-    if bad_linker_entry in pro:
-        pro = pro.replace(bad_linker_entry, "\nunix {", 1)
-    if "win32-msvc*" in pro and "LIBS += opengl32.lib" not in pro:
+    # QT6WIP contains a GNU OpenGL linker flag outside its win32-g++ block.
+    # qmake/MSVC treats it as libopengl32.obj and the Windows link fails.
+    # Remove that exact unconditional entry, preserving the platform blocks.
+    unconditional_gnu_flag = "\\n\\n   LIBS += libopengl32\\n\\nunix {"
+    if unconditional_gnu_flag not in pro:
+        raise SystemExit("Expected unconditional GNU OpenGL linker flag was not found")
+    pro = pro.replace(unconditional_gnu_flag, "\\n\\nunix {", 1)
+    if "LIBS += opengl32.lib" not in pro:
         raise SystemExit("Expected MSVC OpenGL library declaration is missing")
-    if bad_linker_entry in pro:
+    if unconditional_gnu_flag in pro:
         raise SystemExit("Unconditional GNU OpenGL linker flag remains")
     project.write_text(pro, encoding="utf-8")
 
