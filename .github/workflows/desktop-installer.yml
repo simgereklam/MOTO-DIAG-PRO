@@ -42,7 +42,8 @@ jobs:
       - name: Verify Python integration source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTE.py desktop_backend.py scripts/integrate_savvycan.py
+          python -m py_compile SEYFI_USTA_MASAUSTE.py desktop_backend.py savvycan_bridge.py scripts/integrate_savvycan.py scripts/test_savvycan_bridge.py
+          python scripts/test_savvycan_bridge.py
 
       - name: Build local MOTO DIAG PRO backend
         shell: pwsh
