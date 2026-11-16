@@ -18,6 +18,7 @@ from datetime import datetime
 import csv
 import io
 import traceback
+from savvycan_bridge import publish_j2534_frames
 
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
 try:
@@ -2722,7 +2723,7 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
    if(!d.connected||String(d.protocol).toLowerCase()!=='can'){document.getElementById('can_sniff_error').textContent='Önce Protokol alanından CAN · 500 kbit/s (ham/pasif) seçin ve BAĞLAN düğmesine basın. Mevcut kanal: '+(d.protocol||'kapalı');return;}
    canSniffActive=true;canSniffStartMs=Date.now();document.getElementById('can_sniff_status').textContent='DİNLİYOR';
    document.getElementById('can_sniff_start').disabled=true;document.getElementById('can_sniff_stop').disabled=false;
-   document.getElementById('can_sniff_error').textContent='RX dinleme başladı. Uygulama CAN mesajı göndermiyor.';canSniffPoll();
+   document.getElementById('can_sniff_error').textContent='RX dinleme başladı. Aynı CAN çerçeveleri SavvyCAN CAN ANALİZ sekmesine aktarılıyor; SavvyCAN TX şimdilik kapalı.';canSniffPoll();
   }).catch(e=>document.getElementById('can_sniff_error').textContent='J2534 durum hatası: '+e);
  }
  function canSniffStop(){canSniffActive=false;document.getElementById('can_sniff_status').textContent='DURDURULDU';document.getElementById('can_sniff_start').disabled=false;document.getElementById('can_sniff_stop').disabled=true;canSniffRender();}
@@ -2730,6 +2731,7 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   if(!canSniffActive||canSniffBusy)return;canSniffBusy=true;
   try{
    const r=await fetch('/api/j2534/read?timeout_ms=200'),d=await r.json();if(!d.ok)throw new Error(d.error||'J2534 RX okuma hatası');
+   if((d.frames||[]).length)fetch('/api/savvycan/frames',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:d.frames})}).catch(()=>{});
    (d.frames||[]).forEach(f=>{
     const oct=(f.data||'').trim().split(/\s+/).filter(Boolean).map(v=>parseInt(v,16));if(oct.length<4)return;
     const rawId=oct[0]*16777216+oct[1]*65536+oct[2]*256+oct[3],id=(rawId>>>0).toString(16).toUpperCase().padStart(rawId>2047?8:3,'0');
@@ -3040,6 +3042,21 @@ def api_j2534_read():
     if result.get("frames"):
         write_log("J2534 RX", f"{result['count']} mesaj alindi.")
     return jsonify(result), (200 if result.get("ok") else 400)
+
+@app.route('/api/savvycan/frames', methods=['POST'])
+def api_savvycan_frames():
+    state = j2534_status()
+    if not state.get("connected") or str(state.get("protocol") or "").lower() != "can":
+        return jsonify({"ok": False, "error": "SavvyCAN aktarımı için önce J2534 CAN ham kanalını açın."}), 409
+    payload = request.get_json(silent=True) or {}
+    frames = payload.get("frames", [])
+    if not isinstance(frames, list):
+        return jsonify({"ok": False, "error": "frames listesi geçersiz."}), 400
+    forwarded = publish_j2534_frames(frames)
+    return jsonify({"ok": True, "received": len(frames), "forwarded": forwarded,
+                    "tx_enabled": False,
+                    "note": "J2534 CAN RX çerçeveleri SavvyCAN'e aktarıldı. SavvyCAN üzerinden TX güvenlik doğrulaması tamamlanana kadar kapalıdır."})
+
 
 @app.route('/api/j2534/obd/live', methods=['POST'])
 def api_j2534_obd_live():
