@@ -2338,9 +2338,9 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
      <div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
      <div class="test-block" style="margin-top:14px;border-color:#80cbc4">
       <div class="title">SAVVYCAN · CAN TERSİNE MÜHENDİSLİK ENTEGRASYONU</div>
-      <p style="color:#b8c4d0">CAN dinleme kaydını SavvyCAN'in okuyabildiği Vector ASC biçiminde dışa aktarın. SavvyCAN kuruluysa buradan açabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda açamayabilir; önce Seyfi Usta dinlemesini durdurun.</p>
-      <div class="module-actions"><button class="btn test-btn" onclick="canSniffDownloadAsc()">⬇ SAVVYCAN VECTOR ASC İNDİR</button><button class="btn test-btn" onclick="canToolStatus()">ARAÇ DURUMUNU KONTROL ET</button><button class="btn test-btn" onclick="canToolLaunch('savvycan')">SAVVYCAN'I AÇ</button><a class="btn test-btn" href="https://github.com/collin80/SavvyCAN/releases" target="_blank" rel="noopener">SAVVYCAN'I EDİN</a></div>
-      <pre id="can_tool_status" style="white-space:pre-wrap;color:#80cbc4">SavvyCAN durumu henüz kontrol edilmedi.</pre>
+      <p style="color:#b8c4d0">MOTO DIAG PRO Windows kurulum paketi SavvyCAN V220'yi uygulama klasörüne birlikte kurar. Ayrı kurulum yapmanız gerekmez. CAN dinleme kaydını Vector ASC biçiminde dışa aktarabilir veya SavvyCAN'i buradan açabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda açamayabilir; önce Seyfi Usta dinlemesini durdurun.</p>
+      <div class="module-actions"><button class="btn test-btn" onclick="canSniffDownloadAsc()">⬇ SAVVYCAN VECTOR ASC İNDİR</button><button class="btn test-btn" onclick="canToolStatus()">ARAÇ DURUMUNU KONTROL ET</button><button class="btn test-btn" onclick="canToolLaunch('savvycan')">SAVVYCAN'I AÇ</button><span class="btn test-btn" style="cursor:default">PAKETE DAHİL · V220 · 64-BIT</span></div>
+      <pre id="can_tool_status" style="white-space:pre-wrap;color:#80cbc4">SavvyCAN durumu henüz kontrol edilmedi. Windows kurulumuyla birlikte gelir.</pre>
      </div>
      <div class="test-block" style="margin-top:14px;border-color:#90caf9">
       <div class="title">CSS ELECTRONICS / ASAMMDF · MF4 KAYIT İŞLEME</div>
@@ -2749,7 +2749,7 @@ function canSniffDownloadAsc(){
 }
 function canToolStatus(){
  const out=document.getElementById('can_tool_status');out.textContent='Kontrol ediliyor...';
- fetch('/api/can-tools/status').then(r=>r.json()).then(d=>{out.textContent='SavvyCAN: '+(d.savvycan_found?'BULUNDU · '+d.savvycan_path:'BULUNAMADI · İndirme bağlantısını kullanın')+'\\nasammdf: '+(d.asammdf_available?'KURULU · MF4 işleme hazır':'KURULU DEĞİL · py -m pip install asammdf')+'\\nMF4 / DBC işleme: '+(d.mf4_processing?'Hazır':'asammdf kurulumu gerekli');}).catch(e=>out.textContent='Araç kontrol hatası: '+e);
+ fetch('/api/can-tools/status').then(r=>r.json()).then(d=>{out.textContent='SavvyCAN: '+(d.savvycan_found?'PAKETTE HAZIR · '+d.savvycan_path:'BULUNAMADI · MOTO DIAG PRO kurulumunu onarın / yeniden kurun')+'\\nasammdf: '+(d.asammdf_available?'KURULU · MF4 işleme hazır':'KURULU DEĞİL · py -m pip install asammdf')+'\\nMF4 / DBC işleme: '+(d.mf4_processing?'Hazır':'asammdf kurulumu gerekli');}).catch(e=>out.textContent='Araç kontrol hatası: '+e);
 }
 function canToolLaunch(tool){
  if(tool!=='savvycan')return;if(canSniffActive)canSniffStop();
@@ -3062,10 +3062,12 @@ def _savvycan_executable():
     found=shutil.which("SavvyCAN") or shutil.which("savvycan")
     if found: candidates.append(found)
     if sys.platform=="win32":
-        for base in (os.environ.get("ProgramFiles",r"C:\\Program Files"),
-                     os.environ.get("ProgramFiles(x86)",r"C:\\Program Files (x86)"),
-                     os.path.dirname(os.path.abspath(sys.argv[0]))):
-            candidates.extend([os.path.join(base,"SavvyCAN","SavvyCAN.exe"),os.path.join(base,"SavvyCAN.exe"),os.path.join(base,"savvycan.exe")])
+        app_dir=os.path.dirname(os.path.abspath(sys.executable if getattr(sys,"frozen",False) else sys.argv[0]))
+        for base in (app_dir, os.environ.get("ProgramFiles",r"C:\\Program Files"),
+                     os.environ.get("ProgramFiles(x86)",r"C:\\Program Files (x86)")):
+            candidates.extend([os.path.join(base,"SavvyCAN","SavvyCAN.exe"),
+                               os.path.join(base,"SavvyCAN.exe"),
+                               os.path.join(base,"savvycan.exe")])
     return next((p for p in candidates if os.path.isfile(p)),None)
 
 @app.route('/api/can-tools/status', methods=['GET'])
@@ -3084,7 +3086,7 @@ def api_can_tools_launch():
         return jsonify({"ok":False,"error":"Yalnızca SavvyCAN başlatma destekleniyor."}),400
     exe=_savvycan_executable()
     if not exe:
-        return jsonify({"ok":False,"error":"SavvyCAN kurulu bulunamadı. Resmi GitHub Releases sürümünü kurun veya SAVVYCAN_EXE ortam değişkenini tanımlayın."}),404
+        return jsonify({"ok":False,"error":"SavvyCAN uygulama paketinde bulunamadı. MOTO DIAG PRO kurulumunu onarın veya yeniden kurun."}),404
     try:
         subprocess.Popen([exe],cwd=os.path.dirname(exe) or None,
                          creationflags=(getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0) if sys.platform=="win32" else 0))
