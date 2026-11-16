@@ -2666,7 +2666,8 @@ def api_dyno_start():
         return jsonify({'ok': False, 'error': 'DYNO modu gecersiz.'}), 400
     with _conn_lock:
         conn = _connection if _mode == 'real' else None
-    use_j2534 = bool(_j2534_state.get('dll') is not None and
+    use_j2534 = bool(not (conn is not None and conn.is_connected()) and
+                     _j2534_state.get('dll') is not None and
                      _j2534_state.get('channel_id') is not None and
                      _j2534_state.get('protocol') == 'iso15765')
     if not (conn is not None and conn.is_connected()) and not use_j2534:
