@@ -1359,6 +1359,55 @@ _ECU_LAB_LOG = []
 _ECU_LAB_LOCK = threading.RLock()
 _ECU_SERIAL_LOCK = threading.RLock()
 _ECU_SERIAL_STATE = {'thread': None, 'stop': None, 'port': None, 'baud': None, 'connected': False, 'error': ''}
+_DYNO_LOCK = threading.RLock()
+_DYNO_STATE = {'active': False, 'mode': 'standard', 'model': '', 'year': None,
+               'started_at': None, 'start_monotonic': None, 'samples': [],
+               'wheel_radius_m': 0.30, 'load_force_n': None,
+               'dct_mode_confirmed': False, 'last_sample': None}
+_DYNO_MAX_SAMPLES = 100000
+
+def _dyno_record_ecu_sample(data):
+    if not data:
+        return
+    with _DYNO_LOCK:
+        if not _DYNO_STATE.get('active'):
+            return
+        now = time.monotonic()
+        started = _DYNO_STATE.get('start_monotonic') or now
+        radius = float(_DYNO_STATE.get('wheel_radius_m') or 0.30)
+        force = _DYNO_STATE.get('load_force_n')
+        try:
+            speed = float(data.get('speed')) if data.get('speed') is not None else None
+        except (TypeError, ValueError):
+            speed = None
+        sample = {'time': datetime.now().astimezone().isoformat(timespec='milliseconds'),
+                  'elapsed_s': round(now - started, 3), 'source': 'ECU telemetry',
+                  'rpm': data.get('rpm'), 'speed_kmh': speed, 'tps_pct': data.get('tps'),
+                  'coolant_c': data.get('temp'), 'map_kpa': data.get('map'), 'voltage_v': data.get('volt'),
+                  'load_force_n': force, 'roller_radius_m': radius, 'wheel_torque_nm': None,
+                  'wheel_power_kw': None, 'wheel_power_hp': None, 'roller_rpm': None}
+        if force is not None and speed is not None and radius > 0:
+            speed_ms = speed / 3.6
+            sample['wheel_torque_nm'] = round(float(force) * radius, 2)
+            sample['wheel_power_kw'] = round(float(force) * speed_ms / 1000.0, 3)
+            sample['wheel_power_hp'] = round(float(force) * speed_ms / 1000.0 * 1.341022, 3)
+            sample['roller_rpm'] = round(speed_ms / (2.0 * 3.141592653589793 * radius) * 60.0, 1)
+        _DYNO_STATE['last_sample'] = sample
+        if len(_DYNO_STATE['samples']) < _DYNO_MAX_SAMPLES:
+            _DYNO_STATE['samples'].append(sample)
+
+def _dyno_public_state():
+    with _DYNO_LOCK:
+        return {'active': bool(_DYNO_STATE['active']), 'mode': _DYNO_STATE['mode'],
+                'model': _DYNO_STATE['model'], 'year': _DYNO_STATE['year'],
+                'started_at': _DYNO_STATE['started_at'], 'sample_count': len(_DYNO_STATE['samples']),
+                'last_sample': dict(_DYNO_STATE['last_sample']) if _DYNO_STATE['last_sample'] else None,
+                'wheel_radius_m': _DYNO_STATE['wheel_radius_m'], 'load_force_n': _DYNO_STATE['load_force_n'],
+                'dct_mode_confirmed': _DYNO_STATE['dct_mode_confirmed'],
+                'note': ('DCT dyno modu uygulama tarafindan etkinlestirilmedi; Honda HDS veya uyumlu DCT dyno araci ile etkinlestirilip operator tarafindan dogrulanmalidir.'
+                         if _DYNO_STATE['mode'] == 'honda_dct' else
+                         'Guc/tork yalnizca harici yuk kuvveti ve teker/roller hizi varsa hesaplanir. ECU RPM tek basina dinamometre gucu degildir.')}
+
 
 def _ecu_lab_record(transport, direction, payload, detail=''):
     entry = {'time': datetime.now().astimezone().isoformat(timespec='milliseconds'),
@@ -1826,6 +1875,7 @@ def real_data_loop(target, run_id):
                     # Son gerçek ECU ölçümlerini DTC yorumunda kullanmak üzere sakla.
                     with _live_data_lock:
                         _last_live_data.update(data)
+                    _dyno_record_ecu_sample(data)
                     socketio.emit('telemetry', data)
                     socketio.emit('risk_score', {'score': risk_skoru_hesapla(data)})
                     now = time.time()
