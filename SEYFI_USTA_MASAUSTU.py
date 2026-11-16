@@ -525,6 +525,54 @@ def j2534_send_obd_mode03(timeout_ms=2500):
             return None, "J2534 Mode 03 hatasi: " + str(exc)
 
 
+def j2534_clear_obd_mode04(timeout_ms=2500):
+    """SAE J1979 Mode 04: yalnizca standart motor/emisyon OBD DTC hafizasini siler."""
+    with _j2534_lock:
+        dll = _j2534_state.get("dll")
+        channel = _j2534_state.get("channel_id")
+        if dll is None or channel is None or _j2534_state.get("protocol") != "iso15765":
+            return False, "J2534 ISO15765 kanali acik degil."
+        try:
+            write_fn = dll.PassThruWriteMsgs
+            write_fn.argtypes = [ctypes.c_uint32, ctypes.POINTER(_J2534Msg),
+                                 ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32]
+            write_fn.restype = ctypes.c_uint32
+            msg = _J2534Msg()
+            msg.ProtocolID = J2534_PROTOCOLS["iso15765"]["id"]
+            msg.TxFlags = 0x40
+            # SAE J1979 functional request: CAN 7DF, ISO-TP SF, service 04.
+            payload = bytes((0x00, 0x00, 0x07, 0xDF, 0x01, 0x04, 0x00))
+            msg.DataSize = len(payload)
+            for i, value in enumerate(payload):
+                msg.Data[i] = value
+            count = ctypes.c_uint32(1)
+            rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+            if rc != 0 or count.value != 1:
+                return False, "Mode 04 yazma hatasi: " + J2534_STATUS.get(rc, str(rc))
+            deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 10000) / 1000.0)
+            while time.monotonic() < deadline:
+                read_result = j2534_read_passive(timeout_ms=250, max_messages=32)
+                if not read_result.get("ok"):
+                    if "ERR_TIMEOUT" in str(read_result.get("error")):
+                        continue
+                    return False, read_result.get("error", "J2534 RX hatasi")
+                for frame in read_result.get("frames", []):
+                    raw = bytes.fromhex(frame.get("data", "").replace(" ", ""))
+                    if len(raw) < 6:
+                        continue
+                    can_id = int.from_bytes(raw[:4], "big")
+                    if 0x7E8 <= can_id <= 0x7EF:
+                        body = raw[4:]
+                        if body and body[0] <= len(body)-1:
+                            body = body[1:1+body[0]]
+                        if body and body[0] == 0x44:
+                            return True, "ECU 0x44 olumlu cevabi verdi. Standart OBD-II motor/emisyon DTC silme istegi kabul edildi. Arizalarin giderildigi anlamina gelmez; yeniden okuyun."
+            return False, "Mode 04 istegi gonderildi ancak 0x44 olumlu ECU cevabi alinmadi. Silme basarili kabul edilmedi."
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return False, "J2534 Mode 04 hatasi: " + str(exc)
+
+
 class J2534OBDConnection:
     """J2534 uzerinden standart OBD-II motor DTC okuma baglantisi."""
     def __init__(self):
@@ -1905,7 +1953,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
      <div><label class="title">Baud (isteğe bağlı)</label><input class="module-field" id="j2534_baud" type="number" placeholder="Varsayılan"></div>
      <div><label class="title">J2534 durumu</label><div class="module-field" id="j2534_state">Kontrol edilmedi</div></div>
     </div>
-    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">BAĞLAN</button><button class="btn test-btn" onclick="j2534Read()">HAT MESAJLARINI OKU</button><button class="btn test-btn" onclick="j2534ReadDtc()">MOTOR ECU OBD-II ARIZA OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
+    <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">BAĞLAN</button><button class="btn test-btn" onclick="j2534Read()">HAT MESAJLARINI OKU</button><button class="btn test-btn" onclick="j2534ReadDtc()">MOTOR ECU OBD-II ARIZA OKU</button><button class="btn test-btn" onclick="j2534ClearDtc()">MOTOR ECU OBD-II ARIZA SİL</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
     <pre id="j2534_output" style="color:#00e5ff;white-space:pre-wrap;min-height:52px">DLL yolu SCANMATIK_J2534_DLL ortam değişkeniyle tanımlanabilir.</pre>
     <div class="test-block" id="can-sniffer-lab" style="margin-top:14px;border-color:#00e5ff">
      <div class="title">📡 CAN VERİ DİNLEME VE ÇÖZÜMLEME · SNIFFER</div>
@@ -2193,6 +2241,13 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   a.href=url;a.download='MOTO_DIAG_CAN_SNIFF_'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
  }
 function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
+function j2534ClearDtc(){
+ if(!confirm('UYARI: Bu işlem standart OBD-II motor/emisyon ECU arıza hafızasını siler ve hazır olma monitörlerini sıfırlayabilir. ABS arızalarını silmez. Önce arıza raporunu kaydettiniz mi?'))return;
+ var out=document.getElementById('j2534_output');out.innerText='Motor ECU Mode 04 silme isteği gönderiliyor...';
+ fetch('/api/j2534/obd/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'CLEAR_ENGINE_OBD_CONFIRMED'})})
+ .then(r=>r.json().then(d=>({ok:r.ok,data:d}))).then(x=>{out.innerText=JSON.stringify(x.data,null,2);})
+ .catch(e=>out.innerText='Silme isteği hatası: '+e);
+}
 function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
  function absLoadOperations(){
   var q=new URLSearchParams({brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value});
@@ -2282,6 +2337,16 @@ def api_ecu_monitor_analyze():
         return jsonify(result)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+@app.route('/api/j2534/obd/clear', methods=['POST'])
+def api_j2534_obd_clear():
+    payload = request.get_json(silent=True) or {}
+    if payload.get("confirmation") != "CLEAR_ENGINE_OBD_CONFIRMED":
+        return jsonify({"ok": False, "error": "Açık kullanıcı onayı gerekli. Komut gönderilmedi."}), 409
+    ok, detail = j2534_clear_obd_mode04()
+    write_log("J2534 MOTOR OBD DTC SILME", detail)
+    return jsonify({"ok": ok, "message": detail,
+                    "scope": "standard_engine_emissions_obd_only"}), (200 if ok else 400)
 
 @app.route('/api/j2534/close', methods=['POST'])
 def api_j2534_close():
