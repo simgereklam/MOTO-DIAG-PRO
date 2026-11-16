@@ -3128,15 +3128,19 @@ def api_css_mf4_export():
         response=send_file(output_path,as_attachment=True,download_name=download_name,mimetype="text/csv")
         response.headers["X-Export-Filename"]=download_name
         response.headers["X-MF4-Mode"]=mode
+        response.call_on_close(lambda p=output_path: os.path.exists(p) and os.remove(p))
+        output_path=None
         write_log("CSS ELECTRONICS MF4 İŞLEME",f"{os.path.basename(uploaded.filename)} → {download_name} | {mode}")
         return response
     except Exception as exc:
         return jsonify({"ok":False,"error":"MF4/DBC işleme hatası: "+str(exc)}),400
     finally:
-        for path in (source_path,output_path):
-            if path:
-                try: os.remove(path)
-                except OSError: pass
+        if source_path:
+            try: os.remove(source_path)
+            except OSError: pass
+        if output_path:
+            try: os.remove(output_path)
+            except OSError: pass
 
 @app.route('/api/j2534/obd/clear', methods=['POST'])
 def api_j2534_obd_clear():
