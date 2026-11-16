@@ -7,4 +7,3 @@ can-isotp>=2.0,<3
 obd>=0.7,<1
 numpy>=1.26,<3
 PyInstaller>=6.10,<7
-asammdf>=8.0,<10
