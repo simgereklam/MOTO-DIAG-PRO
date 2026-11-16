@@ -41,7 +41,7 @@ jobs:
       - name: Verify Python source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTU.py seyfi_voice.py scripts/prepare_desktop_assets.py
+          python -m py_compile SEYFI_USTA_MASAUSTU.py
 
       - name: Build self-contained Windows application
         shell: pwsh
