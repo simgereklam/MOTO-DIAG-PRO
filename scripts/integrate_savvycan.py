@@ -46,10 +46,10 @@ def main() -> None:
     # QT6WIP contains a GNU OpenGL linker flag outside its win32-g++ block.
     # qmake/MSVC treats it as libopengl32.obj and the Windows link fails.
     # Remove that exact unconditional entry, preserving the platform blocks.
-    unconditional_gnu_flag = "\\n\\n   LIBS += libopengl32\\n\\nunix {"
+    unconditional_gnu_flag = "\n\n   LIBS += libopengl32\n\nunix {"
     if unconditional_gnu_flag not in pro:
         raise SystemExit("Expected unconditional GNU OpenGL linker flag was not found")
-    pro = pro.replace(unconditional_gnu_flag, "\\n\\nunix {", 1)
+    pro = pro.replace(unconditional_gnu_flag, "\n\nunix {", 1)
     if "LIBS += opengl32.lib" not in pro:
         raise SystemExit("Expected MSVC OpenGL library declaration is missing")
     if unconditional_gnu_flag in pro:
