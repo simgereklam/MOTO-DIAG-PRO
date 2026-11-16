@@ -1,3 +1,4 @@
+# Build the unified Windows desktop installer
 name: Build MOTO DIAG PRO Windows Installer
 
 on:
