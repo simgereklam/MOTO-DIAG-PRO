@@ -71,8 +71,12 @@ jobs:
           $source = Join-Path $env:RUNNER_TEMP "SavvyCAN"
           git clone --depth 1 --branch QT6WIP https://github.com/collin80/SavvyCAN.git $source
           python scripts/integrate_savvycan.py --source $source --backend "$((Resolve-Path 'dist/MOTO-DIAG-PRO-Backend.exe').Path)"
-          qmake "$source/SavvyCAN.pro"
+          Push-Location $source
+          qmake SavvyCAN.pro
+          if ($LASTEXITCODE -ne 0) { throw "qmake failed: $LASTEXITCODE" }
           nmake
+          if ($LASTEXITCODE -ne 0) { throw "SavvyCAN build failed: $LASTEXITCODE" }
+          Pop-Location
           $target = "dist/MOTO DIAG PRO"
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           Copy-Item -LiteralPath (Join-Path $source "MOTO_DIAG_PRO.exe") -Destination $target -Force
