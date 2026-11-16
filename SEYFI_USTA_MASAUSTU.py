@@ -1488,7 +1488,7 @@ def _dyno_public_state():
     with _DYNO_LOCK:
         return {'active': bool(_DYNO_STATE['active']), 'mode': _DYNO_STATE['mode'],
                 'model': _DYNO_STATE['model'], 'year': _DYNO_STATE['year'],
-                'started_at': _DYNO_STATE['started_at'], 'sample_count': len(_DYNO_STATE['samples']),
+                'started_at': _DYNO_STATE['started_at'], 'sample_count': len(_DYNO_STATE['samples']), 'recent_samples': list(_DYNO_STATE['samples'][-300:]),
                 'last_sample': dict(_DYNO_STATE['last_sample']) if _DYNO_STATE['last_sample'] else None,
                 'wheel_radius_m': _DYNO_STATE['wheel_radius_m'], 'load_force_n': _DYNO_STATE['load_force_n'],
                 'dct_mode_confirmed': _DYNO_STATE['dct_mode_confirmed'], 'source': _DYNO_STATE.get('source'),
@@ -2320,7 +2320,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <div><label class="title">Model yılı</label><input class="module-field" id="dct_year" type="number" min="2000" max="2035" placeholder="2020"></div>
     <div><label class="title">Şanzıman / ECU bilgisi</label><input class="module-field" id="dct_ecu_type" placeholder="Bilinmiyorsa boş bırakın"></div>
    </div>
-   <div class="module-actions"><button class="btn test-btn" onclick="dctCheckProfile()">📚 DCT PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="HDS uyumlu fiziksel taşıma ve adresleme doğrulanmadı">🔌 DCT BAĞLAN</button><button class="btn test-btn" disabled>🔍 DCT ARIZA TARA</button><button class="btn test-btn" disabled>🗑 DCT ARIZALARINI SİL</button></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="openDctDyno()">📈 DCT DİNAMOMETRE TESTİNE GEÇ</button><button class="btn test-btn" onclick="dctCheckProfile()">📚 DCT PROFİLİNİ KONTROL ET</button><button class="btn test-btn" disabled title="HDS uyumlu fiziksel taşıma ve adresleme doğrulanmadı">🔌 DCT BAĞLAN</button><button class="btn test-btn" disabled>🔍 DCT ARIZA TARA</button><button class="btn test-btn" disabled>🗑 DCT ARIZALARINI SİL</button></div>
    <pre id="dct_profile_result" style="color:#ffcc80;white-space:pre-wrap;margin-top:12px">Honda NC750X DCT 2020 servis profili yerel olarak kontrol edilebilir.</pre>
    <div class="module-actions"><input id="dct_dtc_code" class="module-field" style="max-width:180px" placeholder="DCT kodu (örn. 21-1)"><button class="btn test-btn" onclick="dctDecodeDtc()">KODU AÇIKLA</button></div>
    <pre id="dct_dtc_result" style="color:#aab5c2;white-space:pre-wrap">Yalnızca kaynakla doğrulanmış DCT kodları çevrimdışı açıklanır. ECU'ya bağlanmaz.</pre>
@@ -2419,6 +2419,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
   <div class="module-actions"><button class="btn test-btn" onclick="dynoStart()">▶ GERÇEK DYNO KAYDINI BAŞLAT</button><button class="btn test-btn" onclick="dynoStop()">■ KAYDI DURDUR</button><button class="btn test-btn" onclick="dynoLoadApply()">YÜK / ROLLER BİLGİSİNİ UYGULA</button><button class="btn test-btn" onclick="dynoExport()">CSV RAPORU İNDİR</button></div>
   <pre id="dyno_message" style="color:#00e5ff;white-space:pre-wrap">Önce motor ECU'suna gerçek bağlantı kurun. Sonra test profilini seçin.</pre>
  </div>
+ <div class="test-block"><div class="title">DYNO GRAFİĞİ · RPM / HIZ / TEKER GÜCÜ</div><div style="height:300px"><canvas id="dynoChart"></canvas></div></div>
  <div class="test-block"><div class="title">SON ÖLÇÜM DETAYI</div><pre id="dyno_last_sample" style="color:#00ff99;white-space:pre-wrap">Henüz ölçüm yok.</pre></div>
 </div></div>
 <div id="tab-gk" class="container"><div class="panel"><h3 style="color:#ffaa00;margin-top:0">🔧 GELİŞMİŞ SERVİS TESTLERİ</h3><div class="test-block"><div class="title">BAĞLANTI (Araç Seçimine Göre)</div><button class="btn test-btn" onclick="gkConnect()">🔌 GELİŞMİŞ BAĞLANTI KUR</button><pre id="gk_conn_out" style="color:#00e5ff;min-height:30px">-</pre></div><div class="test-block"><div class="title">AKTÜATÖR TESTLERİ</div><pre id="gk_test_out" style="color:#ffaa00;min-height:30px">Güvenlik nedeniyle kapalı: model/ECU özel komut profili doğrulanınca etkinleştirilecek.</pre></div><div class="test-block"><div class="title">ABS MODÜLÜ</div><pre id="gk_d07_out" style="color:#ffaa00;min-height:30px">Ayrı ABS bağlantı katmanı hazırlanacak. Genel D07 komutu kullanılmayacak.</pre></div></div></div>
@@ -2436,6 +2437,8 @@ function ecuLabJ2534Init(){const p=document.getElementById('ecu_lab_j2534_protoc
 function ecuLabJ2534Live(){fetch('/api/j2534/obd/live',{method:'POST'}).then(r=>r.json()).then(d=>{let lines=['KAPSAM: '+d.scope,d.note||'',...(d.values||[]).map(x=>x.name+': '+x.value+' '+x.unit),'',...(d.errors||[])];document.getElementById('ecu_lab_j2534_status').textContent=lines.join('\n')||JSON.stringify(d,null,2);}).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Canlı PID hatası: '+e);}
 function ecuLabJ2534Read(){fetch('/api/j2534/read?timeout_ms=1000').then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=JSON.stringify(d,null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Okuma hatası: '+e);}
 function ecuLabJ2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Kapatma hatası: '+e);}
+let dynoChartInstance=null;
+function openDctDyno(){document.getElementById('dyno_mode').value='honda_dct';document.getElementById('dyno_model').value=document.getElementById('dct_model').value||'Honda DCT';document.getElementById('dyno_year').value=document.getElementById('dct_year').value||'';document.getElementById('dyno_dct_warning').style.display='block';switchTab('dyno');dynoRefresh();}
 function dynoRefresh(){
  fetch('/api/dyno/status').then(r=>r.json()).then(d=>{
   document.getElementById('dyno_state').textContent=d.active?'KAYIT AKTİF':'DURDURULDU / HAZIR';
@@ -2447,6 +2450,18 @@ function dynoRefresh(){
    document.getElementById('dyno_last_sample').textContent=JSON.stringify(x,null,2);
   }
   if(d.note)document.getElementById('dyno_message').textContent=d.note;
+  const samples=d.recent_samples||[];
+  const canvas=document.getElementById('dynoChart');
+  if(canvas&&window.Chart){
+   const labels=samples.map(x=>x.elapsed_s);
+   const datasets=[
+    {label:'RPM',data:samples.map(x=>x.rpm),borderColor:'#00e5ff',yAxisID:'y',pointRadius:0,tension:0.15},
+    {label:'Hız km/h',data:samples.map(x=>x.speed_kmh),borderColor:'#ffea00',yAxisID:'y1',pointRadius:0,tension:0.15},
+    {label:'Teker gücü kW',data:samples.map(x=>x.wheel_power_kw),borderColor:'#00ff88',yAxisID:'y1',pointRadius:0,tension:0.15}
+   ];
+   if(!dynoChartInstance){dynoChartInstance=new Chart(canvas.getContext('2d'),{type:'line',data:{labels:labels,datasets:datasets},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{intersect:false,mode:'index'},scales:{x:{title:{display:true,text:'Süre (s)'}},y:{type:'linear',position:'left',title:{display:true,text:'RPM'}},y1:{type:'linear',position:'right',title:{display:true,text:'Hız / kW'},grid:{drawOnChartArea:false}}}}});}
+   else{dynoChartInstance.data.labels=labels;dynoChartInstance.data.datasets.forEach((ds,i)=>ds.data=datasets[i].data);dynoChartInstance.update('none');}
+  }
  }).catch(e=>document.getElementById('dyno_message').textContent='DYNO durum hatası: '+e);
 }
 function dynoStart(){
