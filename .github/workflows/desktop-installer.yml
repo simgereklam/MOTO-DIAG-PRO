@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - desktop-universal-abs-foundation
+      - moto-diag-savvycan-unified
     paths:
       - SEYFI_USTA_MASAUSTU.py
       - desktop_requirements.txt
@@ -38,32 +39,46 @@ jobs:
         run: |
           python -m pip install -r desktop_requirements.txt
 
-      - name: Verify Python source
+      - name: Verify Python integration source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTU.py
+          python -m py_compile SEYFI_USTA_MASAUSTE.py desktop_backend.py scripts/integrate_savvycan.py
 
-      - name: Build self-contained Windows application
+      - name: Build local MOTO DIAG PRO backend
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
+          pyinstaller --noconfirm --clean --onefile --windowed --name "MOTO-DIAG-PRO-Backend" --add-data "assets;assets" --add-data "static;static" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan desktop_backend.py
+          if (-not (Test-Path "dist/MOTO-DIAG-PRO-Backend.exe")) { throw "MOTO DIAG PRO backend executable was not created." }
 
-      - name: Bundle SavvyCAN V220 (Windows x64)
+      - name: Install Qt 6 with WebEngine and CAN bus modules
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.9.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: "qtwebengine qtserialbus qtserialport"
+
+      - name: Fetch and patch SavvyCAN as the unified application shell
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $archive = Join-Path $env:RUNNER_TEMP "SavvyCAN-Windows_x64_CIBuild.zip"
-          $extract = Join-Path $env:RUNNER_TEMP "SavvyCAN-V220"
-          $target = "dist/MOTO DIAG PRO/SavvyCAN"
-          Invoke-WebRequest -Uri "https://github.com/collin80/SavvyCAN/releases/download/V220/SavvyCAN-Windows_x64_CIBuild.zip" -OutFile $archive
-          Expand-Archive -Path $archive -DestinationPath $extract -Force
-          $exe = Get-ChildItem -Path $extract -Filter "SavvyCAN.exe" -Recurse | Select-Object -First 1
-          if (-not $exe) { throw "SavvyCAN.exe bulunamadı; upstream arşiv yapısı değişmiş olabilir." }
+          $source = Join-Path $env:RUNNER_TEMP "SavvyCAN"
+          git clone --depth 1 --branch QT6WIP https://github.com/collin80/SavvyCAN.git $source
+          python scripts/integrate_savvycan.py --source $source --backend "$((Resolve-Path 'dist/MOTO-DIAG-PRO-Backend.exe').Path)"
+          qmake "$source/SavvyCAN.pro"
+          nmake
+          $target = "dist/MOTO DIAG PRO"
           New-Item -ItemType Directory -Force -Path $target | Out-Null
-          Copy-Item -Path (Join-Path $exe.Directory.FullName "*") -Destination $target -Recurse -Force
-          Copy-Item -Path "third_party/SavvyCAN/LICENSE.txt" -Destination (Join-Path $target "LICENSE-SavvyCAN.txt") -Force
-          if (-not (Test-Path (Join-Path $target "SavvyCAN.exe"))) { throw "SavvyCAN pakete doğru kopyalanamadı." }
-          Write-Host "SavvyCAN V220 uygulama klasörüne paketlendi."
+          Copy-Item -LiteralPath (Join-Path $source "MOTO DIAG PRO.exe") -Destination $target -Force
+          New-Item -ItemType Directory -Force -Path (Join-Path $target "backend") | Out-Null
+          Copy-Item -Path (Join-Path $source "backend/*") -Destination (Join-Path $target "backend") -Recurse -Force
+          windeployqt --release --compiler-runtime --no-translations --webengine --dir $target (Join-Path $target "MOTO DIAG PRO.exe")
+          Copy-Item -LiteralPath "third_party/SavvyCAN/LICENSE.txt" -Destination (Join-Path $target "LICENSE-SavvyCAN.txt") -Force
+          if (-not (Test-Path (Join-Path $target "MOTO DIAG PRO.exe"))) { throw "Unified MOTO DIAG PRO executable was not created." }
+          if (-not (Test-Path (Join-Path $target "backend/MOTO-DIAG-PRO-Backend.exe"))) { throw "Embedded diagnostic backend is missing." }
+          Write-Host "Unified single-window MOTO DIAG PRO + SavvyCAN package prepared."
+
       - name: Download Microsoft Visual C++ runtime
         shell: pwsh
         run: |
