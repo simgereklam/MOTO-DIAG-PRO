@@ -21,7 +21,7 @@ import traceback
 
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
 try:
-    from flask import Flask, render_template_string, request, jsonify
+    from flask import Flask, render_template_string, request, jsonify, send_file
     from flask_socketio import SocketIO
     WEB_STACK_OK = True
     WEB_STACK_ERROR = ""
@@ -1494,7 +1494,7 @@ def analyze_ecu_can_capture(frames, module="general"):
 
 # ==================== FLASK & SOCKETIO ====================
 app = Flask(__name__); app.config['SECRET_KEY'] = 'efe_moto_r25'
-app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 _connection = None; _mode = 'idle'; _conn_lock = threading.Lock(); _query_lock = threading.Lock()
 _live_data_lock = threading.Lock(); _last_live_data = {}
@@ -2336,6 +2336,18 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
       <pre id="ecu_capture_analysis" style="white-space:pre-wrap;color:#ffcc80;max-height:300px;overflow:auto">Önce CAN dinleme kaydı alın, ardından Motor ECU veya ABS ECU seçerek analiz edin.</pre>
      </div>
      <div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
+     <div class="test-block" style="margin-top:14px;border-color:#80cbc4">
+      <div class="title">SAVVYCAN · CAN TERSİNE MÜHENDİSLİK ENTEGRASYONU</div>
+      <p style="color:#b8c4d0">CAN dinleme kaydını SavvyCAN'in okuyabildiği Vector ASC biçiminde dışa aktarın. SavvyCAN kuruluysa buradan açabilirsiniz. Aynı J2534 adaptörünü iki program aynı anda açamayabilir; önce Seyfi Usta dinlemesini durdurun.</p>
+      <div class="module-actions"><button class="btn test-btn" onclick="canSniffDownloadAsc()">⬇ SAVVYCAN VECTOR ASC İNDİR</button><button class="btn test-btn" onclick="canToolStatus()">ARAÇ DURUMUNU KONTROL ET</button><button class="btn test-btn" onclick="canToolLaunch('savvycan')">SAVVYCAN'I AÇ</button><a class="btn test-btn" href="https://github.com/collin80/SavvyCAN/releases" target="_blank" rel="noopener">SAVVYCAN'I EDİN</a></div>
+      <pre id="can_tool_status" style="white-space:pre-wrap;color:#80cbc4">SavvyCAN durumu henüz kontrol edilmedi.</pre>
+     </div>
+     <div class="test-block" style="margin-top:14px;border-color:#90caf9">
+      <div class="title">CSS ELECTRONICS / ASAMMDF · MF4 KAYIT İŞLEME</div>
+      <p style="color:#b8c4d0">CANedge MF4 kayıtlarını CSV'ye aktarır; isteğe bağlı Yamaha R9 2026 DBC çözümlemesi uygular. Bu dosya tabanlı entegrasyondur; CSS cihazına doğrudan bağlantı kurmaz.</p>
+      <div class="module-actions"><input id="css_mf4_file" type="file" accept=".mf4,.mdf" class="module-field"><select id="css_mf4_dbc" class="module-field" style="max-width:260px"><option value="">DBC olmadan ham dışa aktar</option><option value="yamaha_r9_2026">Yamaha R9 2026 DBC ile çöz</option></select><button class="btn test-btn" onclick="cssMf4Process()">MF4 ANALİZ ET / CSV İNDİR</button><a class="btn test-btn" href="https://www.csselectronics.com/pages/can-bus-software-api-tools" target="_blank" rel="noopener">CSS ELECTRONICS ARAÇLARI</a><a class="btn test-btn" href="https://www.csselectronics.com/pages/asammdf-gui-api-mdf4-mf4" target="_blank" rel="noopener">ASAMMDF KILAVUZU</a></div>
+      <pre id="css_mf4_status" style="white-space:pre-wrap;color:#90caf9">MF4 dosyası bekleniyor. İşleme için asammdf Python paketi gerekir.</pre>
+     </div>
      <div class="module-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
       <div class="module-card"><div class="k">Dinleme durumu</div><div class="v" id="can_sniff_status">Hazır değil</div></div><div class="module-card"><div class="k">Toplam çerçeve</div><div class="v" id="can_sniff_count">0</div></div><div class="module-card"><div class="k">Farklı CAN ID</div><div class="v" id="can_sniff_ids">0</div></div><div class="module-card"><div class="k">Kayıt süresi</div><div class="v" id="can_sniff_duration">0.0 sn</div></div>
      </div>
@@ -2725,6 +2737,29 @@ function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).t
   const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='MOTO_DIAG_CAN_SNIFF_'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
  }
+
+function canSniffDownloadAsc(){
+ if(!canSniffFrames.length){document.getElementById('can_sniff_error').textContent='ASC dışa aktarmak için önce CAN kaydı alın.';return;}
+ const now=new Date(),date=now.toDateString()+' '+now.toTimeString().split(' ')[0]+'.000';
+ const lines=['date '+date,'base hex timestamps absolute','internal events logged','Begin Triggerblock'];
+ canSniffFrames.forEach(x=>{const data=(x.data||'').trim().split(/\\s+/).filter(Boolean).slice(0,8),id=parseInt(x.id,16);if(!Number.isFinite(id)||!data.length)return;lines.push(' '+Number(x.t||0).toFixed(6)+' 1 '+id.toString(16).toUpperCase().padStart(3,'0')+' Rx d '+data.length+' '+data.join(' '));});
+ lines.push('End TriggerBlock');
+ const blob=new Blob([lines.join('\\r\\n')+'\\r\\n'],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='MOTO_DIAG_SAVVYCAN_'+new Date().toISOString().replace(/[:.]/g,'-')+'.asc';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+}
+function canToolStatus(){
+ const out=document.getElementById('can_tool_status');out.textContent='Kontrol ediliyor...';
+ fetch('/api/can-tools/status').then(r=>r.json()).then(d=>{out.textContent='SavvyCAN: '+(d.savvycan_found?'BULUNDU · '+d.savvycan_path:'BULUNAMADI · İndirme bağlantısını kullanın')+'\\nasammdf: '+(d.asammdf_available?'KURULU · MF4 işleme hazır':'KURULU DEĞİL · py -m pip install asammdf')+'\\nMF4 / DBC işleme: '+(d.mf4_processing?'Hazır':'asammdf kurulumu gerekli');}).catch(e=>out.textContent='Araç kontrol hatası: '+e);
+}
+function canToolLaunch(tool){
+ if(tool!=='savvycan')return;if(canSniffActive)canSniffStop();
+ fetch('/api/can-tools/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tool:'savvycan'})}).then(r=>r.json()).then(d=>{document.getElementById('can_tool_status').textContent=d.message||d.error||JSON.stringify(d);}).catch(e=>document.getElementById('can_tool_status').textContent='SavvyCAN açılamadı: '+e);
+}
+function cssMf4Process(){
+ const file=document.getElementById('css_mf4_file').files[0],out=document.getElementById('css_mf4_status');if(!file){out.textContent='Önce .MF4 / .MDF kayıt dosyasını seçin.';return;}if(file.size>50*1024*1024){out.textContent='Dosya 50 MB sınırını aşıyor.';return;}
+ const form=new FormData();form.append('file',file);form.append('dbc_profile',document.getElementById('css_mf4_dbc').value);out.textContent='MF4 dosyası inceleniyor; DBC seçildiyse sinyaller çözümleniyor...';
+ fetch('/api/css/mf4/export',{method:'POST',body:form}).then(async r=>{if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'MF4 işleme başarısız');}const blob=await r.blob(),name=r.headers.get('X-Export-Filename')||'CSS_ELECTRONICS_MF4.csv';const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);out.textContent='CSV dışa aktarıldı: '+name+'\\nİşleme: '+(r.headers.get('X-MF4-Mode')||'ham MF4')+'\\nDosya boyutu: '+blob.size+' bayt';}).catch(e=>out.textContent='CSS / MF4 hata: '+e.message);
+}
 function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
 function j2534ClearDtc(){
  if(!confirm('UYARI: Bu işlem standart OBD-II motor/emisyon ECU arıza hafızasını siler ve hazır olma monitörlerini sıfırlayabilir. ABS arızalarını silmez. Önce arıza raporunu kaydettiniz mi?'))return;
@@ -3018,6 +3053,90 @@ def api_ecu_monitor_analyze():
         return jsonify(result)
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
+
+
+def _savvycan_executable():
+    candidates=[]
+    env=os.environ.get("SAVVYCAN_EXE") or os.environ.get("SAVVYCAN_PATH")
+    if env: candidates.append(env)
+    found=shutil.which("SavvyCAN") or shutil.which("savvycan")
+    if found: candidates.append(found)
+    if sys.platform=="win32":
+        for base in (os.environ.get("ProgramFiles",r"C:\\Program Files"),
+                     os.environ.get("ProgramFiles(x86)",r"C:\\Program Files (x86)"),
+                     os.path.dirname(os.path.abspath(sys.argv[0]))):
+            candidates.extend([os.path.join(base,"SavvyCAN","SavvyCAN.exe"),os.path.join(base,"SavvyCAN.exe"),os.path.join(base,"savvycan.exe")])
+    return next((p for p in candidates if os.path.isfile(p)),None)
+
+@app.route('/api/can-tools/status', methods=['GET'])
+def api_can_tools_status():
+    import importlib.util
+    exe=_savvycan_executable()
+    asammdf_available=importlib.util.find_spec("asammdf") is not None
+    return jsonify({"ok":True,"savvycan_found":bool(exe),"savvycan_path":exe,
+                    "asammdf_available":asammdf_available,"mf4_processing":asammdf_available,
+                    "note":"SavvyCAN bağımsız masaüstü uygulamasıdır; MF4 işlemesi asammdf Python API üzerinden yapılır."})
+
+@app.route('/api/can-tools/launch', methods=['POST'])
+def api_can_tools_launch():
+    payload=request.get_json(silent=True) or {}
+    if payload.get("tool")!="savvycan":
+        return jsonify({"ok":False,"error":"Yalnızca SavvyCAN başlatma destekleniyor."}),400
+    exe=_savvycan_executable()
+    if not exe:
+        return jsonify({"ok":False,"error":"SavvyCAN kurulu bulunamadı. Resmi GitHub Releases sürümünü kurun veya SAVVYCAN_EXE ortam değişkenini tanımlayın."}),404
+    try:
+        subprocess.Popen([exe],cwd=os.path.dirname(exe) or None,
+                         creationflags=(getattr(subprocess,"CREATE_NEW_PROCESS_GROUP",0) if sys.platform=="win32" else 0))
+        write_log("SAVVYCAN BAŞLATILDI",exe)
+        return jsonify({"ok":True,"message":"SavvyCAN başlatıldı. Önceki CAN dinlemesi durduruldu; J2534 arayüzünü SavvyCAN içinden seçebilirsiniz."})
+    except Exception as exc:
+        return jsonify({"ok":False,"error":"SavvyCAN başlatılamadı: "+str(exc)}),500
+
+@app.route('/api/css/mf4/export', methods=['POST'])
+def api_css_mf4_export():
+    uploaded=request.files.get("file")
+    if uploaded is None or not uploaded.filename:
+        return jsonify({"ok":False,"error":"MF4 dosyası seçilmedi."}),400
+    if os.path.splitext(uploaded.filename)[1].lower() not in (".mf4",".mdf"):
+        return jsonify({"ok":False,"error":"Yalnızca .MF4 veya .MDF dosyası kabul edilir."}),400
+    dbc_profile=str(request.form.get("dbc_profile") or "").strip()
+    if dbc_profile not in ("","yamaha_r9_2026"):
+        return jsonify({"ok":False,"error":"Bilinmeyen DBC profili."}),400
+    source_path=output_path=None
+    try:
+        import importlib.util
+        if importlib.util.find_spec("asammdf") is None:
+            return jsonify({"ok":False,"error":"asammdf kurulu değil. Kurulum: py -m pip install asammdf"}),503
+        raw=uploaded.read(50*1024*1024+1)
+        if len(raw)>50*1024*1024:
+            return jsonify({"ok":False,"error":"MF4 dosyası 50 MB sınırını aşıyor."}),413
+        with tempfile.NamedTemporaryFile(prefix="seyfi_mf4_",suffix=".mf4",delete=False) as tmp:
+            tmp.write(raw);source_path=tmp.name
+        from asammdf import MDF
+        with MDF(source_path) as mdf:
+            exported=mdf
+            mode="ham MF4 dışa aktarımı"
+            if dbc_profile=="yamaha_r9_2026":
+                dbc_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),"static","can_profiles","yamaha_r9_2026.dbc")
+                if not os.path.isfile(dbc_path): raise FileNotFoundError("Yamaha R9 DBC dosyası bulunamadı.")
+                exported=mdf.extract_can_logging(dbc_path,ignore_invalid_signals=True)
+                mode="Yamaha R9 2026 DBC çözümlemesi"
+            fd,output_path=tempfile.mkstemp(prefix="seyfi_mf4_export_",suffix=".csv");os.close(fd)
+            exported.export("csv",filename=output_path,single_time_base=True)
+        download_name=os.path.splitext(os.path.basename(uploaded.filename))[0]+"_CSS_ELECTRONICS.csv"
+        response=send_file(output_path,as_attachment=True,download_name=download_name,mimetype="text/csv")
+        response.headers["X-Export-Filename"]=download_name
+        response.headers["X-MF4-Mode"]=mode
+        write_log("CSS ELECTRONICS MF4 İŞLEME",f"{os.path.basename(uploaded.filename)} → {download_name} | {mode}")
+        return response
+    except Exception as exc:
+        return jsonify({"ok":False,"error":"MF4/DBC işleme hatası: "+str(exc)}),400
+    finally:
+        for path in (source_path,output_path):
+            if path:
+                try: os.remove(path)
+                except OSError: pass
 
 @app.route('/api/j2534/obd/clear', methods=['POST'])
 def api_j2534_obd_clear():
