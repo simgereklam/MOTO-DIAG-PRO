@@ -3566,25 +3566,6 @@ def discover_adapter_candidates():
     return found
 
 
-def safe_speak(phrase):
-    """Ses fonksiyonu herhangi bir nedenle yüklenemese bile uygulamanın akışını durdurmaz."""
-    try:
-        speaker = globals().get("speak")
-        if callable(speaker):
-            speaker(phrase)
-            return
-        q = globals().get("_speech_queue")
-        if q is not None:
-            q.put(str(phrase or ""))
-        else:
-            write_log("SES MOTORU", "Ses kuyruğu henüz hazır değil.")
-    except Exception as exc:
-        try:
-            write_log("SES MOTORU HATASI", str(exc))
-        except Exception:
-            pass
-
-
 # ==================== LAUNCHER (TKINTER) ====================
 class App:
     def __init__(self, root):
