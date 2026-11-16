@@ -75,15 +75,15 @@ def main() -> None:
 
     for relative in required_sources:
         if relative not in pro:
-            pro = pro.replace("    pcaplite.cpp", "    pcaplite.cpp " + chr(92) + "\\n    " + relative, 1)
+            pro = pro.replace("    pcaplite.cpp", "    pcaplite.cpp " + chr(92) + "\n    " + relative, 1)
     for relative in required_headers:
         if relative not in pro:
-            pro = pro.replace("    pcaplite.h", "    pcaplite.h " + chr(92) + "\\n    " + relative, 1)
+            pro = pro.replace("    pcaplite.h", "    pcaplite.h " + chr(92) + "\n    " + relative, 1)
     for relative in required_forms:
         if relative not in pro:
             pro = pro.replace(
                 "    ui/udsfirmwareuploaderwindow.ui",
-                "    ui/udsfirmwareuploaderwindow.ui " + chr(92) + "\\n    " + relative, 1
+                "    ui/udsfirmwareuploaderwindow.ui " + chr(92) + "\n    " + relative, 1
             )
     project.write_text(pro, encoding="utf-8")
 
