@@ -1697,6 +1697,18 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     </div>
     <div class="module-actions"><button class="btn test-btn" onclick="j2534Status()">DURUMU KONTROL ET</button><button class="btn test-btn" onclick="j2534Open()">BAĞLAN</button><button class="btn test-btn" onclick="j2534Read()">HAT MESAJLARINI OKU</button><button class="btn test-btn" onclick="j2534ReadDtc()">MOTOR ECU OBD-II ARIZA OKU</button><button class="btn test-btn" onclick="j2534Close()">KANALI KAPAT</button></div>
     <pre id="j2534_output" style="color:#00e5ff;white-space:pre-wrap;min-height:52px">DLL yolu SCANMATIK_J2534_DLL ortam değişkeniyle tanımlanabilir.</pre>
+    <div class="test-block" id="can-sniffer-lab" style="margin-top:14px;border-color:#00e5ff">
+     <div class="title">📡 CAN VERİ DİNLEME VE ÇÖZÜMLEME · SNIFFER</div>
+     <p style="color:#aab5c2">Protokolü CAN · 500 kbit/s (ham/pasif) seçip J2534 kanalını açın. Ardından dinlemeyi başlatın. Uygulama CAN çerçevesi göndermez; yalnızca gelen kayıtları okur. Adaptörün elektriksel listen-only/ACK davranışı cihaz desteğine bağlıdır.</p>
+     <div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
+     <div class="module-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-top:10px">
+      <div class="module-card"><div class="k">Dinleme durumu</div><div class="v" id="can_sniff_status">Hazır değil</div></div><div class="module-card"><div class="k">Toplam çerçeve</div><div class="v" id="can_sniff_count">0</div></div><div class="module-card"><div class="k">Farklı CAN ID</div><div class="v" id="can_sniff_ids">0</div></div><div class="module-card"><div class="k">Kayıt süresi</div><div class="v" id="can_sniff_duration">0.0 sn</div></div>
+     </div>
+     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><input id="can_sniff_marker_text" class="module-field" style="flex:1;min-width:190px" placeholder="Olay işareti: ön fren / arka fren / kontak..."><button class="btn test-btn" onclick="canSniffMark()">📍 OLAYI İŞARETLE</button></div>
+     <pre id="can_sniff_markers" style="color:#ffcc80;white-space:pre-wrap;min-height:28px">Henüz olay işareti yok.</pre>
+     <div class="title" style="margin-top:12px">EN ÇOK GÖRÜLEN CAN ID'LERİ · DEĞİŞEN BAYTLAR</div><div id="can_sniff_summary" style="overflow-x:auto;color:#ddd">Henüz veri alınmadı.</div>
+     <div class="title" style="margin-top:12px">SON HAM CAN ÇERÇEVELERİ</div><div id="can_sniff_frames" style="overflow:auto;max-height:280px;color:#ddd">Dinleme başlatılmadı.</div><pre id="can_sniff_error" style="color:#ff8c96;white-space:pre-wrap"></pre>
+    </div>
    </div>
 <div class="module-card"><div class="k">ABS modül bağlantısı</div><div class="v" id="abs_conn_state">Bağlı değil</div><div class="hint">Motor ECU oturumundan tamamen ayrı</div></div>
    <div class="module-card"><div class="k">ABS ECU kimliği</div><div class="v" id="abs_ecu_id">Henüz okunmadı</div><div class="hint">Üretici / parça / yazılım kimliği</div></div>
@@ -1856,6 +1868,54 @@ function gkConnect(){document.getElementById('gk_conn_out').innerText='Bağlanı
  function j2534Status(){fetch('/api/j2534/status').then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText=d.connected?'Kanal açık: '+d.protocol:'Kanal kapalı';document.getElementById('j2534_output').innerText=JSON.stringify(d,null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Durum hatası: '+e);}
 function j2534Open(){var p=document.getElementById('j2534_protocol').value,b=document.getElementById('j2534_baud').value;fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:p,baud:b||null})}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText=d.status&&d.status.connected?'Kanal açık: '+p:'Kanal kapalı';document.getElementById('j2534_output').innerText=d.message+'\\n'+JSON.stringify(d.status||{},null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Bağlantı hatası: '+e);}
 function j2534Read(){fetch('/api/j2534/read?timeout_ms=500').then(r=>r.json()).then(d=>{document.getElementById('j2534_output').innerText=JSON.stringify(d,null,2);}).catch(e=>document.getElementById('j2534_output').innerText='Okuma hatası: '+e);}
+ // J2534 ham CAN sniffer: yalnizca RX okur, uygulama TX yapmaz.
+ let canSniffActive=false,canSniffBusy=false,canSniffStartMs=0,canSniffFrames=[],canSniffMarkers=[],canSniffStats={};
+ function canSniffRender(){
+  const count=document.getElementById('can_sniff_count');if(!count)return;
+  count.textContent=canSniffFrames.length;document.getElementById('can_sniff_ids').textContent=Object.keys(canSniffStats).length;
+  document.getElementById('can_sniff_duration').textContent=(canSniffStartMs?((Date.now()-canSniffStartMs)/1000).toFixed(1):'0.0')+' sn';
+  const rows=Object.keys(canSniffStats).map(k=>({id:k,...canSniffStats[k]})).sort((a,b)=>b.count-a.count).slice(0,24);
+  document.getElementById('can_sniff_summary').innerHTML=rows.length?'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>ID</th><th>Adet</th><th>Ort. periyot</th><th>DLC</th><th>Değişen byte</th><th>Son veri</th></tr></thead><tbody>'+rows.map(x=>'<tr><td>0x'+x.id+'</td><td>'+x.count+'</td><td>'+(x.periods.length?(x.periods.reduce((a,b)=>a+b,0)/x.periods.length).toFixed(2)+' ms':'-')+'</td><td>'+Array.from(x.dlcs).sort().join(',')+'</td><td>'+Array.from(x.changed).sort((a,b)=>a-b).join(', ')+'</td><td>'+x.lastData+'</td></tr>').join('')+'</tbody></table>':'Henüz veri alınmadı.';
+  const recent=canSniffFrames.slice(-60).reverse();
+  document.getElementById('can_sniff_frames').innerHTML=recent.length?'<table style="width:100%;border-collapse:collapse;font:12px Consolas,monospace"><thead><tr><th>Zaman</th><th>CAN ID</th><th>DLC</th><th>Ham veri</th><th>RX durum</th></tr></thead><tbody>'+recent.map(x=>'<tr><td>'+x.t.toFixed(3)+'</td><td>0x'+x.id+'</td><td>'+x.dlc+'</td><td>'+x.data+'</td><td>'+x.rx_status+'</td></tr>').join('')+'</tbody></table>':'CAN çerçevesi alınmadı.';
+  document.getElementById('can_sniff_markers').textContent=canSniffMarkers.length?canSniffMarkers.map(x=>x.t.toFixed(3)+' sn  |  '+x.label).join('\n'):'Henüz olay işareti yok.';
+ }
+ function canSniffStart(){
+  if(canSniffActive)return;
+  fetch('/api/j2534/status').then(r=>r.json()).then(d=>{
+   if(!d.connected||String(d.protocol).toLowerCase()!=='can'){document.getElementById('can_sniff_error').textContent='Önce Protokol alanından CAN · 500 kbit/s (ham/pasif) seçin ve BAĞLAN düğmesine basın. Mevcut kanal: '+(d.protocol||'kapalı');return;}
+   canSniffActive=true;canSniffStartMs=Date.now();document.getElementById('can_sniff_status').textContent='DİNLİYOR';
+   document.getElementById('can_sniff_start').disabled=true;document.getElementById('can_sniff_stop').disabled=false;
+   document.getElementById('can_sniff_error').textContent='RX dinleme başladı. Uygulama CAN mesajı göndermiyor.';canSniffPoll();
+  }).catch(e=>document.getElementById('can_sniff_error').textContent='J2534 durum hatası: '+e);
+ }
+ function canSniffStop(){canSniffActive=false;document.getElementById('can_sniff_status').textContent='DURDURULDU';document.getElementById('can_sniff_start').disabled=false;document.getElementById('can_sniff_stop').disabled=true;canSniffRender();}
+ async function canSniffPoll(){
+  if(!canSniffActive||canSniffBusy)return;canSniffBusy=true;
+  try{
+   const r=await fetch('/api/j2534/read?timeout_ms=200'),d=await r.json();if(!d.ok)throw new Error(d.error||'J2534 RX okuma hatası');
+   (d.frames||[]).forEach(f=>{
+    const oct=(f.data||'').trim().split(/\s+/).filter(Boolean).map(v=>parseInt(v,16));if(oct.length<4)return;
+    const rawId=oct[0]*16777216+oct[1]*65536+oct[2]*256+oct[3],id=(rawId>>>0).toString(16).toUpperCase().padStart(rawId>2047?8:3,'0');
+    const payload=oct.slice(4,12),stamp=(Date.now()-canSniffStartMs)/1000,data=payload.map(v=>v.toString(16).toUpperCase().padStart(2,'0')).join(' ');
+    canSniffFrames.push({t:stamp,id:id,dlc:payload.length,data:data,rx_status:f.rx_status||0});if(canSniffFrames.length>20000)canSniffFrames.shift();
+    const st=canSniffStats[id]||(canSniffStats[id]={count:0,lastMs:null,periods:[],dlcs:new Set(),changed:new Set(),lastBytes:[],lastData:''});
+    st.count++;if(st.lastMs!==null&&st.periods.length<5000)st.periods.push(Date.now()-st.lastMs);st.lastMs=Date.now();st.dlcs.add(payload.length);
+    payload.forEach((v,i)=>{if(st.lastBytes[i]!==undefined&&st.lastBytes[i]!==v)st.changed.add(i);});st.lastBytes=payload.slice();st.lastData=data;
+   });
+   if((d.frames||[]).length)canSniffRender();
+  }catch(e){document.getElementById('can_sniff_error').textContent='CAN RX durdu / hata: '+e;canSniffStop();}
+  finally{canSniffBusy=false;if(canSniffActive)setTimeout(canSniffPoll,80);}
+ }
+ function canSniffMark(){const label=(document.getElementById('can_sniff_marker_text').value||'').trim();if(!canSniffStartMs){document.getElementById('can_sniff_error').textContent='Önce CAN dinlemeyi başlatın.';return;}if(!label){document.getElementById('can_sniff_error').textContent='Olay işareti için kısa bir açıklama yazın.';return;}canSniffMarkers.push({t:(Date.now()-canSniffStartMs)/1000,label:label});document.getElementById('can_sniff_marker_text').value='';canSniffRender();}
+ function canSniffClear(){if(canSniffActive)canSniffStop();canSniffFrames=[];canSniffMarkers=[];canSniffStats={};canSniffStartMs=0;document.getElementById('can_sniff_status').textContent='Hazır';document.getElementById('can_sniff_error').textContent='';canSniffRender();}
+ function canSniffDownload(){
+  if(!canSniffFrames.length){document.getElementById('can_sniff_error').textContent='İndirilecek CAN kaydı yok.';return;}
+  const lines=['timestamp,can_id,data,dlc,bus,event'];canSniffFrames.forEach(x=>lines.push([x.t.toFixed(6),'0x'+x.id,'"'+x.data+'"',x.dlc,'J2534-CAN',''].join(',')));
+  canSniffMarkers.forEach(x=>lines.push([x.t.toFixed(6),'','','','J2534-CAN','"'+x.label.replace(/"/g,'""')+'"'].join(',')));
+  const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='MOTO_DIAG_CAN_SNIFF_'+new Date().toISOString().replace(/[:.]/g,'-')+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+ }
 function j2534Close(){fetch('/api/j2534/close',{method:'POST'}).then(r=>r.json()).then(d=>{document.getElementById('j2534_state').innerText='Kanal kapalı';document.getElementById('j2534_output').innerText=d.message;}).catch(e=>document.getElementById('j2534_output').innerText='Kapatma hatası: '+e);}
 function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
  function absCheckProfile(){var brand=document.getElementById('abs_brand').value;var model=document.getElementById('abs_model').value;var year=document.getElementById('abs_year').value;var out=document.getElementById('abs_profile_result');out.innerText='Yerel profil veri tabanı kontrol ediliyor...';socket.emit('abs_profile_check',{brand:brand,model:model,year:year})}
