@@ -3532,7 +3532,7 @@ def view_logs():
         with open(LOG_FILE, "r", encoding="utf-8") as f: return f"<pre style='color:black; background:white; padding:20px;'>{f.read()}</pre>"
     return "Log yok."
 
-def run_flask(): socketio.run(app, host='0.0.0.0', port=5000, allow_unsafe_werkzeug=True)
+def run_flask(host='127.0.0.1', port=5000): socketio.run(app, host=host, port=port, allow_unsafe_werkzeug=True)
 @app.route('/')
 def index_page(): return render_template_string(HTML_CODE)
 
