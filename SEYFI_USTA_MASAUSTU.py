@@ -1898,13 +1898,15 @@ class ELM327TcpConnection:
 
 
 def _normalize_target(target):
-    """python-OBD/pyserial socket URL normalizasyonu."""
+    """ELM TCP hedefini normalize eder; Viecar'in /OBD servis eki de kabul edilir."""
     t = (target or "").strip()
     if t.startswith("socket://"):
-        return t if t.rsplit(":", 1)[-1].isdigit() else t + ":35000"
-    if ":" not in t:
-        t = t + ":35000"
-    return "socket://" + t
+        authority = t[len("socket://"):].split("/", 1)[0]
+    else:
+        authority = t.split("/", 1)[0]
+    if ":" not in authority:
+        authority += ":35000"
+    return "socket://" + authority
 
 
 def _tcp_probe(ip, port, timeout=0.7):
@@ -1933,7 +1935,9 @@ def open_obd(target, run_id):
     if raw_target.lower() in ("j2534", "j2534://", "scanmatik", "tactrix", "openport"):
         conn = J2534OBDConnection()
     elif raw_target.startswith('socket://') or (raw_target.count('.') == 3 and ':' in raw_target):
-        hostport = raw_target.replace('socket://', '', 1)
+        # Bazı Viecar arayüzleri adresi 192.168.0.10:35000/OBD biçiminde gösterir.
+        # TCP soketinde /OBD HTTP yolu değildir; bağlantı host:port'a yapılır.
+        hostport = raw_target.replace('socket://', '', 1).split('/', 1)[0]
         host, port = hostport.rsplit(':', 1) if ':' in hostport else (hostport, '35000')
         conn = ELM327TcpConnection(host, int(port))
     else:
