@@ -727,7 +727,7 @@ def j2534_clear_obd_mode04(timeout_ms=2500):
 
 
 class J2534OBDConnection:
-    """J2534 uzerinden standart OBD-II motor DTC okuma baglantisi."""
+    """J2534 üzerinden standart motor OBD-II bağlantısı; ECU yanıtı doğrulanmadan ONLINE sayılmaz."""
     def __init__(self):
         ok, message = j2534_open_passive("iso15765")
         if not ok:
@@ -735,20 +735,103 @@ class J2534OBDConnection:
         self._closed = False
         self.adapter_identity = os.path.basename(_j2534_state.get("dll_path") or "J2534")
         self.protocol = "ISO15765 / CAN 500 kbit/s"
+        self._live_aux_index = 0
+        self.supported_pids = set()
+        try:
+            # Kanalın açılması ECU bağlantısı değildir. Önce gerçek ECU'dan 0100 yanıtı iste.
+            bitmap, detail = j2534_send_obd_pid(0x00, timeout_ms=3000)
+            if bitmap is None or len(bitmap) < 4:
+                raise ConnectionError("J2534 adaptörü/kanalı açıldı ancak motor ECU'su 0100 destek sorgusuna yanıt vermedi: " + str(detail))
+            block_start = 1
+            while True:
+                for bit_index in range(32):
+                    if bitmap[bit_index // 8] & (1 << (7 - (bit_index % 8))):
+                        self.supported_pids.add(block_start + bit_index)
+                continuation_pid = block_start + 31
+                if block_start >= 61 or continuation_pid not in self.supported_pids:
+                    break
+                next_pid = block_start + 19
+                bitmap, detail = j2534_send_obd_pid(next_pid, timeout_ms=2000)
+                if bitmap is None or len(bitmap) < 4:
+                    break
+                block_start += 20
+            write_log("J2534 ECU DOĞRULAMA",
+                      "Gerçek SAE J1979 0100 yanıtı alındı; desteklenen PID sayısı: " + str(len(self.supported_pids)))
+        except Exception:
+            self._closed = True
+            j2534_close()
+            raise
+
     def is_connected(self):
-        return not self._closed and j2534_status().get("connected", False)
+        return (not self._closed and j2534_status().get("connected", False))
+
     def port_name(self):
         return "J2534: " + self.adapter_identity
+
     def protocol_name(self):
         return self.protocol
+
     def read_dtcs(self):
         return j2534_send_obd_mode03()
+
+    @staticmethod
+    def _decode_pid(pid, raw):
+        if not raw:
+            return None
+        a = raw[0]
+        if pid == 0x0C and len(raw) >= 2:
+            return round((a * 256 + raw[1]) / 4.0, 2)
+        if pid == 0x0D:
+            return float(a)
+        if pid == 0x05:
+            return float(a - 40)
+        if pid == 0x0B:
+            return float(a)
+        if pid == 0x11:
+            return round(a * 100.0 / 255.0, 2)
+        if pid == 0x0F:
+            return float(a - 40)
+        if pid == 0x42 and len(raw) >= 2:
+            return round((a * 256 + raw[1]) / 1000.0, 3)
+        if pid == 0x06:
+            return round((a - 128) * 100.0 / 128.0, 2)
+        if pid == 0x14:
+            return round(a / 200.0, 3)
+        return None
+
+    def read_live_data(self):
+        if not self.is_connected():
+            raise ConnectionError("J2534 kanalı kapandı.")
+        core = (0x0C, 0x11, 0x05, 0x0B, 0x42)
+        auxiliary = (0x0D, 0x0F, 0x06, 0x14)
+        selected = [pid for pid in core if pid in self.supported_pids]
+        available_aux = [pid for pid in auxiliary if pid in self.supported_pids]
+        if available_aux:
+            selected.append(available_aux[self._live_aux_index % len(available_aux)])
+            self._live_aux_index = (self._live_aux_index + 1) % len(available_aux)
+        result = {}
+        labels = {0x0C: "rpm", 0x0D: "speed", 0x05: "temp", 0x0B: "map",
+                  0x11: "tps", 0x0F: "iat", 0x42: "volt", 0x06: "stft", 0x14: "o2"}
+        for pid in selected:
+            raw, detail = j2534_send_obd_pid(pid, timeout_ms=700)
+            if raw is None:
+                if any(code in str(detail) for code in ("ERR_DEVICE_NOT_CONNECTED", "ERR_INVALID_CHANNEL_ID")):
+                    raise ConnectionError("J2534 adaptör/kanal bağlantısı koptu: " + str(detail))
+                continue
+            value = self._decode_pid(pid, raw)
+            if value is not None:
+                result[labels[pid]] = value
+        if not result:
+            # Hiç PID verisi gelmediyse ECU'nun hâlâ cevap verip vermediğini tekrar doğrula.
+            ping, detail = j2534_send_obd_pid(0x00, timeout_ms=700)
+            if ping is None:
+                raise ConnectionError("J2534 kanalı açık görünüyor ancak ECU artık OBD sorgusuna yanıt vermiyor: " + str(detail))
+        return result
+
     def close(self):
         if not self._closed:
             self._closed = True
             j2534_close()
-
-
 def j2534_close():
     with _j2534_lock:
         dll, channel, device, filter_id = (_j2534_state["dll"], _j2534_state["channel_id"],
@@ -1900,9 +1983,11 @@ def _obd_value(response):
 
 
 def _query_live_values(conn):
+    # J2534 kendi SAE J1979 sürücüsünü kullanır; python-OBD paketine bağımlı değildir.
+    if isinstance(conn, J2534OBDConnection):
+        return conn.read_live_data()
     if isinstance(conn, ELM327TcpConnection):
-        # Temel göstergeler her turda; daha yavaş değişen yardımcı PID'ler sırayla okunur.
-        # Böylece tek çevrimde dokuz ardışık sorgu gönderilmez.
+        # Temel göstergeler her turda; yardımcı PID'ler sırayla okunur.
         core_keys = ('rpm', 'tps', 'temp', 'map', 'volt')
         auxiliary_keys = ('speed', 'iat', 'stft', 'o2')
         result = {}
@@ -1916,9 +2001,13 @@ def _query_live_values(conn):
                 value = conn.query_pid(key)
                 if value is not None:
                     result[key] = value
+            except (ConnectionError, OSError):
+                # Bağlantı hatasını yutma; gerçek_data_loop yeniden bağlanmayı başlatmalı.
+                raise
             except Exception:
                 continue
         return result
+
     candidates = {
         'rpm': 'RPM', 'speed': 'SPEED', 'temp': 'COOLANT_TEMP',
         'tps': 'THROTTLE_POS', 'map': 'INTAKE_PRESSURE', 'iat': 'INTAKE_TEMP',
@@ -1942,11 +2031,15 @@ def _query_live_values(conn):
                             command_name + ' -> ' + key)
             if value is not None:
                 result[key] = value
-        except Exception:
+        except Exception as exc:
+            try:
+                alive = conn.is_connected()
+            except Exception:
+                alive = False
+            if not alive:
+                raise ConnectionError("USB/COM ECU bağlantısı koptu: " + str(exc)) from exc
             continue
     return result
-
-
 def real_data_loop(target, run_id):
     global _last_alert_time
     conn = None
