@@ -53,6 +53,20 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(event["security_status"], "lockout_or_delay")
         self.assertEqual(self.engine.snapshot()["seed_key_exchanges"][0]["status"], "lockout_or_delay")
 
+    def test_candidate_key_requires_three_accepted_pairs(self):
+        pairs = [(0x10, 0xA5), (0x22, 0x97), (0x35, 0x80)]
+        for seed, key in pairs:
+            self.engine.ingest_uds_message(0x7E8, "RX", bytes([0x67, 0x01, seed]))
+            self.engine.ingest_uds_message(0x7E0, "TX", bytes([0x27, 0x02, key]))
+            self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 02"))
+        analysis = self.engine.analyze_seed_key_candidates("ISO15765:0x7E8", 0x02)
+        self.assertEqual(analysis["status"], "candidate_found_unverified")
+        result = self.engine.calculate_candidate_key("ISO15765:0x7E8", 0x02, "44")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["key_hex"], "F1")
+        self.assertTrue(result["requires_user_approval"])
+        self.assertFalse(result["ecu_acceptance_verified"])
+
     def test_no_fake_algorithm_claim(self):
         state = self.engine.snapshot()
         self.assertEqual(state["key_algorithm_status"], "provider_or_verified_samples_required")
