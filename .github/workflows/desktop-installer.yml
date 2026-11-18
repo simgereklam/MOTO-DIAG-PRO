@@ -9,6 +9,8 @@ on:
     paths:
       - SEYFI_USTA_MASAUSTE.py
       - diagnostic_engine.py
+      - profiles/**
+      - third_party/yamaha-cp3-can/**
       - tests/**
       - desktop_requirements.txt
       - installer/MOTO_DIAG_PRO.iss
@@ -49,7 +51,7 @@ jobs:
       - name: Build self-contained Windows application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTE.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --add-data "profiles;profiles" --add-data "third_party/yamaha-cp3-can;third_party/yamaha-cp3-can" --collect-all cantools --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTE.py
 
       - name: Bundle SavvyCAN V220 (Windows x64)
         shell: pwsh
