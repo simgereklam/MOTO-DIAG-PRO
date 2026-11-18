@@ -191,6 +191,11 @@ class DiagnosticAnalyzer:
                     kwp_payload = data[4:-1]
                     kwp_info = classify_payload(kwp_payload)
                     if kwp_info:
+                        sid = kwp_payload[0]
+                        if sid in KWP_SERVICES:
+                            kwp_info["service"] = KWP_SERVICES[sid]
+                        elif sid >= 0x40 and (sid - 0x40) in KWP_SERVICES:
+                            kwp_info["service"] = KWP_SERVICES[sid - 0x40]
                         messages.append({"can_id": "0x" + can_id, "payload": _hex(kwp_payload),
                                          **kwp_info, "family": "KWP2000"})
         rows = []
