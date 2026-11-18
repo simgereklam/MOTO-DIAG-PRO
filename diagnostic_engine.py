@@ -201,6 +201,60 @@ class DiagnosticAnalyzer:
         }
 
 
+
+
+def decode_yamaha_cp3_frames(frames):
+    """Decode the published CP3 DBC. Applicability is one tested RN70 2022 EU bike."""
+    if not isinstance(frames, list):
+        raise ValueError("CAN frame listesi geçersiz.")
+    try:
+        import cantools
+    except ImportError as exc:
+        raise RuntimeError("cantools kurulu değil; kurulum bağımlılıklarını yükleyin.") from exc
+    dbc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "profiles", "yamaha_cp3_2021_2024.dbc")
+    if not os.path.isfile(dbc_path):
+        raise FileNotFoundError("Yamaha CP3 DBC profili bulunamadı.")
+    database = cantools.database.load_file(dbc_path, strict=False)
+    decoded = []
+    unknown = Counter()
+    errors = []
+    for frame in frames[-30000:]:
+        if not isinstance(frame, dict):
+            continue
+        raw_id = str(frame.get("id", frame.get("can_id", ""))).strip().lower()
+        try:
+            can_id = int(raw_id, 16) if raw_id.startswith("0x") or re.search(r"[a-f]", raw_id) else int(raw_id, 10)
+        except (TypeError, ValueError):
+            continue
+        data = _bytes(frame.get("data"))
+        if not data:
+            continue
+        try:
+            message = database.get_message_by_frame_id(can_id)
+        except KeyError:
+            unknown["0x%03X" % can_id] += 1
+            continue
+        if len(data) != message.length:
+            errors.append({"can_id": "0x%03X" % can_id, "error": "DLC mismatch",
+                           "expected": message.length, "actual": len(data)})
+            continue
+        try:
+            values = message.decode(data, decode_choices=True, scaling=True)
+            decoded.append({"can_id": "0x%03X" % can_id, "message": message.name,
+                            "signals": values, "raw": _hex(data)})
+        except Exception as exc:
+            errors.append({"can_id": "0x%03X" % can_id, "error": str(exc)})
+    return {
+        "ok": True, "profile_id": "YAMAHA-CP3-TRACER9-RN70-2022-EU",
+        "applicability": "2022 Yamaha Tracer 9 base RN70, EU Euro 5 only; other models/years unverified",
+        "source": "https://github.com/bratukh/yamaha-cp3-can",
+        "license": "CC BY 4.0; attribution in third_party/yamaha-cp3-can/LICENSE-DATA",
+        "frames_decoded": len(decoded), "unknown_ids": dict(unknown),
+        "errors": errors[-100:], "decoded": decoded[-2000:],
+        "note": "DBC decoding is read-only broadcast signal decoding; it does not provide ABS DTC, actuator commands or Seed-Key algorithms."
+    }
+
 class SeedKeyProviderRegistry:
     """Loads explicitly installed, model-aware Seed-Key providers.
 
@@ -303,6 +357,22 @@ COORDINATOR = DiagnosticCoordinator()
 def create_blueprint():
     from flask import Blueprint, jsonify, request
     bp = Blueprint("efe_moto_auto_diagnostics", __name__)
+    @bp.post("/api/auto-diagnostics/yamaha/cp3/decode")
+    def decode_cp3():
+        payload = request.get_json(silent=True) or {}
+        try:
+            return jsonify(decode_yamaha_cp3_frames(payload.get("frames", [])))
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
+    @bp.get("/api/auto-diagnostics/yamaha/cp3/profile")
+    def cp3_profile():
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "profiles", "yamaha_cp3_2021_2024.json")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return jsonify(json.load(fh))
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 500
     @bp.get("/api/auto-diagnostics/seedkey/providers")
     def seedkey_providers():
         providers = SEEDKEY_PROVIDERS.public_list()
