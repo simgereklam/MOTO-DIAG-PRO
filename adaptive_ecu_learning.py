@@ -234,6 +234,95 @@ class ECULearningEngine:
                 (ecu_key, stamp, direction, service, sub, did, _hex(data), result))
         return event
 
+    def analyze_seed_key_candidates(self, ecu_key, security_level):
+        """Infer only simple repeatable byte transforms from accepted real ECU exchanges.
+
+        At least three distinct accepted Seed/Key pairs are required. Results are
+        candidates, never proof that an OEM algorithm has been recovered.
+        """
+        level = int(security_level)
+        if level < 2 or level > 0x7F or (level & 1):
+            raise ValueError("Key security subfunction çift ve 0x02-0x7E aralığında olmalı")
+        seed_level = level - 1
+        with self.lock, self._connect() as db:
+            rows = db.execute("""SELECT seed_hex,key_hex FROM seed_exchanges
+                WHERE ecu_key=? AND security_level=? AND status='accepted'
+                AND key_hex IS NOT NULL ORDER BY id""",
+                (str(ecu_key), seed_level)).fetchall()
+        samples = []
+        for row in rows:
+            try:
+                seed = bytes.fromhex(row["seed_hex"])
+                key = bytes.fromhex(row["key_hex"])
+            except ValueError:
+                continue
+            if seed and len(seed) == len(key):
+                samples.append((seed, key))
+        # Duplicate samples do not increase the evidence count.
+        unique = {(seed, key) for seed, key in samples}
+        samples = list(unique)
+        if len(samples) < 3:
+            return {"ok": True, "status": "insufficient_evidence",
+                    "sample_count": len(samples), "required_samples": 3,
+                    "candidates": [],
+                    "message": "Aynı ECU ve güvenlik seviyesi için en az 3 farklı, ECU tarafından kabul edilmiş Seed/Key örneği gerekli."}
+        lengths = {len(seed) for seed, _ in samples}
+        if len(lengths) != 1:
+            return {"ok": True, "status": "incompatible_samples",
+                    "sample_count": len(samples), "candidates": []}
+        xor_masks = bytes(a ^ b for a, b in zip(samples[0][0], samples[0][1]))
+        add_offsets = bytes((b - a) & 0xFF for a, b in zip(samples[0][0], samples[0][1]))
+        xor_match = all(bytes(a ^ b for a, b in zip(seed, key)) == xor_masks
+                        for seed, key in samples)
+        add_match = all(bytes((b - a) & 0xFF for a, b in zip(seed, key)) == add_offsets
+                        for seed, key in samples)
+        candidates = []
+        if xor_match:
+            candidates.append({"algorithm": "bytewise_xor_mask",
+                               "parameter_hex": _hex(xor_masks)})
+        if add_match:
+            candidates.append({"algorithm": "bytewise_add_offset",
+                               "parameter_hex": _hex(add_offsets)})
+        if len(candidates) == 1:
+            status = "candidate_found_unverified"
+        elif len(candidates) > 1:
+            status = "ambiguous_candidates"
+        else:
+            status = "no_simple_candidate"
+        return {"ok": True, "status": status, "sample_count": len(samples),
+                "candidates": candidates,
+                "message": "Bu yalnızca gözlenen örneklere uyan basit dönüşüm adayıdır; OEM algoritmasının doğrulandığı anlamına gelmez."}
+
+    def calculate_candidate_key(self, ecu_key, security_level, seed_hex):
+        """Calculate a candidate only when accepted samples identify one simple transform."""
+        analysis = self.analyze_seed_key_candidates(ecu_key, security_level)
+        if analysis["status"] != "candidate_found_unverified":
+            return {"ok": False, **analysis, "key_hex": None,
+                    "message": "Tek ve tutarlı aday bulunmadı; Key üretilmedi."}
+        try:
+            seed = bytes.fromhex(str(seed_hex or "").replace(" ", ""))
+        except ValueError:
+            raise ValueError("Seed hexadecimal biçimde olmalı")
+        if not seed or len(seed) > 32:
+            raise ValueError("Seed uzunluğu geçersiz")
+        candidate = analysis["candidates"][0]
+        parameter = bytes.fromhex(candidate["parameter_hex"].replace(" ", ""))
+        if len(seed) != len(parameter):
+            return {"ok": False, "status": "seed_length_mismatch",
+                    "key_hex": None, "message": "Yeni Seed uzunluğu öğrenilen örneklerle eşleşmiyor."}
+        if candidate["algorithm"] == "bytewise_xor_mask":
+            key = bytes(a ^ b for a, b in zip(seed, parameter))
+        elif candidate["algorithm"] == "bytewise_add_offset":
+            key = bytes((a + b) & 0xFF for a, b in zip(seed, parameter))
+        else:
+            return {"ok": False, "status": "unsupported_candidate", "key_hex": None}
+        return {"ok": True, "status": "candidate_key_ready",
+                "algorithm": candidate["algorithm"], "key_hex": _hex(key),
+                "sample_count": analysis["sample_count"],
+                "requires_user_approval": True,
+                "ecu_acceptance_verified": False,
+                "message": "Key adayı hazır. ECU'ya gönderilmeden önce kullanıcı onayı ve yeni Seed üzerinde ECU kabul cevabı gerekir."}
+
     def snapshot(self, limit=100):
         with self.lock, self._connect() as db:
             profiles = [dict(row) for row in db.execute(
