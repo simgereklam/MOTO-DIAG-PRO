@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import uuid
+from importlib.metadata import entry_points
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
@@ -104,6 +105,10 @@ def classify_payload(payload):
         if original == 0x27 and len(payload) >= 3:
             info["security_level"] = payload[1]
             info["security_exchange"] = "seed_response" if payload[1] & 1 else "key_response"
+            if payload[1] & 1:
+                info["seed_hex"] = _hex(payload[2:])
+            else:
+                info["key_response_hex"] = _hex(payload[2:])
         if original == 0x22 and len(payload) >= 3:
             info["did"] = "0x%02X%02X" % (payload[1], payload[2])
         return info
@@ -195,6 +200,73 @@ class DiagnosticAnalyzer:
             "limitations": "Pasif kayıt servis ve adres adaylarını gösterir; tek başına ECU kimliği, Seed-Key algoritması veya komut yetkisi kanıtlamaz."
         }
 
+
+class SeedKeyProviderRegistry:
+    """Loads explicitly installed, model-aware Seed-Key providers.
+
+    Provider contract:
+      provider_id: stable string
+      supports(ecu_identity: dict, security_level: int) -> bool
+      calculate_key(seed: bytes, ecu_identity: dict, security_level: int) -> bytes
+    Providers must be supplied by a trusted, separately licensed package through
+    the 'efe_moto.seedkey_providers' Python entry-point group.
+    """
+    def __init__(self):
+        self._providers = {}
+        self._loaded = False
+        self._lock = threading.RLock()
+
+    def discover(self):
+        with self._lock:
+            if self._loaded:
+                return list(self._providers.values())
+            try:
+                points = entry_points()
+                selected = points.select(group="efe_moto.seedkey_providers") if hasattr(points, "select") else points.get("efe_moto.seedkey_providers", [])
+                for point in selected:
+                    try:
+                        factory = point.load()
+                        provider = factory() if callable(factory) else factory
+                        provider_id = str(getattr(provider, "provider_id", point.name)).strip()
+                        if provider_id and callable(getattr(provider, "supports", None)) and callable(getattr(provider, "calculate_key", None)):
+                            self._providers[provider_id] = provider
+                    except Exception:
+                        continue
+            finally:
+                self._loaded = True
+            return list(self._providers.values())
+
+    def public_list(self):
+        providers = self.discover()
+        return [{"provider_id": str(getattr(p, "provider_id", "unknown")),
+                 "description": str(getattr(p, "description", "")),
+                 "available": True} for p in providers]
+
+    def calculate(self, provider_id, seed_hex, ecu_identity, security_level):
+        self.discover()
+        if not isinstance(ecu_identity, dict) or not ecu_identity:
+            raise ValueError("Seed-Key hesabı için ECU kimlik profili gerekli.")
+        try:
+            seed = bytes.fromhex(re.sub(r"[^0-9a-fA-F]", "", str(seed_hex or "")))
+            level = int(security_level)
+        except (TypeError, ValueError):
+            raise ValueError("Seed veya güvenlik seviyesi geçersiz.")
+        if not seed or len(seed) > 32 or not 1 <= level <= 0x7F:
+            raise ValueError("Seed uzunluğu veya güvenlik seviyesi desteklenen aralıkta değil.")
+        provider = self._providers.get(str(provider_id or ""))
+        if provider is None:
+            raise LookupError("İstenen Seed-Key sağlayıcısı kurulu değil.")
+        if not provider.supports(ecu_identity, level):
+            raise LookupError("Bu sağlayıcı seçilen ECU kimliği/güvenlik seviyesi için uygun değil.")
+        key = provider.calculate_key(seed, ecu_identity, level)
+        if not isinstance(key, (bytes, bytearray)) or not key or len(key) > 32:
+            raise ValueError("Seed-Key sağlayıcısı geçerli bir anahtar döndürmedi.")
+        return {"ok": True, "provider_id": str(provider_id), "key_hex": bytes(key).hex(" ").upper(),
+                "key_length": len(key), "ecu_identity": ecu_identity,
+                "note": "Anahtar hesaplandı; ECU'ya gönderim için ayrıca oturum, adresleme ve kullanıcı onayı gerekir."}
+
+SEEDKEY_PROVIDERS = SeedKeyProviderRegistry()
+
 class DiagnosticCoordinator:
     def __init__(self):
         self.lock = threading.RLock()
@@ -231,6 +303,22 @@ COORDINATOR = DiagnosticCoordinator()
 def create_blueprint():
     from flask import Blueprint, jsonify, request
     bp = Blueprint("efe_moto_auto_diagnostics", __name__)
+    @bp.get("/api/auto-diagnostics/seedkey/providers")
+    def seedkey_providers():
+        providers = SEEDKEY_PROVIDERS.public_list()
+        return jsonify({"ok": True, "providers": providers, "count": len(providers),
+                        "note": "Model/yıl/ECU kimliğiyle eşleşen, ayrıca kurulmuş sağlayıcılar listelenir."})
+    @bp.post("/api/auto-diagnostics/seedkey/calculate")
+    def seedkey_calculate():
+        payload = request.get_json(silent=True) or {}
+        try:
+            result = SEEDKEY_PROVIDERS.calculate(payload.get("provider_id"), payload.get("seed_hex"),
+                payload.get("ecu_identity"), payload.get("security_level"))
+            return jsonify(result)
+        except LookupError as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 409
+        except Exception as exc:
+            return jsonify({"ok": False, "error": str(exc)}), 400
     @bp.get("/api/auto-diagnostics/status")
     def status():
         return jsonify(COORDINATOR.status())
