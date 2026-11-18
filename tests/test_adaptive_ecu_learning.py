@@ -1,0 +1,63 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from adaptive_ecu_learning import ECULearningEngine, IsoTpDecoder
+
+
+class IsoTpTests(unittest.TestCase):
+    def test_single_frame(self):
+        decoder = IsoTpDecoder()
+        self.assertEqual(decoder.feed(0x7E8, "RX", bytes.fromhex("03 67 01 AA")), bytes.fromhex("67 01 AA"))
+
+    def test_multiframe(self):
+        decoder = IsoTpDecoder()
+        self.assertIsNone(decoder.feed(0x7E8, "RX", bytes.fromhex("10 08 67 01 01 02 03 04")))
+        self.assertEqual(decoder.feed(0x7E8, "RX", bytes.fromhex("21 05 06 07 08")), bytes.fromhex("67 01 01 02 03 04 05 06"))
+
+
+class LearningTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.engine = ECULearningEngine(Path(self.tmp.name) / "learn.sqlite3")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_seed_key_exchange_is_correlated_and_persisted(self):
+        self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("27 01"))
+        seed_event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 12 34"))
+        self.assertEqual(seed_event["event"], "seed_captured")
+        key_event = self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("27 02 AB CD"))
+        self.assertEqual(key_event["event"], "key_submission_observed")
+        accepted = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 02"))
+        self.assertEqual(accepted["event"], "key_accepted")
+        state = self.engine.snapshot()
+        exchange = state["seed_key_exchanges"][0]
+        self.assertEqual(exchange["seed_hex"], "12 34")
+        self.assertEqual(exchange["key_hex"], "AB CD")
+        self.assertEqual(exchange["status"], "accepted")
+
+    def test_invalid_key_is_recorded_without_retry(self):
+        self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 01 02"))
+        self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("27 02 99 99"))
+        event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("7F 27 35"))
+        self.assertEqual(event["security_status"], "key_rejected")
+        exchange = self.engine.snapshot()["seed_key_exchanges"][0]
+        self.assertEqual(exchange["status"], "rejected")
+        self.assertEqual(exchange["nrc"], 0x35)
+
+    def test_attempt_limit_and_delay_are_marked_lockout(self):
+        self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 01"))
+        event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("7F 27 36"))
+        self.assertEqual(event["security_status"], "lockout_or_delay")
+        self.assertEqual(self.engine.snapshot()["seed_key_exchanges"][0]["status"], "lockout_or_delay")
+
+    def test_no_fake_algorithm_claim(self):
+        state = self.engine.snapshot()
+        self.assertEqual(state["key_algorithm_status"], "provider_or_verified_samples_required")
+        self.assertFalse(state["automatic_actions"]["guess_or_bruteforce_key"])
+
+
+if __name__ == "__main__":
+    unittest.main()
