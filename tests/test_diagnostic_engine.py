@@ -59,9 +59,9 @@ class DiagnosticEngineTests(unittest.TestCase):
 
     @unittest.skipUnless(importlib.util.find_spec("cantools"), "cantools dependency is installed in installer build")
     def test_yamaha_cp3_dbc_decodes_documented_wheel_speed(self):
-        result = decode_yamaha_cp3_frames([
+        result = decode_yamaha_can_frames([
             {"id": "205", "data": "2B 21 2B 78 00 04 00 00"}
-        ])
+        ], "YAMAHA-CP3-TRACER9-RN70-2022-EU")
         self.assertEqual(result["profile_id"], "YAMAHA-CP3-TRACER9-RN70-2022-EU")
         self.assertEqual(result["frames_decoded"], 1)
         signals = result["decoded"][0]["signals"]
