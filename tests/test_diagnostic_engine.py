@@ -8,6 +8,7 @@ class DiagnosticEngineTests(unittest.TestCase):
         result = classify_payload(bytes.fromhex("67 01 12 34 56 78"))
         self.assertEqual(result["service"], "SecurityAccess")
         self.assertEqual(result["security_exchange"], "seed_response")
+        self.assertEqual(result["seed_hex"], "12 34 56 78")
 
     def test_negative_response_code_is_decoded(self):
         result = classify_payload(bytes.fromhex("7F 27 35"))
