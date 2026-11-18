@@ -18,6 +18,7 @@ from datetime import datetime
 import csv
 import io
 import traceback
+from diagnostic_engine import create_blueprint
 
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
 try:
@@ -1496,6 +1497,7 @@ def analyze_ecu_can_capture(frames, module="general"):
 app = Flask(__name__); app.config['SECRET_KEY'] = 'efe_moto_r25'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+app.register_blueprint(create_blueprint())
 _connection = None; _mode = 'idle'; _conn_lock = threading.Lock(); _query_lock = threading.Lock()
 _live_data_lock = threading.Lock(); _last_live_data = {}
 _run_id = 0; _run_lock = threading.Lock(); _last_alert_time = 0
@@ -2138,7 +2140,7 @@ def can_d07_oku():
 
 # ==================== HTML ARAYÜZÜ ====================
 HTML_CODE = r"""
-<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Efe Moto Diag</title>
+<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>EFE MOTO MOTOSİKLET ARIZA TEŞHİSİ</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
@@ -2226,7 +2228,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
 @media(max-width:600px){.module-grid{grid-template-columns:1fr}.nav{justify-content:flex-start}.nav button{margin:4px}}
 
 </style></head><body><div id="toast-container"></div>
-<div class="top-bar"><h1>SMART GAUGE <span style="font-size:12px;color:#555">YAMAHA DIAG</span></h1><div id="status-bar">BAĞLANTI BEKLENİYOR...</div></div>
+<div class="top-bar"><h1>EFE MOTO <span style="font-size:12px;color:#9bb0c4">MOTOSİKLET ARIZA TEŞHİSİ</span></h1><div id="status-bar">BAĞLANTI BEKLENİYOR...</div></div>
 <div class="nav">
 <button id="nav-arac" class="active" onclick="switchTab('arac')">🚗 ARAÇ SEÇİMİ</button>
 <button id="nav-dash" onclick="switchTab('dash')">KONTROL PANELİ</button>
@@ -2387,7 +2389,14 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <pre id="abs_can_log_result" style="color:#00e5ff;white-space:pre-wrap;min-height:70px">Henüz kayıt seçilmedi.</pre>
     <div id="abs_can_log_table" style="overflow-x:auto"></div>
    </div>
-   <h3 style="color:#ff8c96">ABS canlı veri ekranı</h3>
+   <div class="test-block" id="auto-ecu-discovery" style="border-color:#00e5ff;margin:14px 0">
+   <div class="title">🤖 EFE MOTO · OTOMATİK ECU KEŞİF VE ONAY</div>
+   <p style="color:#b8c4d0">CAN dinleme kaydını otomatik çözümler; ECU adresi, ISO-TP/UDS servisleri, pozitif/negatif cevaplar ve yakalanmış Seed-Key alışverişlerini ayıklar. Sonuçları motor ve ABS modülü için ayrı oturumda tutar.</p>
+   <div class="module-actions"><button class="btn test-btn" onclick="autoDiagAnalyze()">🔎 KAYDI OTOMATİK ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagStatus()">OTURUM DURUMU</button></div>
+   <pre id="auto_diag_result" style="color:#00e5ff;white-space:pre-wrap;max-height:340px;overflow:auto">CAN kaydı alındıktan sonra otomatik çözümlemeyi başlatın.</pre>
+   <div class="module-note">Seed-Key isteği/cevabı yakalanırsa güvenlik alışverişi olarak raporlanır. Gerçek anahtar hesabı için ilgili ECU algoritmasının sağlayıcı kütüphanesi ve doğrulanmış model profili gerekir; yalnızca trafikten anahtar uydurulmaz.</div>
+  </div>
+  <h3 style="color:#ff8c96">ABS canlı veri ekranı</h3>
   <div class="module-list">
    <div class="module-item"><b>Ön tekerlek hızı</b><span id="abs_front_speed">ABS ECU bağlantısı bekleniyor · km/h</span></div>
    <div class="module-item"><b>Arka tekerlek hızı</b><span id="abs_rear_speed">ABS ECU bağlantısı bekleniyor · km/h</span></div>
@@ -2784,6 +2793,52 @@ function j2534ClearDtc(){
  .catch(e=>out.innerText='Silme isteği hatası: '+e);
 }
 function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
+ async function autoDiagStatus(){
+  const out=document.getElementById('auto_diag_result');out.textContent='Otomatik teşhis oturumu okunuyor...';
+  try{const r=await fetch('/api/auto-diagnostics/status'),d=await r.json();out.textContent=JSON.stringify(d,null,2);}
+  catch(e){out.textContent='Oturum durumu okunamadı: '+e.message;}
+ }
+ async function autoDiagAnalyze(){
+  const out=document.getElementById('auto_diag_result'),module=document.getElementById('ecu_capture_module').value;
+  if(!canSniffFrames.length){out.textContent='Önce J2534 CAN dinlemeyi başlatıp gerçek çerçeve kaydı alın.';return;}
+  out.textContent='CAN/ISO-TP/UDS ve Seed-Key alışverişleri analiz ediliyor...';
+  try{
+   const r=await fetch('/api/auto-diagnostics/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({module:module,frames:canSniffFrames})});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'Analiz başarısız');
+   const lines=['OTOMATİK ECU KEŞİF RAPORU','Oturum: '+d.session_id,'Modül seçimi: '+module.toUpperCase(),
+    'Çerçeve: '+d.frame_count+' | CAN ID: '+d.unique_can_ids,
+    'Standart istek/yanıt çifti adayları: '+(d.request_response_pairs||[]).length,
+    'Yakalanan SecurityAccess mesajları: '+(d.security_access_observations||[]).length,
+    '', 'ADRES ÇİFTLERİ'];
+   (d.request_response_pairs||[]).forEach(x=>lines.push(x.request_id+' → '+x.response_id+' · '+x.evidence));
+   lines.push('','SECURITY ACCESS GÖZLEMLERİ');
+   (d.security_access_observations||[]).forEach(x=>lines.push(x.can_id+' | '+x.service_id+' | '+x.security_exchange+' | '+x.payload));
+   lines.push('','TANINAN SERVİSLER');
+   (d.diagnostic_messages||[]).slice(-80).forEach(x=>lines.push(x.can_id+' | '+x.family+' | '+x.service+' | '+x.meaning+' | '+x.payload));
+   lines.push('','NOT: '+d.limitations);
+   out.textContent=lines.join('\n');
+   const approved=window.confirm((module==='abs'?'ABS ECU':'Motor ECU')+' için haberleşme analizi tamamlandı.\n'+
+    'ECU adres/servis adayları: '+(d.request_response_pairs||[]).length+'\n'+
+    'SecurityAccess gözlemi: '+(d.security_access_observations||[]).length+'\n\n'+
+    'Teşhis oturumuna geçmek için EVET, durdurmak için HAYIR seçin.');
+   const c=await fetch('/api/auto-diagnostics/consent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:d.session_id,approved:approved})});
+   const consent=await c.json();if(!c.ok||!consent.ok)throw new Error(consent.error||'Onay kaydedilemedi');
+   if(!approved){out.textContent+='\n\nHAYIR: ECU komutu gönderilmedi.';return;}
+   out.textContent+='\n\nEVET: Kullanıcı onayı kaydedildi.';
+   if(module==='engine'){
+    const st=await (await fetch('/api/j2534/status')).json();
+    if(st.connected&&String(st.protocol).toLowerCase()==='iso15765'){
+     const scan=await fetch('/api/j2534/obd/dtc',{method:'POST'}),result=await scan.json();
+     out.textContent+='\n\nMOTOR ECU STANDART OBD-II TARAMASI\n'+JSON.stringify(result,null,2);
+    }else{
+     socket.emit('scan_dtc');
+     out.textContent+='\n\nMotor ECU standart arıza taraması başlatıldı. Sonuç mevcut DTC ekranına ve işlem kayıtlarına düşecektir.';
+    }
+   }else{
+    out.textContent+='\n\nABS ECU: Analiz ve onay tamamlandı. Bu dalda ABS için doğrulanmış aktif teşhis taşıma/servis profili henüz bulunmadığından ABS ECU’ya tahmini komut gönderilmedi.';
+   }
+  }catch(e){out.textContent='Otomatik çözümleme hatası: '+e.message;}
+ }
  function absLoadOperations(){
   var q=new URLSearchParams({brand:document.getElementById('abs_brand').value,model:document.getElementById('abs_model').value,year:document.getElementById('abs_year').value});
   var out=document.getElementById('abs_operations_result');out.textContent='ABS işlev kapsamı kontrol ediliyor...';
@@ -3569,7 +3624,7 @@ def discover_adapter_candidates():
 # ==================== LAUNCHER (TKINTER) ====================
 class App:
     def __init__(self, root):
-        self.root = root; root.title("Seyfi Usta - Akıllı Motosiklet Teşhis"); root.geometry("1050x650"); root.configure(bg="#121212")
+        self.root = root; root.title("EFE MOTO MOTOSİKLET ARIZA TEŞHİSİ"); root.geometry("1050x650"); root.configure(bg="#121212")
         self.running = True; self.log_buffer = []; self._active_run_id = None; self._searching = False
         self._candidate_queue = []
         frm_top = tk.Frame(root, bg="#1e1e1e", pady=10); frm_top.pack(fill="x")
