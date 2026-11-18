@@ -1,0 +1,20 @@
+Data and documentation licence
+
+The contents of `data/`, `dbc/`, `docs/` and `captures/`, and the Markdown
+files in the repository root, are licensed under the Creative Commons
+Attribution 4.0 International licence (CC BY 4.0).
+
+Copyright (c) 2026 yamaha-cp3-can contributors
+
+You may share and adapt this material for any purpose, including commercially,
+as long as you give appropriate credit, link to the licence, and say whether
+you changed anything.
+
+Full text: https://creativecommons.org/licenses/by/4.0/legalcode
+Summary:   https://creativecommons.org/licenses/by/4.0/
+
+Suggested credit: "yamaha-cp3-can contributors,
+https://github.com/bratukh/yamaha-cp3-can, CC BY 4.0".
+
+Source code (`decoder/`, `tools/`, `tests/`, `.github/`) is under the MIT
+licence in `LICENSE`.
