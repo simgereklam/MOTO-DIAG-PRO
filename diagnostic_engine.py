@@ -244,7 +244,7 @@ def decode_yamaha_can_frames(frames, profile_id="YAMAHA-CP3-TRACER9-RN70-2022-EU
     dbc_name, applicability = profile_files[profile_id]
     dbc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles", dbc_name)
     if not os.path.isfile(dbc_path):
-        raise FileNotFoundError("Yamaha CP3 DBC profili bulunamadı.")
+        raise FileNotFoundError("Seçilen Yamaha DBC profili bulunamadı: " + profile_id)
     database = cantools.database.load_file(dbc_path, strict=False)
     decoded = []
     unknown = Counter()
