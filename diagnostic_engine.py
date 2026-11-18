@@ -144,7 +144,7 @@ def classify_payload(payload):
 
 class DiagnosticAnalyzer:
     def analyze(self, frames, module="general"):
-        if module not in ("engine", "abs", "general"):
+        if module not in ("engine", "abs", "both", "general"):
             raise ValueError("module engine, abs veya general olmalı.")
         if not isinstance(frames, list):
             raise ValueError("CAN frame listesi geçersiz.")
