@@ -2960,6 +2960,13 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
    (d.diagnostic_messages||[]).slice(-80).forEach(x=>lines.push(x.can_id+' | '+x.family+' | '+x.service+' | '+x.meaning+' | '+x.payload));
    lines.push('','NOT: '+d.limitations);
    out.textContent=lines.join('\n');
+   const cp3Evidence=canSniffFrames.some(f=>['205','209','215','226','268'].includes(String(f.id||'').toUpperCase()));
+   if(cp3Evidence){
+    try{
+     const dr=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames})});
+     const dd=await dr.json();if(dd.ok)out.textContent+='\n\nYAMAHA CP3 DBC: '+dd.frames_decoded+' frame çözüldü. Profil kapsamı: '+dd.applicability;
+    }catch(ignore){}
+   }
    const approved=window.confirm((module==='abs'?'ABS ECU':'Motor ECU')+' için haberleşme analizi tamamlandı.\n'+
     'ECU adres/servis adayları: '+(d.request_response_pairs||[]).length+'\n'+
     'SecurityAccess gözlemi: '+(d.security_access_observations||[]).length+'\n\n'+
@@ -2968,11 +2975,20 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
    const consent=await c.json();if(!c.ok||!consent.ok)throw new Error(consent.error||'Onay kaydedilemedi');
    if(!approved){out.textContent+='\n\nHAYIR: ECU komutu gönderilmedi.';return;}
    out.textContent+='\n\nEVET: Kullanıcı onayı kaydedildi.';
-   const currentStatus=await (await fetch('/api/j2534/status')).json();
-   if(currentStatus.connected&&String(currentStatus.protocol).toLowerCase()==='iso15765'&&(module==='engine'||module==='abs')){
-    const identify=await fetch('/api/auto-diagnostics/yamaha/cp3/identify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'READ_ONLY_CP3_IDENTIFY',module:module})});
-    const identifyResult=await identify.json();
-    out.textContent+='\n\nYAMAHA CP3 READ-ONLY ECU KİMLİK TARAMASI\n'+JSON.stringify(identifyResult,null,2);
+   let currentStatus=await (await fetch('/api/j2534/status')).json();
+   if(cp3Evidence&&(module==='engine'||module==='abs')){
+    if(!currentStatus.connected||String(currentStatus.protocol).toLowerCase()==='can'){
+     if(currentStatus.connected)await fetch('/api/j2534/close',{method:'POST'});
+     const opened=await fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:'iso15765'})});
+     const openedResult=await opened.json();
+     if(!opened.ok||!openedResult.ok)throw new Error('CP3 UDS kanalı açılamadı: '+(openedResult.message||'J2534 ISO15765 hatası'));
+     currentStatus=openedResult.status||{};
+    }
+    if(currentStatus.connected&&String(currentStatus.protocol).toLowerCase()==='iso15765'){
+     const identify=await fetch('/api/auto-diagnostics/yamaha/cp3/identify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'READ_ONLY_CP3_IDENTIFY',module:module})});
+     const identifyResult=await identify.json();
+     out.textContent+='\n\nYAMAHA CP3 READ-ONLY ECU KİMLİK TARAMASI\n'+JSON.stringify(identifyResult,null,2);
+    }
    }
    if(module==='engine'){
     const st=await (await fetch('/api/j2534/status')).json();
