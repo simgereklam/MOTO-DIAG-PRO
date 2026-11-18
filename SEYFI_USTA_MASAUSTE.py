@@ -2521,7 +2521,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <div class="test-block" id="auto-ecu-discovery" style="border-color:#00e5ff;margin:14px 0">
    <div class="title">🤖 EFE MOTO · OTOMATİK ECU KEŞİF VE ONAY</div>
    <p style="color:#b8c4d0">CAN dinleme kaydını otomatik çözümler; ECU adresi, ISO-TP/UDS servisleri, pozitif/negatif cevaplar ve yakalanmış Seed-Key alışverişlerini ayıklar. Sonuçları motor ve ABS modülü için ayrı oturumda tutar.</p>
-   <div class="module-actions"><button class="btn test-btn" onclick="autoDiagAnalyze()">🔎 KAYDI OTOMATİK ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagDecodeCp3()">YAMAHA CP3 DBC ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagStatus()">OTURUM DURUMU</button></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="autoDiagAnalyze()">🔎 KAYDI OTOMATİK ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagDecodeCp3()">YAMAHA CP3 DBC ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagDecodeR9()">YAMAHA R9 DBC ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagStatus()">OTURUM DURUMU</button></div>
    <pre id="auto_diag_result" style="color:#00e5ff;white-space:pre-wrap;max-height:340px;overflow:auto">CAN kaydı alındıktan sonra otomatik çözümlemeyi başlatın.</pre>
    <div class="module-note">Seed-Key isteği/cevabı yakalanırsa güvenlik alışverişi olarak raporlanır. Gerçek anahtar hesabı için ilgili ECU algoritmasının sağlayıcı kütüphanesi ve doğrulanmış model profili gerekir; yalnızca trafikten anahtar uydurulmaz.</div>
   </div>
@@ -2922,20 +2922,22 @@ function j2534ClearDtc(){
  .catch(e=>out.innerText='Silme isteği hatası: '+e);
 }
 function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
- async function autoDiagDecodeCp3(){
+ async function autoDiagDecodeProfile(profileId){
   const out=document.getElementById('auto_diag_result');
   if(!canSniffFrames.length){out.textContent='Önce CAN dinleme kaydı alın.';return;}
   out.textContent='Yamaha CP3 DBC profiliyle sinyaller çözülüyor...';
   try{
    const r=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames})});
    const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'DBC çözümlemesi başarısız');
-   const lines=['YAMAHA CP3 DBC ÇÖZÜMLEME','Profil: '+d.profile_id,d.applicability,
+   const lines=['YAMAHA DBC ÇÖZÜMLEME','Profil: '+d.profile_id,d.applicability,
     'Çözülen frame: '+d.frames_decoded,'Bilinmeyen ID: '+JSON.stringify(d.unknown_ids),
     'Lisans: '+d.license,''];
    (d.decoded||[]).slice(-120).forEach(x=>lines.push(x.can_id+' '+x.message+' | '+JSON.stringify(x.signals)));
    lines.push('',d.note);out.textContent=lines.join('\n');
   }catch(e){out.textContent='CP3 DBC hatası: '+e.message;}
  }
+ function autoDiagDecodeCp3(){return autoDiagDecodeProfile('YAMAHA-CP3-TRACER9-RN70-2022-EU');}
+ function autoDiagDecodeR9(){return autoDiagDecodeProfile('YAMAHA-R9-2026');}
  async function autoDiagStatus(){
   const out=document.getElementById('auto_diag_result');out.textContent='Otomatik teşhis oturumu okunuyor...';
   try{const r=await fetch('/api/auto-diagnostics/status'),d=await r.json();out.textContent=JSON.stringify(d,null,2);}
@@ -2961,10 +2963,12 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
    lines.push('','NOT: '+d.limitations);
    out.textContent=lines.join('\n');
    const cp3Evidence=canSniffFrames.some(f=>['205','209','215','226','268'].includes(String(f.id||'').toUpperCase()));
-   if(cp3Evidence){
+   const r9Evidence=canSniffFrames.some(f=>['27C','383','512','751','756','758','759','765','76D','76E'].includes(String(f.id||'').toUpperCase()));
+   if(cp3Evidence||r9Evidence){
     try{
-     const dr=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames})});
-     const dd=await dr.json();if(dd.ok)out.textContent+='\n\nYAMAHA CP3 DBC: '+dd.frames_decoded+' frame çözüldü. Profil kapsamı: '+dd.applicability;
+     const profileId=cp3Evidence?'YAMAHA-CP3-TRACER9-RN70-2022-EU':'YAMAHA-R9-2026';
+     const dr=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames,profile_id:profileId})});
+     const dd=await dr.json();if(dd.ok)out.textContent+='\n\n'+profileId+' DBC: '+dd.frames_decoded+' frame çözüldü. Profil kapsamı: '+dd.applicability;
     }catch(ignore){}
    }
    const approved=window.confirm((module==='both'?'Motor + ABS ECU':module==='abs'?'ABS ECU':'Motor ECU')+' için haberleşme analizi tamamlandı.\n'+
