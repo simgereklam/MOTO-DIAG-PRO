@@ -532,6 +532,134 @@ def j2534_read_passive(timeout_ms=250, max_messages=16):
             _j2534_state["last_error"] = str(exc)
             return {"ok": False, "error": str(exc), "frames": []}
 
+def j2534_send_uds_request(tx_id, rx_id, payload, timeout_ms=2200):
+    """ISO-TP single-frame UDS request with response reassembly; caller supplies documented IDs."""
+    payload = bytes(payload)
+    if not payload or len(payload) > 7:
+        return None, "UDS tek çerçeve isteği 1-7 bayt olmalı."
+    with _j2534_lock:
+        dll = _j2534_state.get("dll")
+        channel = _j2534_state.get("channel_id")
+        if dll is None or channel is None or _j2534_state.get("protocol") != "iso15765":
+            return None, "J2534 ISO15765 kanalı açık değil."
+        try:
+            write_fn = dll.PassThruWriteMsgs
+            write_fn.argtypes = [ctypes.c_uint32, ctypes.POINTER(_J2534Msg),
+                                 ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32]
+            write_fn.restype = ctypes.c_uint32
+            def send_can(can_id, data, note):
+                msg = _J2534Msg()
+                msg.ProtocolID = J2534_PROTOCOLS["iso15765"]["id"]
+                msg.TxFlags = 0x40
+                raw = int(can_id).to_bytes(4, "big") + bytes(data)
+                msg.DataSize = len(raw)
+                for index, value in enumerate(raw):
+                    msg.Data[index] = value
+                count = ctypes.c_uint32(1)
+                rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+                _ecu_lab_record("J2534-ISO15765", "TX", raw.hex(" ").upper(), note)
+                return rc == 0 and count.value == 1, rc
+            ok, rc = send_can(tx_id, bytes([len(payload)]) + payload, "UDS 0x%03X" % tx_id)
+            if not ok:
+                return None, "UDS TX hatası: " + J2534_STATUS.get(rc, str(rc))
+            deadline = time.monotonic() + max(0.7, min(int(timeout_ms), 8000) / 1000.0)
+            assembled = bytearray()
+            expected = None
+            last_nrc = None
+            while time.monotonic() < deadline:
+                result = j2534_read_passive(timeout_ms=180, max_messages=32)
+                if not result.get("ok"):
+                    if "ERR_TIMEOUT" in str(result.get("error")):
+                        continue
+                    return None, result.get("error", "J2534 RX hatası")
+                for frame in result.get("frames", []):
+                    try:
+                        raw = bytes.fromhex(frame.get("data", "").replace(" ", ""))
+                    except ValueError:
+                        continue
+                    if len(raw) < 6 or int.from_bytes(raw[:4], "big") != int(rx_id):
+                        continue
+                    body = raw[4:]
+                    pci = body[0] >> 4
+                    if pci == 0:
+                        length = body[0] & 0x0F
+                        response = body[1:1 + length]
+                        if response and response[0] == 0x7F and len(response) >= 3 and response[2] == 0x78:
+                            last_nrc = response
+                            continue
+                        return response, "ECU 0x%03X yanıtı" % rx_id
+                    if pci == 1 and len(body) >= 2:
+                        expected = ((body[0] & 0x0F) << 8) | body[1]
+                        assembled = bytearray(body[2:])
+                        # ISO-TP FlowControl is sent to the ECU's physical request ID.
+                        send_can(tx_id, bytes((0x30, 0x00, 0x00, 0, 0, 0, 0)), "ISO-TP FlowControl")
+                        continue
+                    if pci == 2 and expected is not None:
+                        assembled.extend(body[1:])
+                        if len(assembled) >= expected:
+                            response = bytes(assembled[:expected])
+                            if response and response[0] == 0x7F and len(response) >= 3 and response[2] == 0x78:
+                                assembled.clear()
+                                expected = None
+                                last_nrc = response
+                                continue
+                            return response, "ECU 0x%03X çoklu çerçeve yanıtı" % rx_id
+            if last_nrc:
+                return last_nrc, "ECU yanıt bekliyor veya zaman aşımı (NRC 0x78)."
+            return None, "ECU 0x%03X yanıt vermedi." % rx_id
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return None, "UDS/J2534 hatası: " + str(exc)
+
+
+def j2534_yamaha_cp3_readonly_identify(module="both"):
+    """Read-only identification for the single documented Tracer 9 RN70 profile."""
+    module = str(module or "both").lower()
+    if module not in ("engine", "abs", "both"):
+        return {"ok": False, "error": "Modül engine, abs veya both olmalı."}
+    targets = []
+    if module in ("engine", "both"):
+        targets.append(("engine", 0x7E0, 0x7E8, ["F190","F18A","F18C","F192","F194","F195","F197","F1A0","F1A1","F1A2","F1EF"]))
+    if module in ("abs", "both"):
+        targets.append(("abs", 0x7E3, 0x7EB, ["F18A","F18C","F192","F194","F195","F197","F1A0"]))
+    reports = []
+    for name, tx_id, rx_id, dids in targets:
+        session, detail = j2534_send_uds_request(tx_id, rx_id, bytes((0x10, 0x01)), 1800)
+        row = {"module": name, "request_id": "0x%03X" % tx_id,
+               "response_id": "0x%03X" % rx_id, "session": session.hex(" ").upper() if session else None,
+               "session_detail": detail, "identifiers": [], "matched_cp3_profile": False}
+        if not session or session[:2] != bytes((0x50, 0x01)):
+            row["note"] = "Default diagnostic session olumlu yanıtlanmadı; DID sorguları yapılmadı."
+            reports.append(row)
+            continue
+        for did_hex in dids:
+            did = bytes.fromhex(did_hex)
+            answer, answer_detail = j2534_send_uds_request(tx_id, rx_id, bytes((0x22,)) + did, 2200)
+            item = {"did": "0x" + did_hex, "detail": answer_detail,
+                    "raw": answer.hex(" ").upper() if answer else None}
+            if answer and len(answer) >= 3 and answer[:3] == bytes((0x62, did[0], did[1])):
+                value = answer[3:]
+                item["value_hex"] = value.hex(" ").upper()
+                if did_hex in ("F190", "F18A", "F197"):
+                    item["value_ascii"] = value.decode("ascii", errors="replace").rstrip("\x00 ")
+                if did_hex == "F194":
+                    item["software_bcd"] = value.hex().upper()
+            row["identifiers"].append(item)
+        values = {x["did"]: x for x in row["identifiers"]}
+        system = values.get("0xF197", {}).get("value_ascii")
+        software = values.get("0xF194", {}).get("software_bcd")
+        expected = "12165003" if name == "engine" else "12165180"
+        row["matched_cp3_profile"] = system == "B5U1" and software == expected
+        row["note"] = ("Yayımlanmış CP3 test ECU kimliğiyle eşleşti." if row["matched_cp3_profile"]
+                       else "ECU yanıt verdi; fakat yayımlanmış CP3 test kimliğiyle tam eşleşme doğrulanmadı.")
+        reports.append(row)
+    return {"ok": True, "profile_id": "YAMAHA-CP3-TRACER9-RN70-2022-EU",
+            "scope": "Read-only UDS identification only; no DTC clear, actuator or Seed-Key requests.",
+            "reports": reports,
+            "matched_profile": bool(reports) and all(x["matched_cp3_profile"] for x in reports),
+            "note": "Bu profil yalnız 2022 Tracer 9 RN70 EU test verisine dayanır; diğer Yamaha modelleri için genellenemez."}
+
+
 def j2534_send_obd_mode03(timeout_ms=2500):
     """Standart OBD-II Mode 03 istegi; yalnizca ISO15765/CAN motor emisyon ECU'su icindir."""
     with _j2534_lock:
