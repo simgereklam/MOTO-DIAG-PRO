@@ -16,7 +16,6 @@ import time
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
-from flask import Blueprint, jsonify, request
 
 UDS_SERVICES = {
     0x10: "DiagnosticSessionControl", 0x11: "ECUReset",
@@ -230,6 +229,7 @@ class DiagnosticCoordinator:
 COORDINATOR = DiagnosticCoordinator()
 
 def create_blueprint():
+    from flask import Blueprint, jsonify, request
     bp = Blueprint("efe_moto_auto_diagnostics", __name__)
     @bp.get("/api/auto-diagnostics/status")
     def status():
