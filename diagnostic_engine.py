@@ -192,7 +192,7 @@ class DiagnosticAnalyzer:
                     kwp_info = classify_payload(kwp_payload)
                     if kwp_info:
                         messages.append({"can_id": "0x" + can_id, "payload": _hex(kwp_payload),
-                                         "family": "KWP2000", **kwp_info})
+                                         **kwp_info, "family": "KWP2000"})
         rows = []
         for can_id, row in sorted(stats.items(), key=lambda item: item[1]["count"], reverse=True):
             periods = row["periods"]
