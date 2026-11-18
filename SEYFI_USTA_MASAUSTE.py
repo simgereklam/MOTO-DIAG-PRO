@@ -2465,7 +2465,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
      <div style="display:grid;grid-template-columns:minmax(220px,1fr) 2fr;gap:10px;margin:10px 0"><div><label class="title" for="can_profile">MOTOSİKLET CAN PROFİLİ</label><select id="can_profile" class="module-field" onchange="canSniffRenderDecoded()"><option value="none">Genel / bilinmeyen model</option><option value="yamaha_cp3_2021_2024">Yamaha CP3 · Tracer 9 / MT-09 / XSR900 (2021–2024)</option><option value="yamaha_r9_2026">Yamaha R9 (2026)</option><option value="yamaha_mt07_legacy">Yamaha MT-07 eski forum notları</option><option value="yamaha_mt07_2014_project">Yamaha MT-07 2014 açık kaynak profili</option><option value="yamaha_mt07_abs_notes">Yamaha MT-07 Euro 3 ABS · pasif kayıt</option><option value="ducati_panigale_mitsubishi">Ducati Panigale / Mitsubishi ECU CAN</option></select></div><div id="can_profile_note" class="module-field" style="white-space:normal;min-height:42px">Profil seçilmedi; ham kayıt devam eder.</div></div><div class="title" style="margin-top:12px">ARAŞTIRMA KAYNAKLARI</div><div style="font-size:12px;line-height:1.8;color:#b8c4d0"><a target="_blank" href="https://github.com/CSS-Electronics/can-bus-reverse-engineering-skills">CSS Electronics · CAN tersine mühendislik yöntemi</a> · <a target="_blank" href="https://github.com/collin80/SavvyCAN">SavvyCAN · CAN kayıt / DBC analiz aracı</a> · <a target="_blank" href="https://github.com/talss89/motorcycle-canbus-info">Motosiklet CAN bilgi koleksiyonu</a> · <a target="_blank" href="https://github.com/JackHat1/MT07_CAN_Project">MT-07 CAN projesi</a> · <a target="_blank" href="https://github.com/bratukh/yamaha-cp3-can">Yamaha CP3 CAN / DBC</a> · <a target="_blank" href="https://github.com/DeziderMesko/motocan">Yamaha R9 CAN / DBC kaynak</a> · <a href="/static/can_profiles/yamaha_r9_2026.dbc" download>Yamaha R9 2026 DBC dosyasını indir</a> · <a target="_blank" href="https://github.com/renatobo/DucatiPanigaleCanBus">Ducati Panigale CAN projesi</a> · <a target="_blank" href="https://zggtr.org/index.php?topic=20461.0">Kawasaki Concours CAN kayıt tartışması</a></div><div class="test-block" style="margin:12px 0;border-color:#ffcc80">
       <div class="title">MOTOR ECU / ABS ECU ORTAK KEŞİF VE PROTOKOL ÇÖZÜMLEME</div>
       <p style="color:#b8c4d0">Aynı pasif CAN kaydı motor ECU veya ABS incelemesi için seçilebilir. ISO-TP mesajları birleştirilir; OBD-II / UDS / KWP servis yanıtı adayları, CAN ID sıklığı ve değişen baytlar gösterilir. Bu analiz ECU'ya komut göndermez.</p>
-      <div class="module-actions"><select id="ecu_capture_module" class="module-field" style="max-width:220px"><option value="engine">MOTOR ECU</option><option value="abs">ABS ECU</option><option value="general">GENEL / BİLİNMİYOR</option></select><button class="btn test-btn" onclick="canSniffAnalyzeProtocol()">🔬 SEÇİLİ MODÜLÜ ÇÖZÜMLE</button></div>
+      <div class="module-actions"><select id="ecu_capture_module" class="module-field" style="max-width:220px"><option value="both">MOTOR + ABS ECU</option><option value="engine">MOTOR ECU</option><option value="abs">ABS ECU</option><option value="general">GENEL / BİLİNMİYOR</option></select><button class="btn test-btn" onclick="canSniffAnalyzeProtocol()">🔬 SEÇİLİ MODÜLÜ ÇÖZÜMLE</button></div>
       <pre id="ecu_capture_analysis" style="white-space:pre-wrap;color:#ffcc80;max-height:300px;overflow:auto">Önce CAN dinleme kaydı alın, ardından Motor ECU veya ABS ECU seçerek analiz edin.</pre>
      </div>
      <div class="title" style="margin-top:12px">KAYNAKLI CAN SİNYAL ÇÖZÜMLEME</div><div id="can_sniff_decoded" style="overflow-x:auto;color:#ddd">Profil seçip dinlemeyi başlatın.</div><div class="module-actions"><button class="btn test-btn" id="can_sniff_start" onclick="canSniffStart()">▶ CAN DİNLEMEYİ BAŞLAT</button><button class="btn test-btn" id="can_sniff_stop" onclick="canSniffStop()" disabled>DİNLEMEYİ DURDUR</button><button class="btn test-btn" onclick="canSniffDownload()">⬇ KAYDI CSV İNDİR</button><button class="btn test-btn" onclick="canSniffClear()">KAYDI TEMİZLE</button></div>
@@ -2967,7 +2967,7 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
      const dd=await dr.json();if(dd.ok)out.textContent+='\n\nYAMAHA CP3 DBC: '+dd.frames_decoded+' frame çözüldü. Profil kapsamı: '+dd.applicability;
     }catch(ignore){}
    }
-   const approved=window.confirm((module==='abs'?'ABS ECU':'Motor ECU')+' için haberleşme analizi tamamlandı.\n'+
+   const approved=window.confirm((module==='both'?'Motor + ABS ECU':module==='abs'?'ABS ECU':'Motor ECU')+' için haberleşme analizi tamamlandı.\n'+
     'ECU adres/servis adayları: '+(d.request_response_pairs||[]).length+'\n'+
     'SecurityAccess gözlemi: '+(d.security_access_observations||[]).length+'\n\n'+
     'Teşhis oturumuna geçmek için EVET, durdurmak için HAYIR seçin.');
@@ -2976,7 +2976,7 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
    if(!approved){out.textContent+='\n\nHAYIR: ECU komutu gönderilmedi.';return;}
    out.textContent+='\n\nEVET: Kullanıcı onayı kaydedildi.';
    let currentStatus=await (await fetch('/api/j2534/status')).json();
-   if(cp3Evidence&&(module==='engine'||module==='abs')){
+   if(cp3Evidence&&(module==='engine'||module==='abs'||module==='both')){
     if(!currentStatus.connected||String(currentStatus.protocol).toLowerCase()==='can'){
      if(currentStatus.connected)await fetch('/api/j2534/close',{method:'POST'});
      const opened=await fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:'iso15765'})});
@@ -2990,19 +2990,20 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
      out.textContent+='\n\nYAMAHA CP3 READ-ONLY ECU KİMLİK TARAMASI\n'+JSON.stringify(identifyResult,null,2);
     }
    }
-   if(module==='engine'){
+   if(module==='engine'||module==='both'){
     const st=await (await fetch('/api/j2534/status')).json();
     if(st.connected&&String(st.protocol).toLowerCase()==='iso15765'){
      const scan=await fetch('/api/j2534/obd/dtc',{method:'POST'}),result=await scan.json();
      out.textContent+='\n\nMOTOR ECU STANDART OBD-II TARAMASI\n'+JSON.stringify(result,null,2);
     }else if(st.connected&&String(st.protocol).toLowerCase()==='can'){
-     out.textContent+='\n\nJ2534 ham CAN kanalı yalnızca pasif dinleme için açık. Aktif motor OBD sorgusu için J2534 ISO15765 kanalını açın; ham CAN kaydından rastgele komut gönderilmedi.';
+     out.textContent+='\n\nJ2534 ham CAN kanalı yalnızca pasif dinleme için açık. Motor ECU aktif OBD sorgusu için ISO15765 kanalı gerekir.';
     }else{
      socket.emit('scan_dtc');
-     out.textContent+='\n\nMotor ECU arıza taraması mevcut ELM/USB teşhis bağlantısına iletildi. Sonuç DTC ekranına ve işlem kayıtlarına düşecektir.';
+     out.textContent+='\n\nMotor ECU taraması mevcut ELM/USB teşhis bağlantısına iletildi.';
     }
-   }else{
-    out.textContent+='\n\nABS ECU: Analiz ve onay tamamlandı. Bu dalda ABS için doğrulanmış aktif teşhis taşıma/servis profili henüz bulunmadığından ABS ECU’ya tahmini komut gönderilmedi.';
+   }
+   if(module==='abs'||module==='both'){
+    out.textContent+='\n\nABS ECU: CP3 profiliyle yalnızca kaynakta doğrulanmış kimlik DİD okumaları yapıldı. Bu açık kaynak profilde ABS DTC okuma/silme ve pompa-valf aktif test komutları bulunmadığından bu işlemler otomatik başlatılmadı.';
    }
   }catch(e){out.textContent='Otomatik çözümleme hatası: '+e.message;}
  }
