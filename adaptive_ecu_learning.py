@@ -249,6 +249,24 @@ class ECULearningEngine:
                 (ecu_key, stamp, direction, service, sub, did, _hex(data), result))
         return event
 
+    def set_ecu_identity(self, ecu_key, identity):
+        """Attach a stable, observed ECU identity before samples may be combined."""
+        if not isinstance(identity, dict):
+            raise ValueError("ECU kimliği sözlük biçiminde olmalı")
+        allowed = ("vin", "ecu_part_number", "hardware_number", "software_number",
+                   "supplier", "ecu_name")
+        clean = {key: str(identity.get(key) or "").strip()
+                 for key in allowed if str(identity.get(key) or "").strip()}
+        stable = ("vin", "ecu_part_number", "hardware_number", "software_number")
+        if not any(clean.get(key) for key in stable):
+            raise ValueError("Algoritma örneklerini eşleştirmek için VIN, ECU parça, donanım veya yazılım numarası gerekli")
+        with self.lock, self._db() as db:
+            cur = db.execute("UPDATE profiles SET identity_json=?,last_seen=? WHERE ecu_key=?",
+                             (json.dumps(clean, ensure_ascii=False), time.time(), str(ecu_key)))
+            if cur.rowcount == 0:
+                raise LookupError("Önce bu ECU adresinden gerçek trafik gözlenmeli")
+        return {"ok": True, "ecu_key": str(ecu_key), "identity": clean}
+
     def analyze_seed_key_candidates(self, ecu_key, security_level):
         """Infer only simple repeatable byte transforms from accepted real ECU exchanges.
 
@@ -260,6 +278,15 @@ class ECULearningEngine:
             raise ValueError("Key security subfunction çift ve 0x02-0x7E aralığında olmalı")
         seed_level = level - 1
         with self.lock, self._db() as db:
+            profile = db.execute("SELECT identity_json FROM profiles WHERE ecu_key=?",
+                                 (str(ecu_key),)).fetchone()
+            identity = json.loads(profile["identity_json"] or "{}") if profile else {}
+            stable_identity = any(identity.get(key) for key in
+                                  ("vin", "ecu_part_number", "hardware_number", "software_number"))
+            if not stable_identity:
+                return {"ok": True, "status": "ecu_identity_unconfirmed",
+                        "sample_count": 0, "required_samples": 3, "candidates": [],
+                        "message": "Seed/Key örnekleri farklı ECU'larla karışmaması için önce VIN veya ECU parça/donanım/yazılım kimliği doğrulanmalı."}
             rows = db.execute("""SELECT seed_hex,key_hex FROM seed_exchanges
                 WHERE ecu_key=? AND security_level=? AND status='accepted'
                 AND key_hex IS NOT NULL ORDER BY id""",
