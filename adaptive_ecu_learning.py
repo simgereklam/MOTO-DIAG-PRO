@@ -11,6 +11,7 @@ import os
 import sqlite3
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -72,8 +73,22 @@ class ECULearningEngine:
         conn.row_factory = sqlite3.Row
         return conn
 
+    @contextmanager
+    def _db(self):
+        # sqlite3's connection context manager commits but does not close the handle.
+        # Explicit close is required so Windows can clean temporary test databases.
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def _init_db(self):
-        with self.lock, self._connect() as db:
+        with self.lock, self._db() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript("""
             CREATE TABLE IF NOT EXISTS frames(
@@ -127,7 +142,7 @@ class ECULearningEngine:
         if not raw or len(raw) > 4128:
             return None
         stamp = float(timestamp if timestamp is not None else time.time())
-        with self.lock, self._connect() as db:
+        with self.lock, self._db() as db:
             db.execute("INSERT INTO frames(ts,protocol,can_id,direction,data_hex) VALUES(?,?,?,?,?)",
                        (stamp, str(protocol), int(can_id), direction, _hex(raw)))
             response_id = self._address_pair(can_id, direction)
@@ -165,7 +180,7 @@ class ECULearningEngine:
         event = {"ecu_key": ecu_key, "direction": direction, "service": sid,
                  "payload_hex": _hex(data), "event": "observed"}
 
-        with self.lock, self._connect() as db:
+        with self.lock, self._db() as db:
             response_id = ecu_id if direction == "RX" else self._address_pair(can_id, "TX")
             request_id = self._address_pair(response_id, "RX") if response_id is not None else None
             db.execute("""INSERT INTO profiles(ecu_key,protocol,response_id,request_id,first_seen,last_seen)
@@ -244,7 +259,7 @@ class ECULearningEngine:
         if level < 2 or level > 0x7F or (level & 1):
             raise ValueError("Key security subfunction çift ve 0x02-0x7E aralığında olmalı")
         seed_level = level - 1
-        with self.lock, self._connect() as db:
+        with self.lock, self._db() as db:
             rows = db.execute("""SELECT seed_hex,key_hex FROM seed_exchanges
                 WHERE ecu_key=? AND security_level=? AND status='accepted'
                 AND key_hex IS NOT NULL ORDER BY id""",
@@ -324,7 +339,7 @@ class ECULearningEngine:
                 "message": "Key adayı hazır. ECU'ya gönderilmeden önce kullanıcı onayı ve yeni Seed üzerinde ECU kabul cevabı gerekir."}
 
     def snapshot(self, limit=100):
-        with self.lock, self._connect() as db:
+        with self.lock, self._db() as db:
             profiles = [dict(row) for row in db.execute(
                 "SELECT * FROM profiles ORDER BY last_seen DESC LIMIT ?", (max(1,min(int(limit),500)),))]
             exchanges = [dict(row) for row in db.execute(
