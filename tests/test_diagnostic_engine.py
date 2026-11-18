@@ -30,6 +30,10 @@ class DiagnosticEngineTests(unittest.TestCase):
         self.assertEqual(result["request_response_pairs"][0]["request_id"], "0x7E0")
         self.assertEqual(len(result["security_access_observations"]), 1)
 
+    def test_kwp_positive_response_service_is_classified(self):
+        result = classify_payload(bytes.fromhex("57 01 00 00"))
+        self.assertEqual(result["service"], "ReadDiagnosticTroubleCodes")
+
     def test_invalid_module_is_rejected(self):
         with self.assertRaises(ValueError):
             DiagnosticAnalyzer().analyze([], "gearbox")
