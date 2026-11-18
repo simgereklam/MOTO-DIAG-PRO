@@ -265,7 +265,7 @@ def decode_yamaha_cp3_frames(frames):
                            "expected": message.length, "actual": len(data)})
             continue
         try:
-            values = message.decode(data, decode_choices=True, scaling=True)
+            values = message.decode(data, decode_choices=False, scaling=True)
             decoded.append({"can_id": "0x%03X" % can_id, "message": message.name,
                             "signals": values, "raw": _hex(data)})
         except Exception as exc:
