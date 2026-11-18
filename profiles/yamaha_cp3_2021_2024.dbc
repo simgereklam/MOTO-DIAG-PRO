@@ -1,0 +1,268 @@
+VERSION "0.1.0"
+
+NS_ :
+
+BS_:
+
+BU_: BIKE LOGGER
+
+BO_ 517 WHEEL_SPEEDS: 8 BIKE
+ SG_ WHEEL_SPEED_FRONT : 7|16@0+ (0.00990099,0) [0|300] "km/h" LOGGER
+ SG_ WHEEL_SPEED_REAR : 23|16@0+ (0.00990099,0) [0|300] "km/h" LOGGER
+ SG_ ACCEL_LEVEL : 43|3@0+ (1,0) [0|7] "" LOGGER
+
+BO_ 521 ENGINE_GEAR: 6 BIKE
+ SG_ ENGINE_RPM : 7|16@0+ (0.390625,0) [0|12000] "rpm" LOGGER
+ SG_ GEAR_ACTUAL : 31|3@0+ (1,0) [0|6] "" LOGGER
+ SG_ TCS_LEVEL : 28|4@0+ (1,0) [0|3] "" LOGGER
+ SG_ START_FLAG : 24|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ GEAR_REQUESTED : 34|3@0+ (1,0) [0|7] "" LOGGER
+ SG_ RIDE_MODE : 39|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ SHIFT_WINDOW_BITS : 43|2@0+ (1,0) [0|2] "" LOGGER
+
+BO_ 533 THROTTLE: 8 BIKE
+ SG_ THROTTLE_VALVE : 7|16@0+ (1,0) [0|700] "" LOGGER
+ SG_ THROTTLE_GRIP : 23|16@0+ (1,0) [0|730] "" LOGGER
+ SG_ TCS_MODE : 33|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ GRIP_CLOSED : 37|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ ASSIST_LEVEL_B : 41|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ QS_DOWN_ENABLED : 43|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ QS_UP_ENABLED : 45|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ TCS_LEVEL : 50|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ RIDE_MODE : 63|2@0+ (1,0) [0|3] "" LOGGER
+
+BO_ 550 RIDER_SETTINGS: 7 BIKE
+ SG_ RIDE_MODE : 7|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ TCS_LEVEL : 3|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ ASSIST_LEVEL_A : 1|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ QS_DOWN_ENABLED : 8|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ TCS_MODE : 31|8@0+ (1,0) [0|3] "" LOGGER
+ SG_ BC_MODE : 41|2@0+ (1,0) [0|2] "" LOGGER
+ SG_ ASSIST_LEVEL_B : 43|2@0+ (1,0) [0|3] "" LOGGER
+ SG_ QS_UP_ENABLED : 45|1@0+ (1,0) [0|1] "" LOGGER
+
+BO_ 554 BRAKE_SWITCH: 2 BIKE
+ SG_ BRAKE_SWITCH : 11|1@0+ (1,0) [0|1] "" LOGGER
+
+BO_ 555 UNKNOWN_22B: 2 BIKE
+
+BO_ 558 UNKNOWN_22E: 2 BIKE
+
+BO_ 570 WAKE_STATE: 3 BIKE
+ SG_ WAKE_PHASE : 7|8@0+ (1,0) [0|4] "" LOGGER
+
+BO_ 574 TEMPERATURES: 4 BIKE
+ SG_ COOLANT_TEMP : 7|8@0+ (0.625,-30) [-30|130] "degC" LOGGER
+ SG_ AMBIENT_TEMP : 15|8@0+ (0.625,-30) [-30|70] "degC" LOGGER
+ SG_ LOAD_COUNTER : 23|16@0+ (1,0) [0|65535] "" LOGGER
+
+BO_ 581 UNKNOWN_245: 1 BIKE
+
+BO_ 592 IMU_ACCEL: 8 BIKE
+ SG_ ACCEL_X : 7|16@0+ (0.001008,-7.056) [-4|4] "g" LOGGER
+ SG_ ACCEL_Y : 23|16@0+ (0.001008,-7.056) [-4|4] "g" LOGGER
+ SG_ ACCEL_Z : 39|16@0+ (0.001008,-7.056) [-4|4] "g" LOGGER
+ SG_ POWER_UP_FLAGS : 55|8@0+ (1,0) [0|128] "" LOGGER
+
+BO_ 596 IMU_GYRO: 8 BIKE
+ SG_ ROLL_RATE : 7|16@0+ (0.01,-300) [-300|355.35] "deg/s" LOGGER
+ SG_ PITCH_RATE : 23|16@0+ (0.01,-300) [-300|355.35] "deg/s" LOGGER
+ SG_ YAW_RATE : 39|16@0+ (0.01,-300) [-300|355.35] "deg/s" LOGGER
+
+BO_ 600 IMU_DERIVED: 8 BIKE
+ SG_ PITCH_RATE_LEVEL : 55|16@0+ (0.01,-300) [-300|355.35] "deg/s" LOGGER
+
+BO_ 604 IMU_UNKNOWN: 4 BIKE
+
+BO_ 608 BRAKE_PRESSURE: 8 BIKE
+ SG_ BRAKE_PRESSURE_FRONT : 7|16@0+ (1,0) [0|2000] "" LOGGER
+
+BO_ 616 ABS_STATUS: 6 BIKE
+ SG_ NOT_MOVED_SINCE_START : 8|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ VEHICLE_SPEED : 23|16@0+ (0.056497,0) [0|300] "km/h" LOGGER
+ SG_ ABS_REAR_ACTIVE : 32|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ ABS_FRONT_ACTIVE : 33|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ BRAKE_SWITCH : 34|1@0+ (1,0) [0|1] "" LOGGER
+ SG_ BC_MODE : 36|2@0+ (1,0) [0|2] "" LOGGER
+
+BO_ 1025 SHUTDOWN_STATE: 1 BIKE
+ SG_ AFTER_RUN : 7|1@0+ (1,0) [0|1] "" LOGGER
+
+BO_ 1424 UNKNOWN_590: 4 BIKE
+
+CM_ "Yamaha CP3 (Tracer 9 2021-2024 generation) diagnostic-connector CAN bus, 500 kbit/s, 11-bit IDs. Generated from data/signals.yaml of github.com/bratukh/yamaha-cp3-can (CC BY 4.0). Read from one motorcycle, a 2022 Tracer 9 (RN70, EU). Each signal comment starts with [status/confidence]. Read-only use.";
+CM_ BO_ 517 "Front and rear wheel speed as two 16-bit words. The difference between them shows wheel slip under traction control and ABS.";
+CM_ SG_ 517 WHEEL_SPEED_FRONT "[confirmed/high] Front wheel speed, raw / 101.0 = true km/h. The dash reads about 9 % higher than this, as most speedometers do. The dash trip meter counts 1.0388 x the distance integrated from this word, so a trip that matches the dash can be computed from the bus.";
+CM_ SG_ 517 WHEEL_SPEED_REAR "[confirmed/medium] Rear wheel speed, same scale as the front. At steady speed it reads within 0.2 % of the front below 60 km/h and up to 1 % higher above 100 km/h.";
+CM_ SG_ 517 ACCEL_LEVEL "[hypothesis/medium] A longitudinal acceleration level 0-7 with the bit order reversed: bit 3 is the least significant bit of the level and bit 1 the most significant, so level = bit3 + 2 x bit2 + 4 x bit1 (the value table maps the raw 3-bit field to the level). The level rises steadily with rear-wheel acceleration, about 0.11 g per step; level 0 covers any deceleration. B4 is always 0. Possibly a drive-force class used by the ABS unit for traction or lift control. An earlier reading of bit 3 as 'ABS armed' does not fit.";
+CM_ BO_ 521 "Engine speed, gear position, riding mode and traction-control level in one frame.";
+CM_ SG_ 521 ENGINE_RPM "[confirmed/high] Engine speed, raw x 25/64.";
+CM_ SG_ 521 GEAR_ACTUAL "[confirmed/high] Gear reported by the gearbox sensor. Never reads 7. With the engine stopped it reads 0 whatever gear is engaged, so use `gear_requested` for a display.";
+CM_ SG_ 521 TCS_LEVEL "[confirmed/high] Traction-control level in effect: a copy of 0x226 `tcs_level` (B0 bits 3..2), not of the mode the dash shows (0x226 `tcs_mode`). In the TCS 1 and TCS 2 modes the two are equal. In M (manual) this field carries the TCS level the rider set inside M, while the dash shows 'M'. Value 0 is probably TCS OFF, which this bike offers, but that is not confirmed: it appeared on one ride only, and nobody noted TCS OFF being selected on it. No capture has a deliberate switch to OFF yet.";
+CM_ SG_ 521 START_FLAG "[hypothesis/medium] Set while the engine is cranking: in 13 of 13 engine starts it comes on with the first cranking frame and clears 0.7-0.9 s later when the engine idles; the same at nine more starts on a later ride (0.7-1.0 s). It is also set for about 0.1 s just before every key-off, but not when the engine stops with the ignition left on. On some rides it is set for long stretches with the ignition on and the engine off, so the exact meaning is open. It is not a shift flag: clear at all 535 gear changes checked.";
+CM_ SG_ 521 GEAR_REQUESTED "[confirmed/high] Gear position as the shift mechanism sees it. Reads 7 for a moment during gear changes between 2nd and 6th while moving; changes between 1st and 2nd go straight from one number to the other. Keeps showing the engaged gear with the engine stopped, which is what the dash shows. Mask with 0x07: bit 3 of the byte is a separate flag.";
+CM_ SG_ 521 RIDE_MODE "[confirmed/medium] Selected riding mode. The same two bits appear in 0x215 B7 and 0x226 B0.";
+CM_ SG_ 521 SHIFT_WINDOW_BITS "[hypothesis/medium] B5 takes the values 0x00, 0x04 and 0x08. 0x08 goes with an open throttle and 0x04 with a closed throttle and the clutch engaged, but 0x08 never occurs in 6th gear and 0x04 never occurs in 1st. That fits 'upshift possible' (bit 3) and 'downshift possible' (bit 2), the two quickshifter windows, better than a plain drive/overrun state. A later full-rate ride agrees: 0x04 never in 1st (0 of 81 037 frames above 1500 rpm), 0x08 in 1st to 5th (6th was not used). Quickshifts show in this byte: on 57 of 57 upshifts with the throttle open it goes 0x08 -> 0x00 for about 300 ms, starting about 50 ms before the gear changes, while the throttle valve stays open and the engine speed dips (ignition cut); on 76 downshifts 0x04 -> 0x00 for about 230 ms, with the throttle valve blipped open while the grip stays closed in 83 % of them. The rider's quickshifter on/off settings are separate bits (0x226 `qs_up_enabled`, `qs_down_enabled`); they were switched only with the engine off, so they do not test this byte yet.";
+CM_ BO_ 533 "Throttle grip position and throttle valve opening as two separate 16-bit words, plus copies of rider settings from 0x226: traction-control mode and level, one of the two assist levels, the quickshifter enables and the riding mode.";
+CM_ SG_ 533 THROTTLE_VALVE "[hypothesis/medium] Throttle valve opening: about 14 at idle, 697-698 at the stop. It follows the grip most of the time and departs from it where the ECU decides: it stays open with the grip closed for minutes at steady speed (cruise control), opens less than the grip asks at low rpm, and drops during a quickshift while the grip stays put. No independent reference, hence hypothesis.";
+CM_ SG_ 533 THROTTLE_GRIP "[confirmed/medium] Throttle grip (twist) position: 0 closed, 690-696 fully open, isolated readings up to 730. Percent = raw x 100 / 690, clamped.";
+CM_ SG_ 533 TCS_MODE "[confirmed/medium] Copy of the selected traction-control mode (see 0x226 `tcs_mode`): 1, 2 or 3 = M.";
+CM_ SG_ 533 GRIP_CLOSED "[confirmed/medium] Set when the grip is closed or nearly closed: in every frame with grip 0, and also at grip readings up to about 20.";
+CM_ SG_ 533 ASSIST_LEVEL_B "[hypothesis/medium] Copy of 0x226 `assist_level_b` (the SCS or LIF level, 1-3). Hypothesis because the original is one.";
+CM_ SG_ 533 QS_DOWN_ENABLED "[confirmed/medium] Copy of the quickshifter DOWN setting (1 = on).";
+CM_ SG_ 533 QS_UP_ENABLED "[confirmed/medium] Copy of the quickshifter UP setting (1 = on). The other bits of B5 not listed here are always 0.";
+CM_ SG_ 533 TCS_LEVEL "[confirmed/medium] Copy of the traction-control level in effect (see 0x209 `tcs_level`). B6 = level x 2; bit 7 is set briefly at wake-up.";
+CM_ SG_ 533 RIDE_MODE "[confirmed/medium] Copy of the riding mode (see 0x209 `ride_mode`). B7 reads 0x02, 0x42, 0x82 or 0xC2.";
+CM_ BO_ 550 "The settings the rider makes in the dash menu, sent continuously: riding mode, traction-control mode and level, two further assist levels (SCS and LIF, which is which is open), the quickshifter enables and the brake-control mode. The frame changes only when the rider changes a setting.";
+CM_ SG_ 550 RIDE_MODE "[confirmed/medium] Riding mode (see 0x209 `ride_mode`). This frame changes first; 0x209 follows 10-20 ms later.";
+CM_ SG_ 550 TCS_LEVEL "[confirmed/high] Traction-control level in effect. In the TCS 1 and TCS 2 modes it equals the mode; in M it is the level the rider set inside M. 0x209 B3 bits 4..1 and 0x215 B6 bits 2..1 copy this field.";
+CM_ SG_ 550 ASSIST_LEVEL_A "[hypothesis/medium] The SCS (slide control) or LIF (lift control) level, 1-3; which of the two is not known. 1 in the TCS 1 mode, 2 in TCS 2, 3 in the rider's M setup. The other one is `assist_level_b`.";
+CM_ SG_ 550 QS_DOWN_ENABLED "[confirmed/medium] Quickshifter DOWN enabled, the rider's menu setting. The rest of B1 is always 0.";
+CM_ SG_ 550 TCS_MODE "[confirmed/high] Traction-control mode as the dash shows it. Levels 1 and 2 can be switched while riding with the throttle closed; M can be entered or left only at a standstill, and the captures agree: every change into or out of M happened at 0 km/h. The level in effect is `tcs_level`, which differs from this field in M.";
+CM_ SG_ 550 BC_MODE "[confirmed/high] Brake control (BC) mode. The ABS unit repeats it in 0x268 B4 bits 4..3, about 20 ms later. The field changes when a choice is accepted in the menu, not while it is only highlighted.";
+CM_ SG_ 550 ASSIST_LEVEL_B "[hypothesis/medium] The other of SCS and LIF, level 1-3 (see `assist_level_a`). 1 in the TCS 1 mode, 2 in TCS 2, 1 in the rider's M setup and 3 after an edit inside M that changed nothing else. 0x215 B5 bits 1..0 copy it.";
+CM_ SG_ 550 QS_UP_ENABLED "[confirmed/medium] Quickshifter UP enabled, the rider's menu setting.";
+CM_ BO_ 554 "Two bytes, normally 00 00. One bit is the brake light switch, set by either brake. Every other bit stayed 0 through a whole day of riding.";
+CM_ SG_ 554 BRAKE_SWITCH "[confirmed/medium] Brake light switch: set by the rear pedal switch or the front lever switch, the same signal as 0x268 B4 bit 2.";
+CM_ BO_ 555 "Always `00 00` in every capture. It may belong to equipment this base model lacks (heated grips, heated seat, semi-active suspension on the GT models).";
+CM_ BO_ 558 "Always `00 00` in every capture, at standstill and while riding. It may belong to equipment this base model lacks (heated grips, heated seat, semi-active suspension on the GT models).";
+CM_ BO_ 570 "B0 reads 0x04 for a short time after the bus wakes, then 0x00. B1 and B2 are always 0xFF.";
+CM_ SG_ 570 WAKE_PHASE "[hypothesis/low] 0x04 from wake-up for anything between 0.1 s and 54 s (0.1-1.9 s at each of five key-ons on a later ride), back to 0x00 before the engine is started, and 0x00 from then on whether the engine runs or not (including a 66 s stall). It does not tell a running engine from a stopped one, as we first thought. Use `engine_rpm` for that.";
+CM_ BO_ 574 "Coolant temperature, the air temperature the dash shows and a 16-bit engine-load-like counter, once a second.";
+CM_ SG_ 574 COOLANT_TEMP "[confirmed/high] Engine coolant temperature, raw x 0.625 - 30. The dash shows this value rounded down to a whole degree.";
+CM_ SG_ 574 AMBIENT_TEMP "[confirmed/medium] The air temperature the dash shows, raw x 0.625 - 30 (same encoding as the coolant byte); the dash shows it rounded down to a whole degree. It reads true outside air only on the move: at a standstill it heat-soaks a few degrees, and the dash then keeps showing the last value it took while moving. Where the sensor sits (outside air or intake) is not known.";
+CM_ SG_ 574 LOAD_COUNTER "[hypothesis/low] 0 with the engine off; rises on a cold start and under hard acceleration (peak 878 on one ride). Probably an injection or torque quantity. Not decoded.";
+CM_ BO_ 581 "Always `00` in every capture. It may belong to equipment this base model lacks (heated grips, heated seat, semi-active suspension on the GT models).";
+CM_ BO_ 592 "Three-axis accelerometer. Each axis is a 16-bit word with zero at about 7000 and about 992 counts per g.";
+CM_ SG_ 592 ACCEL_X "[confirmed/medium] Longitudinal acceleration, (raw - 7000) / 992. Positive when the bike accelerates. 7000 is the nominal zero (the reset value); this bike reads about 7056 when level and at rest, which includes the mounting angle of the sensor. While riding on level road the zero is lower, 7026-7029, because the riding attitude is about 1.7 deg more nose-down than at rest.";
+CM_ SG_ 592 ACCEL_Y "[confirmed/medium] Lateral acceleration in the bike frame, (raw - 7000) / 992. The raw value falls when the standing bike is leaned to the left. In a balanced turn the bike leans into the resultant force, so this axis stays small: it moves a few counts per degree of lean in a corner (our estimates run from 2 to 4) against 17.4 counts per degree at standstill.";
+CM_ SG_ 592 ACCEL_Z "[confirmed/medium] Vertical acceleration in the bike frame, (raw - 7000) / 992. About +1 g upright and at rest; rises above 1 g in a corner.";
+CM_ SG_ 592 POWER_UP_FLAGS "[hypothesis/medium] 0x80 in the first frame, 0x60 for the next 0.4 s, then 0x20 for the rest of the session whether the bike moves or not. An earlier reading of bit 6 as a 'moving' flag was wrong. B7 is always 0x00.";
+CM_ BO_ 596 "Three-axis gyroscope. Each axis is a 16-bit word with zero at 30000 and about 100 counts per degree per second. Yaw rate together with wheel speed gives the lean angle in a corner.";
+CM_ SG_ 596 ROLL_RATE "[confirmed/medium] Roll rate, (raw - 30000) / 100. Positive when the bike rolls to the right. Peaks when flicking from one side to the other, near zero in a steady corner.";
+CM_ SG_ 596 PITCH_RATE "[confirmed/medium] Pitch rate, (raw - 30000) / 100. Large under braking dive. In a steady corner it shows a steady offset equal to -yaw x tan(lean), which is the turn seen from a leaned sensor and not cross-talk. 0x258 B6:B7 carries a second, separately filtered pitch rate.";
+CM_ SG_ 596 YAW_RATE "[confirmed/medium] Yaw rate, (raw - 30000) / 100. Positive in a left turn.";
+CM_ BO_ 600 "A second IMU frame with packed fields. B6:B7 is a second pitch-rate channel, apparently with the cornering component removed, which suggests the IMU computes its own attitude; the rest is not decoded.";
+CM_ SG_ 600 PITCH_RATE_LEVEL "[hypothesis/medium] A second pitch rate, zero at 30000-30005, same encoding as 0x254. It follows the 0x254 pitch rate with the -yaw x tan(lean) corner term removed, one frame later (correlation 0.94-0.98 on three rides against 0.52 for the raw pitch rate), so it reads as the pitch rate in the road frame. It is filtered or sourced separately, not a byte copy. Hypothesis because it is known only from other IMU words.";
+CM_ BO_ 604 "Not decoded. The low nibble of B0 is always 1 and the high nibble takes all 16 values; the high nibble of B1 is always 1 and the low nibble takes all 16. Both sit at 5 at rest and spread out as speed rises. The low nibble of B1 correlates -0.61 with a low-passed roll rate; otherwise no correlation with lean, yaw or roll above 0.24. The low nibbles of B2 and B3 are 0xB in 97-99 % of frames while the high nibbles vary.";
+CM_ BO_ 608 "Front brake hydraulic pressure as a 16-bit word, sent twice in the frame. The rear circuit is not in it.";
+CM_ SG_ 608 BRAKE_PRESSURE_FRONT "[confirmed/high] Front brake pressure in raw units. 0 with the lever released (small values of 1-6 also occur at rest). Normal riding stays under about 160; hard stops reach 200-840; a full squeeze at standstill reached 1361. Front circuit only: the rear pedal does not move it. The physical unit is not known.";
+CM_ BO_ 616 "A second speed value from the ABS unit, ABS intervention flags, the brake light switch and the brake-control mode.";
+CM_ SG_ 616 NOT_MOVED_SINCE_START "[hypothesis/medium] 1 from power-on until the speed first passes about 6 km/h, then 0 through every later stop of the ride, and 1 again only in the last 0.2 s before the bus goes quiet. Possibly 'ABS self-check not yet done'. An earlier reading as a low-speed indicator was wrong. The same on five more key-ons of a later ride, including one inside a recording after a 205 s key-off; a recording in which the bike never moved stayed at 1.";
+CM_ SG_ 616 VEHICLE_SPEED "[confirmed/medium] Speed as one 16-bit word, raw / 17.7 = true km/h. It follows the front wheel and lags 0x205 by about 20 ms. 0x205 has 5.7 times the resolution, so prefer it.";
+CM_ SG_ 616 ABS_REAR_ACTIVE "[confirmed/high] Rear ABS is intervening. Also set when the rear wheel slows sharply from engine braking on a downshift with no brake applied. Each event holds the flag for 0.46-0.50 s, so it is probably held for a fixed time rather than following the modulation.";
+CM_ SG_ 616 ABS_FRONT_ACTIVE "[confirmed/medium] Front ABS is intervening.";
+CM_ SG_ 616 BRAKE_SWITCH "[confirmed/medium] Brake light switch: rear pedal switch OR front lever switch. The front lever switch closes late: while riding the bit is on in 31 % of samples with front pressure 20-50, 66 % at 50-100, 89 % at 100-200 and always from 200 up. So the bit alone does not tell which brake is used; rear only = this bit on with 0x260 near 0. 0x22A B1 bit 3 carries the same signal. Earlier described as the rear pedal switch alone.";
+CM_ SG_ 616 BC_MODE "[confirmed/high] Brake control mode, the ABS unit's copy of 0x226 `bc_mode`, about 20 ms after the engine ECU. Bit 3 alone was once read as 'ABS enabled' because it was always 1 in the early captures, when the bike was on BC1.";
+CM_ BO_ 1025 "0x00 while the bus is alive. 0x80 after the ignition is switched off, for at least half a minute while every other ID has already stopped.";
+CM_ SG_ 1025 AFTER_RUN "[hypothesis/medium] 0 for the whole ride, engine running or not. 1 only once the rest of the bus has gone quiet: at least 31 s of this frame alone at the end of one capture (the capture ends first), and the whole of a 205 s key-off inside another. The sender stays awake for a while after key-off and says so. An earlier reading (0x80 = engine running) was the wrong way round.";
+CM_ BO_ 1424 "Always `00 00 00 00` in every capture. It may belong to equipment this base model lacks (heated grips, heated seat, semi-active suspension on the GT models).";
+
+BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
+BA_DEF_ BO_ "Status" STRING ;
+BA_DEF_ SG_ "Status" STRING ;
+BA_DEF_DEF_ "GenMsgCycleTime" 0;
+BA_DEF_DEF_ "Status" "unknown";
+BA_ "GenMsgCycleTime" BO_ 517 10;
+BA_ "GenMsgCycleTime" BO_ 521 10;
+BA_ "GenMsgCycleTime" BO_ 533 10;
+BA_ "GenMsgCycleTime" BO_ 550 10;
+BA_ "GenMsgCycleTime" BO_ 554 100;
+BA_ "GenMsgCycleTime" BO_ 555 100;
+BA_ "GenMsgCycleTime" BO_ 558 100;
+BA_ "GenMsgCycleTime" BO_ 570 100;
+BA_ "GenMsgCycleTime" BO_ 574 1000;
+BA_ "GenMsgCycleTime" BO_ 581 100;
+BA_ "GenMsgCycleTime" BO_ 592 10;
+BA_ "GenMsgCycleTime" BO_ 596 10;
+BA_ "GenMsgCycleTime" BO_ 600 10;
+BA_ "GenMsgCycleTime" BO_ 604 10;
+BA_ "GenMsgCycleTime" BO_ 608 10;
+BA_ "GenMsgCycleTime" BO_ 616 10;
+BA_ "GenMsgCycleTime" BO_ 1025 100;
+BA_ "GenMsgCycleTime" BO_ 1424 100;
+BA_ "Status" BO_ 517 "confirmed";
+BA_ "Status" SG_ 517 WHEEL_SPEED_FRONT "confirmed";
+BA_ "Status" SG_ 517 WHEEL_SPEED_REAR "confirmed";
+BA_ "Status" SG_ 517 ACCEL_LEVEL "hypothesis";
+BA_ "Status" BO_ 521 "confirmed";
+BA_ "Status" SG_ 521 ENGINE_RPM "confirmed";
+BA_ "Status" SG_ 521 GEAR_ACTUAL "confirmed";
+BA_ "Status" SG_ 521 TCS_LEVEL "confirmed";
+BA_ "Status" SG_ 521 START_FLAG "hypothesis";
+BA_ "Status" SG_ 521 GEAR_REQUESTED "confirmed";
+BA_ "Status" SG_ 521 RIDE_MODE "confirmed";
+BA_ "Status" SG_ 521 SHIFT_WINDOW_BITS "hypothesis";
+BA_ "Status" BO_ 533 "confirmed";
+BA_ "Status" SG_ 533 THROTTLE_VALVE "hypothesis";
+BA_ "Status" SG_ 533 THROTTLE_GRIP "confirmed";
+BA_ "Status" SG_ 533 TCS_MODE "confirmed";
+BA_ "Status" SG_ 533 GRIP_CLOSED "confirmed";
+BA_ "Status" SG_ 533 ASSIST_LEVEL_B "hypothesis";
+BA_ "Status" SG_ 533 QS_DOWN_ENABLED "confirmed";
+BA_ "Status" SG_ 533 QS_UP_ENABLED "confirmed";
+BA_ "Status" SG_ 533 TCS_LEVEL "confirmed";
+BA_ "Status" SG_ 533 RIDE_MODE "confirmed";
+BA_ "Status" BO_ 550 "confirmed";
+BA_ "Status" SG_ 550 RIDE_MODE "confirmed";
+BA_ "Status" SG_ 550 TCS_LEVEL "confirmed";
+BA_ "Status" SG_ 550 ASSIST_LEVEL_A "hypothesis";
+BA_ "Status" SG_ 550 QS_DOWN_ENABLED "confirmed";
+BA_ "Status" SG_ 550 TCS_MODE "confirmed";
+BA_ "Status" SG_ 550 BC_MODE "confirmed";
+BA_ "Status" SG_ 550 ASSIST_LEVEL_B "hypothesis";
+BA_ "Status" SG_ 550 QS_UP_ENABLED "confirmed";
+BA_ "Status" BO_ 554 "confirmed";
+BA_ "Status" SG_ 554 BRAKE_SWITCH "confirmed";
+BA_ "Status" BO_ 555 "unknown";
+BA_ "Status" BO_ 558 "unknown";
+BA_ "Status" BO_ 570 "hypothesis";
+BA_ "Status" SG_ 570 WAKE_PHASE "hypothesis";
+BA_ "Status" BO_ 574 "confirmed";
+BA_ "Status" SG_ 574 COOLANT_TEMP "confirmed";
+BA_ "Status" SG_ 574 AMBIENT_TEMP "confirmed";
+BA_ "Status" SG_ 574 LOAD_COUNTER "hypothesis";
+BA_ "Status" BO_ 581 "unknown";
+BA_ "Status" BO_ 592 "confirmed";
+BA_ "Status" SG_ 592 ACCEL_X "confirmed";
+BA_ "Status" SG_ 592 ACCEL_Y "confirmed";
+BA_ "Status" SG_ 592 ACCEL_Z "confirmed";
+BA_ "Status" SG_ 592 POWER_UP_FLAGS "hypothesis";
+BA_ "Status" BO_ 596 "confirmed";
+BA_ "Status" SG_ 596 ROLL_RATE "confirmed";
+BA_ "Status" SG_ 596 PITCH_RATE "confirmed";
+BA_ "Status" SG_ 596 YAW_RATE "confirmed";
+BA_ "Status" BO_ 600 "hypothesis";
+BA_ "Status" SG_ 600 PITCH_RATE_LEVEL "hypothesis";
+BA_ "Status" BO_ 604 "unknown";
+BA_ "Status" BO_ 608 "confirmed";
+BA_ "Status" SG_ 608 BRAKE_PRESSURE_FRONT "confirmed";
+BA_ "Status" BO_ 616 "confirmed";
+BA_ "Status" SG_ 616 NOT_MOVED_SINCE_START "hypothesis";
+BA_ "Status" SG_ 616 VEHICLE_SPEED "confirmed";
+BA_ "Status" SG_ 616 ABS_REAR_ACTIVE "confirmed";
+BA_ "Status" SG_ 616 ABS_FRONT_ACTIVE "confirmed";
+BA_ "Status" SG_ 616 BRAKE_SWITCH "confirmed";
+BA_ "Status" SG_ 616 BC_MODE "confirmed";
+BA_ "Status" BO_ 1025 "hypothesis";
+BA_ "Status" SG_ 1025 AFTER_RUN "hypothesis";
+BA_ "Status" BO_ 1424 "unknown";
+
+VAL_ 517 ACCEL_LEVEL 7 "level 7" 6 "level 3" 5 "level 5" 4 "level 1" 3 "level 6" 2 "level 2" 1 "level 4" 0 "level 0 (decelerating)" ;
+VAL_ 521 GEAR_ACTUAL 6 "6th" 5 "5th" 4 "4th" 3 "3rd" 2 "2nd" 1 "1st" 0 "neutral" ;
+VAL_ 521 TCS_LEVEL 3 "TCS level 3" 2 "TCS level 2" 1 "TCS level 1" 0 "probably TCS OFF (not confirmed)" ;
+VAL_ 521 GEAR_REQUESTED 7 "between gears" 6 "6th" 5 "5th" 4 "4th" 3 "3rd" 2 "2nd" 1 "1st" 0 "neutral" ;
+VAL_ 521 RIDE_MODE 3 "D-MODE 4" 2 "D-MODE 3" 1 "D-MODE 2" 0 "D-MODE 1" ;
+VAL_ 521 SHIFT_WINDOW_BITS 2 "bit 3 only" 1 "bit 2 only" 0 "neither" ;
+VAL_ 533 RIDE_MODE 3 "D-MODE 4" 2 "D-MODE 3" 1 "D-MODE 2" 0 "D-MODE 1" ;
+VAL_ 550 RIDE_MODE 3 "D-MODE 4" 2 "D-MODE 3" 1 "D-MODE 2" 0 "D-MODE 1" ;
+VAL_ 550 TCS_LEVEL 3 "TCS level 3" 2 "TCS level 2" 1 "TCS level 1" 0 "probably TCS OFF (not confirmed)" ;
+VAL_ 550 ASSIST_LEVEL_A 3 "level 3" 2 "level 2" 1 "level 1" ;
+VAL_ 550 QS_DOWN_ENABLED 1 "on" 0 "off" ;
+VAL_ 550 TCS_MODE 3 "TCS M (manual)" 2 "TCS 2" 1 "TCS 1" 0 "probably TCS OFF (not confirmed)" ;
+VAL_ 550 BC_MODE 2 "BC2" 1 "BC1" ;
+VAL_ 550 ASSIST_LEVEL_B 3 "level 3" 2 "level 2" 1 "level 1" ;
+VAL_ 550 QS_UP_ENABLED 1 "on" 0 "off" ;
+VAL_ 570 WAKE_PHASE 4 "just woken" 0 "normal" ;
+VAL_ 592 POWER_UP_FLAGS 128 "first frame" 96 "first 0.4 s after power-up" 32 "normal" ;
+VAL_ 616 BC_MODE 2 "BC2" 1 "BC1" ;
