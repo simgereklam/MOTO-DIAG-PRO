@@ -222,9 +222,10 @@ def decode_yamaha_cp3_frames(frames):
     for frame in frames[-30000:]:
         if not isinstance(frame, dict):
             continue
-        raw_id = str(frame.get("id", frame.get("can_id", ""))).strip().lower()
+        raw_value = frame.get("id", frame.get("can_id", ""))
+        raw_id = str(raw_value).strip().lower()
         try:
-            can_id = int(raw_id, 16) if raw_id.startswith("0x") or re.search(r"[a-f]", raw_id) else int(raw_id, 10)
+            can_id = int(raw_value) if isinstance(raw_value, int) else int(raw_id.replace("0x", ""), 16)
         except (TypeError, ValueError):
             continue
         data = _bytes(frame.get("data"))
