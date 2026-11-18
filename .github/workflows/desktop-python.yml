@@ -5,10 +5,11 @@ on:
     branches:
       - main
       - desktop-seyfi-live-data-stage1
+      - desktop-universal-abs-foundation
     paths:
       - "SEYFI_USTA_MASAUSTU.py"
-      - "seyfi_voice.py"
-      - "scripts/prepare_desktop_assets.py"
+      - "diagnostic_engine.py"
+      - "tests/**"
       - ".github/workflows/desktop-python.yml"
   pull_request:
     paths:
