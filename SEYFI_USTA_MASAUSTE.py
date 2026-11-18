@@ -2521,7 +2521,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <div class="test-block" id="auto-ecu-discovery" style="border-color:#00e5ff;margin:14px 0">
    <div class="title">🤖 EFE MOTO · OTOMATİK ECU KEŞİF VE ONAY</div>
    <p style="color:#b8c4d0">CAN dinleme kaydını otomatik çözümler; ECU adresi, ISO-TP/UDS servisleri, pozitif/negatif cevaplar ve yakalanmış Seed-Key alışverişlerini ayıklar. Sonuçları motor ve ABS modülü için ayrı oturumda tutar.</p>
-   <div class="module-actions"><button class="btn test-btn" onclick="autoDiagAnalyze()">🔎 KAYDI OTOMATİK ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagStatus()">OTURUM DURUMU</button></div>
+   <div class="module-actions"><button class="btn test-btn" onclick="autoDiagAnalyze()">🔎 KAYDI OTOMATİK ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagDecodeCp3()">YAMAHA CP3 DBC ÇÖZÜMLE</button><button class="btn test-btn" onclick="autoDiagStatus()">OTURUM DURUMU</button></div>
    <pre id="auto_diag_result" style="color:#00e5ff;white-space:pre-wrap;max-height:340px;overflow:auto">CAN kaydı alındıktan sonra otomatik çözümlemeyi başlatın.</pre>
    <div class="module-note">Seed-Key isteği/cevabı yakalanırsa güvenlik alışverişi olarak raporlanır. Gerçek anahtar hesabı için ilgili ECU algoritmasının sağlayıcı kütüphanesi ve doğrulanmış model profili gerekir; yalnızca trafikten anahtar uydurulmaz.</div>
   </div>
@@ -2922,6 +2922,20 @@ function j2534ClearDtc(){
  .catch(e=>out.innerText='Silme isteği hatası: '+e);
 }
 function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.innerText='Standart OBD-II motor DTC sorgusu gönderiliyor...';fetch('/api/j2534/obd/dtc',{method:'POST'}).then(r=>r.json()).then(d=>{out.innerText=JSON.stringify(d,null,2);}).catch(e=>out.innerText='DTC okuma hatası: '+e);}
+ async function autoDiagDecodeCp3(){
+  const out=document.getElementById('auto_diag_result');
+  if(!canSniffFrames.length){out.textContent='Önce CAN dinleme kaydı alın.';return;}
+  out.textContent='Yamaha CP3 DBC profiliyle sinyaller çözülüyor...';
+  try{
+   const r=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames})});
+   const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'DBC çözümlemesi başarısız');
+   const lines=['YAMAHA CP3 DBC ÇÖZÜMLEME','Profil: '+d.profile_id,d.applicability,
+    'Çözülen frame: '+d.frames_decoded,'Bilinmeyen ID: '+JSON.stringify(d.unknown_ids),
+    'Lisans: '+d.license,''];
+   (d.decoded||[]).slice(-120).forEach(x=>lines.push(x.can_id+' '+x.message+' | '+JSON.stringify(x.signals)));
+   lines.push('',d.note);out.textContent=lines.join('\n');
+  }catch(e){out.textContent='CP3 DBC hatası: '+e.message;}
+ }
  async function autoDiagStatus(){
   const out=document.getElementById('auto_diag_result');out.textContent='Otomatik teşhis oturumu okunuyor...';
   try{const r=await fetch('/api/auto-diagnostics/status'),d=await r.json();out.textContent=JSON.stringify(d,null,2);}
@@ -2954,6 +2968,12 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
    const consent=await c.json();if(!c.ok||!consent.ok)throw new Error(consent.error||'Onay kaydedilemedi');
    if(!approved){out.textContent+='\n\nHAYIR: ECU komutu gönderilmedi.';return;}
    out.textContent+='\n\nEVET: Kullanıcı onayı kaydedildi.';
+   const currentStatus=await (await fetch('/api/j2534/status')).json();
+   if(currentStatus.connected&&String(currentStatus.protocol).toLowerCase()==='iso15765'&&(module==='engine'||module==='abs')){
+    const identify=await fetch('/api/auto-diagnostics/yamaha/cp3/identify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmation:'READ_ONLY_CP3_IDENTIFY',module:module})});
+    const identifyResult=await identify.json();
+    out.textContent+='\n\nYAMAHA CP3 READ-ONLY ECU KİMLİK TARAMASI\n'+JSON.stringify(identifyResult,null,2);
+   }
    if(module==='engine'){
     const st=await (await fetch('/api/j2534/status')).json();
     if(st.connected&&String(st.protocol).toLowerCase()==='iso15765'){
@@ -3225,6 +3245,17 @@ def api_j2534_read():
     result = j2534_read_passive(request.args.get("timeout_ms", 250))
     if result.get("frames"):
         write_log("J2534 RX", f"{result['count']} mesaj alindi.")
+    return jsonify(result), (200 if result.get("ok") else 400)
+
+@app.route('/api/auto-diagnostics/yamaha/cp3/identify', methods=['POST'])
+def api_yamaha_cp3_identify():
+    payload = request.get_json(silent=True) or {}
+    if payload.get("confirmation") != "READ_ONLY_CP3_IDENTIFY":
+        return jsonify({"ok": False, "error": "Açık kullanıcı onayı gerekli; ECU'ya istek gönderilmedi."}), 409
+    if not j2534_status().get("connected") or str(_j2534_state.get("protocol") or "").lower() != "iso15765":
+        return jsonify({"ok": False, "error": "Yamaha CP3 UDS kimlik taraması için J2534 ISO15765/CAN kanalı açık olmalı."}), 400
+    result = j2534_yamaha_cp3_readonly_identify(payload.get("module", "both"))
+    write_log("YAMAHA CP3 READ-ONLY UDS ECU KIMLIK", json.dumps(result, ensure_ascii=False))
     return jsonify(result), (200 if result.get("ok") else 400)
 
 @app.route('/api/j2534/obd/live', methods=['POST'])
