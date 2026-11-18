@@ -19,6 +19,13 @@ import csv
 import io
 import traceback
 
+# Otomatik ECU trafik öğrenmesi: tamamen yerel SQLite kaydı.
+try:
+    from adaptive_ecu_learning import ECU_LEARNER
+except Exception as _learning_import_error:
+    ECU_LEARNER = None
+    print("ECU öğrenme modülü yüklenemedi:", _learning_import_error)
+
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
 try:
     from flask import Flask, render_template_string, request, jsonify, send_file
@@ -424,8 +431,11 @@ def j2534_open_passive(protocol="can", baud=None):
                 mask.ProtocolID = spec["id"]; mask.DataSize = 4
                 pattern.ProtocolID = spec["id"]; pattern.DataSize = 4
                 if protocol == "iso15765":
-                    for i, value in enumerate((0x00, 0x00, 0x07, 0xF8)): mask.Data[i] = value
-                    for i, value in enumerate((0x00, 0x00, 0x07, 0xE8)): pattern.Data[i] = value
+                    # Pasif öğrenme motoru Engine + ABS dahil bütün 11-bit CAN ID'lerini dinler.
+                    # Sıfır maske, hiçbir CAN ID'sini önceden 0x7E8-0x7EF ile sınırlamaz.
+                    for i in range(4):
+                        mask.Data[i] = 0x00
+                        pattern.Data[i] = 0x00
                 rc_filter = int(filter_fn(channel.value, 1, ctypes.byref(mask),
                                           ctypes.byref(pattern), None, ctypes.byref(fid)))
                 if rc_filter == 0:
@@ -526,6 +536,29 @@ def j2534_read_passive(timeout_ms=250, max_messages=16):
                     "data": raw_hex, "length": size})
                 _ecu_lab_record("J2534-" + str(_j2534_state.get("protocol") or "RX"),
                                 "RX", raw_hex, "ProtocolID=%s Timestamp=%s" % (msg.ProtocolID, msg.Timestamp))
+                # Gerçek CAN ID + ISO-TP verisini yerel öğrenme motoruna aktar.
+                if ECU_LEARNER is not None and _j2534_state.get("protocol") == "iso15765" and size >= 5:
+                    try:
+                        raw = bytes(msg.Data[:size])
+                        can_id = int.from_bytes(raw[:4], "big")
+                        event = ECU_LEARNER.ingest_can_frame(
+                            can_id, raw[4:], direction="RX", timestamp=time.time(),
+                            protocol="ISO15765"
+                        )
+                        if event and event.get("event") in (
+                            "seed_captured", "key_submission_observed", "key_accepted",
+                            "negative_response"
+                        ):
+                            details = event.get("event", "ECU gözlemi")
+                            if event.get("seed_hex"):
+                                details += " | Seed: " + event["seed_hex"]
+                            if event.get("security_level") is not None:
+                                details += " | Seviye: " + str(event["security_level"])
+                            if event.get("nrc") is not None:
+                                details += " | NRC: 0x%02X" % event["nrc"]
+                            write_log("OTOMATİK ECU ÖĞRENME", details + " | " + str(event.get("ecu_key")))
+                    except Exception as learn_exc:
+                        write_log("ECU ÖĞRENME KAYIT HATASI", str(learn_exc))
             return {"ok": True, "frames": frames, "count": len(frames),
                     "note": "J2534 RX kaydi; ECU istegi gonderilmedi."}
         except Exception as exc:
@@ -2189,6 +2222,10 @@ def real_data_loop(target, run_id):
                 if not conn.is_connected():
                     raise ConnectionError("Adaptör/ECU bağlantısı koptu.")
                 data = _query_live_values(conn)
+                # PID sorguları arasında da CAN hattını kısa aralıklarla pasif dinle.
+                # Bu adım ECU'ya ek bir komut göndermez; yalnızca RX kuyruğunu okur.
+                if isinstance(conn, J2534OBDConnection):
+                    j2534_read_passive(timeout_ms=25, max_messages=64)
                 if data:
                     empty_cycles = 0
                     # Son gerçek ECU ölçümlerini DTC yorumunda kullanmak üzere sakla.
