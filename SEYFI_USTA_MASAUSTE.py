@@ -2927,7 +2927,7 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
   if(!canSniffFrames.length){out.textContent='Önce CAN dinleme kaydı alın.';return;}
   out.textContent='Yamaha CP3 DBC profiliyle sinyaller çözülüyor...';
   try{
-   const r=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames})});
+   const r=await fetch('/api/auto-diagnostics/yamaha/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames})});
    const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||'DBC çözümlemesi başarısız');
    const lines=['YAMAHA DBC ÇÖZÜMLEME','Profil: '+d.profile_id,d.applicability,
     'Çözülen frame: '+d.frames_decoded,'Bilinmeyen ID: '+JSON.stringify(d.unknown_ids),
@@ -2967,7 +2967,7 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
    if(cp3Evidence||r9Evidence){
     try{
      const profileId=cp3Evidence?'YAMAHA-CP3-TRACER9-RN70-2022-EU':'YAMAHA-R9-2026';
-     const dr=await fetch('/api/auto-diagnostics/yamaha/cp3/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames,profile_id:profileId})});
+     const dr=await fetch('/api/auto-diagnostics/yamaha/decode',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({frames:canSniffFrames,profile_id:profileId})});
      const dd=await dr.json();if(dd.ok)out.textContent+='\n\n'+profileId+' DBC: '+dd.frames_decoded+' frame çözüldü. Profil kapsamı: '+dd.applicability;
     }catch(ignore){}
    }
