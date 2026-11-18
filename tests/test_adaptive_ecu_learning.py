@@ -59,6 +59,12 @@ class LearningTests(unittest.TestCase):
             self.engine.ingest_uds_message(0x7E8, "RX", bytes([0x67, 0x01, seed]))
             self.engine.ingest_uds_message(0x7E0, "TX", bytes([0x27, 0x02, key]))
             self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 02"))
+        unconfirmed = self.engine.analyze_seed_key_candidates("ISO15765:0x7E8", 0x02)
+        self.assertEqual(unconfirmed["status"], "ecu_identity_unconfirmed")
+        self.engine.set_ecu_identity("ISO15765:0x7E8", {
+            "ecu_part_number": "YAMAHA-TEST-ECU-001",
+            "software_number": "SW-TEST-001"
+        })
         analysis = self.engine.analyze_seed_key_candidates("ISO15765:0x7E8", 0x02)
         self.assertEqual(analysis["status"], "candidate_found_unverified")
         result = self.engine.calculate_candidate_key("ISO15765:0x7E8", 0x02, "44")
