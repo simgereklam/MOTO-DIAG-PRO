@@ -107,10 +107,11 @@ def classify_payload(payload):
                 "meaning": "Negatif cevap: NRC 0x%02X (%s)" %
                            (payload[2], NRC.get(payload[2], "NRC tanımsız")),
                 "negative_response_code": payload[2], "original_service": original}
-    if sid >= 0x40 and (sid - 0x40) in UDS_SERVICES:
+    if sid >= 0x40 and ((sid - 0x40) in UDS_SERVICES or (sid - 0x40) in KWP_SERVICES):
         original = sid - 0x40
-        info = {"family": "UDS", "service_id": "0x%02X" % sid,
-                "service": UDS_SERVICES[original], "meaning": "Pozitif servis cevabı"}
+        service_map = UDS_SERVICES if original in UDS_SERVICES else KWP_SERVICES
+        info = {"family": "UDS/KWP", "service_id": "0x%02X" % sid,
+                "service": service_map[original], "meaning": "Pozitif servis cevabı"}
         if original == 0x27 and len(payload) >= 3:
             info["security_level"] = payload[1]
             info["security_exchange"] = "seed_response" if payload[1] & 1 else "key_response"
@@ -185,7 +186,7 @@ class DiagnosticAnalyzer:
                 if info:
                     messages.append({"can_id": "0x" + can_id, "payload": _hex(payload), **info})
             # KWP2000 long-header frames: format, length, target, source, SID/data, checksum.
-            if len(data) >= 6 and (data[0] & 0x80) and data[1] >= 3 and len(data) == int(data[1]) + 2:
+            if len(data) >= 6 and (data[0] & 0x80) and data[1] >= 3 and len(data) == int(data[1]) + 3:
                 if (sum(data[:-1]) & 0xFF) == data[-1]:
                     kwp_payload = data[4:-1]
                     kwp_info = classify_payload(kwp_payload)
