@@ -67,6 +67,15 @@ class LearningTests(unittest.TestCase):
         self.assertTrue(result["requires_user_approval"])
         self.assertFalse(result["ecu_acceptance_verified"])
 
+    def test_observed_ecu_profile_survives_restart(self):
+        event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("62 F1 90 01 02"))
+        self.assertEqual(event["event"], "positive_response")
+        reopened = ECULearningEngine(Path(self.tmp.name) / "learn.sqlite3")
+        state = reopened.snapshot()
+        self.assertEqual(state["frame_count"], 0)
+        self.assertEqual(state["ecu_profiles"][0]["ecu_key"], "ISO15765:0x7E8")
+        self.assertEqual(state["recent_observations"][0]["did"], 0xF190)
+
     def test_no_fake_algorithm_claim(self):
         state = self.engine.snapshot()
         self.assertEqual(state["key_algorithm_status"], "provider_or_verified_samples_required")
