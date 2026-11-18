@@ -18,7 +18,6 @@ from datetime import datetime
 import csv
 import io
 import traceback
-from diagnostic_engine import create_blueprint
 
 # Web sunucusu kutuphaneleri eksikse masaustu uygulamasi sessizce kapanmasin.
 try:
@@ -43,6 +42,8 @@ except Exception as _web_exc:
     except Exception:
         pass
     raise SystemExit(1)
+
+from diagnostic_engine import create_blueprint
 
 # --- Kütüphane Yüklemeleri ---
 try:
