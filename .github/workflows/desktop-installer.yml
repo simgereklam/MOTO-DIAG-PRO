@@ -7,7 +7,9 @@ on:
       - main
       - desktop-universal-abs-foundation
     paths:
-      - SEYFI_USTA_MASAUSTU.py
+      - SEYFI_USTA_MASAUSTE.py
+      - diagnostic_engine.py
+      - tests/**
       - desktop_requirements.txt
       - installer/MOTO_DIAG_PRO.iss
       - third_party/SavvyCAN/**
@@ -41,12 +43,13 @@ jobs:
       - name: Verify Python source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTU.py
+          python -m py_compile SEYFI_USTA_MASAUSTE.py diagnostic_engine.py
+          python -m unittest discover -s tests -v
 
       - name: Build self-contained Windows application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTE.py
 
       - name: Bundle SavvyCAN V220 (Windows x64)
         shell: pwsh
