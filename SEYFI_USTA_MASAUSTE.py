@@ -2831,9 +2831,11 @@ function j2534ReadDtc(){var out=document.getElementById('j2534_output');out.inne
     if(st.connected&&String(st.protocol).toLowerCase()==='iso15765'){
      const scan=await fetch('/api/j2534/obd/dtc',{method:'POST'}),result=await scan.json();
      out.textContent+='\n\nMOTOR ECU STANDART OBD-II TARAMASI\n'+JSON.stringify(result,null,2);
+    }else if(st.connected&&String(st.protocol).toLowerCase()==='can'){
+     out.textContent+='\n\nJ2534 ham CAN kanalı yalnızca pasif dinleme için açık. Aktif motor OBD sorgusu için J2534 ISO15765 kanalını açın; ham CAN kaydından rastgele komut gönderilmedi.';
     }else{
      socket.emit('scan_dtc');
-     out.textContent+='\n\nMotor ECU standart arıza taraması başlatıldı. Sonuç mevcut DTC ekranına ve işlem kayıtlarına düşecektir.';
+     out.textContent+='\n\nMotor ECU arıza taraması mevcut ELM/USB teşhis bağlantısına iletildi. Sonuç DTC ekranına ve işlem kayıtlarına düşecektir.';
     }
    }else{
     out.textContent+='\n\nABS ECU: Analiz ve onay tamamlandı. Bu dalda ABS için doğrulanmış aktif teşhis taşıma/servis profili henüz bulunmadığından ABS ECU’ya tahmini komut gönderilmedi.';
