@@ -21,7 +21,7 @@ import traceback
 
 # Otomatik ECU trafik öğrenmesi: tamamen yerel SQLite kaydı.
 try:
-    from adaptive_ecu_learning import ECU_LEARNER
+    from adaptive_ecu_learning import ECU_LEARNER, IsoTpDecoder
 except Exception as _learning_import_error:
     ECU_LEARNER = None
     print("ECU öğrenme modülü yüklenemedi:", _learning_import_error)
@@ -808,6 +808,69 @@ def j2534_send_obd_pid(pid, timeout_ms=1800):
             return None, "Mode 01 PID hatasi: " + str(exc)
 
 
+def j2534_read_obd_info(info_type=0x02, timeout_ms=2500):
+    """Read standard SAE J1979 Mode 09 vehicle information (VIN only by default)."""
+    info_type = int(info_type)
+    if not 0 <= info_type <= 0xFF:
+        return None, None, "Bilgi türü 0-255 aralığında olmalı."
+    with _j2534_lock:
+        dll = _j2534_state.get("dll")
+        channel = _j2534_state.get("channel_id")
+        if dll is None or channel is None or _j2534_state.get("protocol") != "iso15765":
+            return None, None, "J2534 ISO15765 kanalı açık değil."
+        try:
+            write_fn = dll.PassThruWriteMsgs
+            write_fn.argtypes = [ctypes.c_uint32, ctypes.POINTER(_J2534Msg),
+                                 ctypes.POINTER(ctypes.c_uint32), ctypes.c_uint32]
+            write_fn.restype = ctypes.c_uint32
+            msg = _J2534Msg()
+            msg.ProtocolID = J2534_PROTOCOLS["iso15765"]["id"]
+            msg.TxFlags = 0x40
+            payload = bytes((0x00, 0x00, 0x07, 0xDF, 0x02, 0x09, info_type))
+            msg.DataSize = len(payload)
+            for i, value in enumerate(payload):
+                msg.Data[i] = value
+            count = ctypes.c_uint32(1)
+            rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
+            if rc != 0 or count.value != 1:
+                return None, None, "Mode 09 isteği gönderilemedi: " + J2534_STATUS.get(rc, str(rc))
+            if ECU_LEARNER is not None:
+                ECU_LEARNER.ingest_can_frame(0x7DF, payload[4:], direction="TX",
+                                             protocol="ISO15765")
+            _ecu_lab_record("J2534-ISO15765", "TX", payload.hex(" ").upper(),
+                            "SAE J1979 Mode 09 info %02X" % info_type)
+            decoder = IsoTpDecoder()
+            deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 8000) / 1000.0)
+            while time.monotonic() < deadline:
+                result = j2534_read_passive(timeout_ms=200, max_messages=32)
+                if not result.get("ok"):
+                    if "ERR_TIMEOUT" in str(result.get("error")):
+                        continue
+                    return None, None, result.get("error", "J2534 RX hatası")
+                for frame in result.get("frames", []):
+                    try:
+                        raw = bytes.fromhex(frame.get("data", "").replace(" ", ""))
+                    except ValueError:
+                        continue
+                    if len(raw) < 5:
+                        continue
+                    can_id = int.from_bytes(raw[:4], "big")
+                    response = decoder.feed(can_id, "RX", raw[4:])
+                    if response and len(response) >= 3 and response[0] == 0x49 and response[1] == info_type:
+                        body = response[3:] if response[2] <= 0x20 else response[2:]
+                        text_value = "".join(ch for ch in body.decode("ascii", errors="ignore")
+                                             if ch.isalnum())
+                        if info_type == 0x02 and len(text_value) >= 17:
+                            vin = text_value[:17].upper()
+                            if len(vin) == 17:
+                                return vin, can_id, "VIN ECU 0x%03X üzerinden okundu." % can_id
+                        return text_value or None, can_id, "Mode 09 olumlu yanıtı alındı."
+            return None, None, "Mode 09 bilgi yanıtı alınmadı."
+        except Exception as exc:
+            _j2534_state["last_error"] = str(exc)
+            return None, None, "Mode 09 sorgu hatası: " + str(exc)
+
+
 def j2534_read_obd_live_data():
     """Desteklenen temel SAE J1979 PID'lerini tek tek sorgular; standart OBD motor verisidir."""
     definitions = {
@@ -920,6 +983,17 @@ class J2534OBDConnection:
                 block_start += 20
             write_log("J2534 ECU DOĞRULAMA",
                       "Gerçek SAE J1979 0100 yanıtı alındı; desteklenen PID sayısı: " + str(len(self.supported_pids)))
+            # VIN, öğrenilen Seed/Key örneklerinin farklı motosikletlerle karışmasını önler.
+            vin, vin_response_id, vin_detail = j2534_read_obd_info(0x02, timeout_ms=2500)
+            if vin and vin_response_id is not None and ECU_LEARNER is not None:
+                ecu_key = "ISO15765:0x%03X" % int(vin_response_id)
+                try:
+                    ECU_LEARNER.set_ecu_identity(ecu_key, {"vin": vin})
+                    write_log("OTOMATİK ECU KİMLİĞİ", "VIN: " + vin + " | " + ecu_key)
+                except Exception as identity_exc:
+                    write_log("ECU KİMLİĞİ KAYDI", str(identity_exc))
+            else:
+                write_log("OTOMATİK ECU KİMLİĞİ", vin_detail + " | VIN yoksa Seed/Key örnekleri algoritma çıkarmak için birleştirilmez.")
         except Exception:
             self._closed = True
             j2534_close()
