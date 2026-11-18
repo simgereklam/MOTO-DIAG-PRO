@@ -227,16 +227,22 @@ class DiagnosticAnalyzer:
 
 
 
-def decode_yamaha_cp3_frames(frames):
-    """Decode the published CP3 DBC. Applicability is one tested RN70 2022 EU bike."""
+def decode_yamaha_can_frames(frames, profile_id="YAMAHA-CP3-TRACER9-RN70-2022-EU"):
+    """Decode a specifically selected Yamaha community DBC profile; passive only."""
     if not isinstance(frames, list):
         raise ValueError("CAN frame listesi geçersiz.")
     try:
         import cantools
     except ImportError as exc:
         raise RuntimeError("cantools kurulu değil; kurulum bağımlılıklarını yükleyin.") from exc
-    dbc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            "profiles", "yamaha_cp3_2021_2024.dbc")
+    profile_files = {
+        "YAMAHA-CP3-TRACER9-RN70-2022-EU": ("yamaha_cp3_2021_2024.dbc", "2022 Yamaha Tracer 9 base RN70, EU Euro 5 only; other models/years unverified"),
+        "YAMAHA-R9-2026": ("yamaha_r9_2026.dbc", "Community reverse-engineering data from one 2026 Yamaha R9; not an official specification"),
+    }
+    if profile_id not in profile_files:
+        raise ValueError("Yamaha DBC profili desteklenmiyor.")
+    dbc_name, applicability = profile_files[profile_id]
+    dbc_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "profiles", dbc_name)
     if not os.path.isfile(dbc_path):
         raise FileNotFoundError("Yamaha CP3 DBC profili bulunamadı.")
     database = cantools.database.load_file(dbc_path, strict=False)
@@ -271,10 +277,10 @@ def decode_yamaha_cp3_frames(frames):
         except Exception as exc:
             errors.append({"can_id": "0x%03X" % can_id, "error": str(exc)})
     return {
-        "ok": True, "profile_id": "YAMAHA-CP3-TRACER9-RN70-2022-EU",
-        "applicability": "2022 Yamaha Tracer 9 base RN70, EU Euro 5 only; other models/years unverified",
-        "source": "https://github.com/bratukh/yamaha-cp3-can",
-        "license": "CC BY 4.0; attribution in third_party/yamaha-cp3-can/LICENSE-DATA",
+        "ok": True, "profile_id": profile_id,
+        "applicability": applicability,
+        "source": ("https://github.com/bratukh/yamaha-cp3-can" if profile_id.startswith("YAMAHA-CP3") else "https://github.com/DeziderMesko/motocan"),
+        "license": "CC BY 4.0; see the profile attribution file under third_party/",
         "frames_decoded": len(decoded), "unknown_ids": dict(unknown),
         "errors": errors[-100:], "decoded": decoded[-2000:],
         "note": "DBC decoding is read-only broadcast signal decoding; it does not provide ABS DTC, actuator commands or Seed-Key algorithms."
@@ -386,7 +392,7 @@ def create_blueprint():
     def decode_cp3():
         payload = request.get_json(silent=True) or {}
         try:
-            return jsonify(decode_yamaha_cp3_frames(payload.get("frames", [])))
+            return jsonify(decode_yamaha_can_frames(payload.get("frames", []), payload.get("profile_id", "YAMAHA-CP3-TRACER9-RN70-2022-EU"))))
         except Exception as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
     @bp.get("/api/auto-diagnostics/yamaha/cp3/profile")
