@@ -26,6 +26,15 @@ UDS_SERVICES = {
     0x2F: "InputOutputControlByIdentifier", 0x31: "RoutineControl",
     0x3E: "TesterPresent", 0x85: "ControlDTCSetting",
 }
+KWP_SERVICES = {
+    0x10: "StartDiagnosticSession", 0x11: "ECUReset", 0x14: "ClearDiagnosticTroubleCodes",
+    0x17: "ReadDiagnosticTroubleCodes", 0x18: "ReadDiagnosticTroubleCodesByStatus",
+    0x1A: "ReadECUIdentification", 0x21: "ReadDataByCommonIdentifier",
+    0x22: "ReadDataByLocalIdentifier", 0x23: "ReadMemoryByAddress",
+    0x27: "SecurityAccess", 0x28: "CommunicationControl", 0x29: "ReadDataByPeriodicIdentifier",
+    0x30: "DeviceControl", 0x31: "StartRoutine", 0x3B: "WriteDataByLocalIdentifier",
+    0x3D: "WriteMemoryByAddress", 0x3E: "TesterPresent", 0x85: "ControlDTCSetting",
+}
 NRC = {
     0x11: "ServiceNotSupported", 0x12: "SubFunctionNotSupported",
     0x13: "IncorrectMessageLengthOrInvalidFormat", 0x22: "ConditionsNotCorrect",
@@ -112,9 +121,10 @@ def classify_payload(payload):
         if original == 0x22 and len(payload) >= 3:
             info["did"] = "0x%02X%02X" % (payload[1], payload[2])
         return info
-    if sid in UDS_SERVICES:
-        info = {"family": "UDS request/candidate", "service_id": "0x%02X" % sid,
-                "service": UDS_SERVICES[sid], "meaning": "Servis isteği veya yakalanmış teşhis mesajı"}
+    if sid in UDS_SERVICES or sid in KWP_SERVICES:
+        service_map = UDS_SERVICES if sid in UDS_SERVICES else KWP_SERVICES
+        info = {"family": "UDS/KWP request/candidate", "service_id": "0x%02X" % sid,
+                "service": service_map[sid], "meaning": "Servis isteği veya yakalanmış teşhis mesajı"}
         if sid == 0x27 and len(payload) >= 2:
             info["security_level"] = payload[1]
             info["security_exchange"] = "seed_request" if payload[1] & 1 else "key_submission"
@@ -174,6 +184,14 @@ class DiagnosticAnalyzer:
                 info = classify_payload(payload)
                 if info:
                     messages.append({"can_id": "0x" + can_id, "payload": _hex(payload), **info})
+            # KWP2000 long-header frames: format, length, target, source, SID/data, checksum.
+            if len(data) >= 6 and (data[0] & 0x80) and data[1] >= 3 and len(data) == int(data[1]) + 2:
+                if (sum(data[:-1]) & 0xFF) == data[-1]:
+                    kwp_payload = data[4:-1]
+                    kwp_info = classify_payload(kwp_payload)
+                    if kwp_info:
+                        messages.append({"can_id": "0x" + can_id, "payload": _hex(kwp_payload),
+                                         "family": "KWP2000", **kwp_info})
         rows = []
         for can_id, row in sorted(stats.items(), key=lambda item: item[1]["count"], reverse=True):
             periods = row["periods"]
