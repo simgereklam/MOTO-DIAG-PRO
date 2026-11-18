@@ -389,10 +389,11 @@ def create_blueprint():
     from flask import Blueprint, jsonify, request
     bp = Blueprint("efe_moto_auto_diagnostics", __name__)
     @bp.post("/api/auto-diagnostics/yamaha/cp3/decode")
+    @bp.post("/api/auto-diagnostics/yamaha/decode")
     def decode_cp3():
         payload = request.get_json(silent=True) or {}
         try:
-            return jsonify(decode_yamaha_can_frames(payload.get("frames", []), payload.get("profile_id", "YAMAHA-CP3-TRACER9-RN70-2022-EU"))))
+            return jsonify(decode_yamaha_can_frames(payload.get("frames", []), payload.get("profile_id", "YAMAHA-CP3-TRACER9-RN70-2022-EU")))
         except Exception as exc:
             return jsonify({"ok": False, "error": str(exc)}), 400
     @bp.get("/api/auto-diagnostics/yamaha/cp3/profile")
