@@ -34,6 +34,16 @@ class DiagnosticEngineTests(unittest.TestCase):
         result = classify_payload(bytes.fromhex("57 01 00 00"))
         self.assertEqual(result["service"], "ReadDiagnosticTroubleCodes")
 
+    def test_kwp_long_header_frame_is_extracted(self):
+        frame = bytearray.fromhex("84 04 10 F1 10 01")
+        frame.append(sum(frame) & 0xFF)
+        result = DiagnosticAnalyzer().analyze([
+            {"id": "001", "data": frame.hex(" ")}
+        ], "both")
+        self.assertTrue(any(x["family"] == "KWP2000" and
+                            x["service"] == "StartDiagnosticSession"
+                            for x in result["diagnostic_messages"]))
+
     def test_invalid_module_is_rejected(self):
         with self.assertRaises(ValueError):
             DiagnosticAnalyzer().analyze([], "gearbox")
