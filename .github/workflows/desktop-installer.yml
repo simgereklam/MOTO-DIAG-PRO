@@ -46,7 +46,7 @@ jobs:
       - name: Verify Python source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTE.py diagnostic_engine.py
+          python -m py_compile SEYFI_USTA_MASAUSTE.py diagnostic_engine.py adaptive_ecu_learning.py
           python -m unittest discover -s tests -v
 
       - name: Build self-contained Windows application
