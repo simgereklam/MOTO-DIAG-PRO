@@ -90,6 +90,13 @@ class LearningTests(unittest.TestCase):
         self.assertTrue(result["requires_user_approval"])
         self.assertFalse(result["ecu_acceptance_verified"])
 
+    def test_can_tx_rx_frames_share_same_ecu_profile(self):
+        self.engine.ingest_can_frame(0x7E0, bytes.fromhex("02 27 01"), "TX")
+        self.engine.ingest_can_frame(0x7E8, bytes.fromhex("04 67 01 12 34"), "RX")
+        profiles = self.engine.snapshot()["ecu_profiles"]
+        keys = {row["ecu_key"] for row in profiles}
+        self.assertEqual(keys, {"ISO15765:0x7E8"})
+
     def test_observed_ecu_profile_survives_restart(self):
         event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("62 F1 90 01 02"))
         self.assertEqual(event["event"], "positive_response")
