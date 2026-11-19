@@ -2894,7 +2894,7 @@ function ecuLearningListenStart(){
  ecuLearningListenTimer=setInterval(async()=>{
   try{
    const st=await (await fetch('/api/j2534/status')).json();
-   if(!st.connected||String(st.protocol).toLowerCase()!=='iso15765'){clearInterval(ecuLearningListenTimer);ecuLearningListenTimer=null;out.textContent='ISO15765 kanalı kapandı; otomatik dinleme durdu.';return;}
+   if(!st.connected||!['iso15765','kwp2000'].includes(String(st.protocol).toLowerCase())){clearInterval(ecuLearningListenTimer);ecuLearningListenTimer=null;out.textContent='ISO15765/KWP2000 kanalı kapandı veya desteklenmeyen protokol seçildi; otomatik dinleme durdu.';return;}
    await fetch('/api/j2534/read?timeout_ms=150');
    await ecuLearningRefresh();
   }catch(e){out.textContent='RX dinleme hatası: '+e.message;}
