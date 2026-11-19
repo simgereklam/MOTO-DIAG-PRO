@@ -65,6 +65,7 @@ class LearningTests(unittest.TestCase):
 
     def test_attempt_limit_and_delay_are_marked_lockout(self):
         self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 01"))
+        self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("27 02 99"))
         event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("7F 27 36"))
         self.assertEqual(event["security_status"], "lockout_or_delay")
         self.assertEqual(self.engine.snapshot()["seed_key_exchanges"][0]["status"], "lockout_or_delay")
