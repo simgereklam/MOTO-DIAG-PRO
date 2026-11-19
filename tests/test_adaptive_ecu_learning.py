@@ -99,6 +99,15 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(state["ecu_profiles"][0]["ecu_key"], "ISO15765:0x7E8")
         self.assertEqual(state["recent_observations"][0]["did"], 0xF190)
 
+    def test_observed_abs_routine_is_candidate_not_executable(self):
+        self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("31 01 12 34"))
+        state = self.engine.snapshot()
+        self.assertEqual(len(state["active_test_candidates"]), 1)
+        candidate = state["active_test_candidates"][0]
+        self.assertEqual(candidate["did"], 0x1234)
+        self.assertFalse(candidate["verified"])
+        self.assertFalse(candidate["execution_allowed"])
+
     def test_no_fake_algorithm_claim(self):
         state = self.engine.snapshot()
         self.assertEqual(state["key_algorithm_status"], "provider_or_verified_samples_required")
