@@ -38,6 +38,22 @@ class LearningTests(unittest.TestCase):
         self.assertEqual(exchange["key_hex"], "AB CD")
         self.assertEqual(exchange["status"], "accepted")
 
+    def test_security_positive_response_without_submitted_key_is_not_accepted(self):
+        self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 11 22"))
+        event = self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 02"))
+        self.assertEqual(event["event"], "security_positive_response_unpaired")
+        self.assertEqual(self.engine.snapshot()["seed_key_exchanges"][0]["status"], "seed_captured")
+
+    def test_seed_must_be_fresh_and_unconsumed(self):
+        self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 11 22"))
+        pending = self.engine.pending_seed("ISO15765:0x7E8", 0x02)
+        self.assertTrue(pending["ok"])
+        self.assertEqual(pending["seed_hex"], "11 22")
+        self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("27 02 AA BB"))
+        self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 02"))
+        consumed = self.engine.pending_seed("ISO15765:0x7E8", 0x02)
+        self.assertFalse(consumed["ok"])
+
     def test_invalid_key_is_recorded_without_retry(self):
         self.engine.ingest_uds_message(0x7E8, "RX", bytes.fromhex("67 01 01 02"))
         self.engine.ingest_uds_message(0x7E0, "TX", bytes.fromhex("27 02 99 99"))
