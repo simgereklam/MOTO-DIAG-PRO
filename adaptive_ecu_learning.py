@@ -176,7 +176,9 @@ class ECULearningEngine:
         ecu_key = f"{protocol}:0x{ecu_id:03X}"
         service = sid
         sub = data[1] if len(data) > 1 else None
-        did = ((data[1] << 8) | data[2]) if sid in (0x22, 0x62) and len(data) >= 3 else None
+        did = ((data[1] << 8) | data[2]) if sid in (0x22, 0x62, 0x2F) and len(data) >= 3 else None
+        if sid in (0x31, 0x71) and len(data) >= 4:
+            did = (data[2] << 8) | data[3]  # RoutineControl identifier, not a DID.
         result = "request_or_observation"
         event = {"ecu_key": ecu_key, "direction": direction, "service": sid,
                  "payload_hex": _hex(data), "event": "observed"}
@@ -407,12 +409,22 @@ class ECULearningEngine:
             observations = [dict(row) for row in db.execute(
                 "SELECT * FROM observations ORDER BY ts DESC LIMIT ?", (max(1,min(int(limit),500)),))]
             frame_count = db.execute("SELECT COUNT(*) FROM frames").fetchone()[0]
+            routine_rows = [dict(row) for row in db.execute(
+                """SELECT ecu_key,ts,direction,service,subfunction,did,payload_hex,result
+                   FROM observations WHERE service IN (49,113,47)
+                   ORDER BY ts DESC LIMIT 200""")]
         for row in profiles:
             row["identity"] = json.loads(row.pop("identity_json", "{}"))
         return {
             "ok": True, "mode": "passive_learning",
             "frame_count": frame_count, "ecu_profiles": profiles,
             "seed_key_exchanges": exchanges, "recent_observations": observations,
+            "active_test_candidates": [
+                {**row, "candidate_only": True, "verified": False,
+                 "execution_allowed": False,
+                 "reason": "Pasif trafikte gözlenen RoutineControl/IOControl isteği; güvenli test prosedürü ve OEM doğrulaması olmadan çalıştırılmaz."}
+                for row in routine_rows if row["direction"] == "TX"
+            ],
             "key_algorithm_status": "provider_or_verified_samples_required",
             "automatic_actions": {
                 "capture_and_classify": True, "persist_profiles": True,
