@@ -146,10 +146,12 @@ class ECULearningEngine:
         with self.lock, self._db() as db:
             db.execute("INSERT INTO frames(ts,protocol,can_id,direction,data_hex) VALUES(?,?,?,?,?)",
                        (stamp, str(protocol), int(can_id), direction, _hex(raw)))
-            response_id = self._address_pair(can_id, direction)
-            if response_id is not None:
+            # Store every physical response under the ECU response CAN ID.
+            # TX 0x7E0-0x7E7 maps to its paired RX 0x7E8-0x7EF; RX stays itself.
+            response_id = int(can_id) if direction == "RX" else self._address_pair(can_id, "TX")
+            if response_id is not None and 0x7E8 <= response_id <= 0x7EF:
                 ecu_key = f"{protocol}:0x{response_id:03X}"
-                request_id = response_id - 8 if 0x7E8 <= response_id <= 0x7EF else None
+                request_id = response_id - 8
                 db.execute("""INSERT INTO profiles(ecu_key,protocol,response_id,request_id,first_seen,last_seen)
                     VALUES(?,?,?,?,?,?) ON CONFLICT(ecu_key) DO UPDATE SET last_seen=excluded.last_seen""",
                     (ecu_key, str(protocol), response_id, request_id, stamp, stamp))
