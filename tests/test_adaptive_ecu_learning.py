@@ -90,6 +90,15 @@ class LearningTests(unittest.TestCase):
         self.assertTrue(result["requires_user_approval"])
         self.assertFalse(result["ecu_acceptance_verified"])
 
+    def test_kwp_seed_response_is_learned_from_valid_frame(self):
+        payload = bytes.fromhex("67 01 12 34")
+        # Format, length, target, source, payload, checksum.
+        frame = bytearray([0x80, len(payload) + 3, 0xF1, 0x10]) + bytearray(payload) + bytearray([0])
+        frame[-1] = sum(frame[:-1]) & 0xFF
+        event = self.engine.ingest_kwp_frame(frame, "RX")
+        self.assertEqual(event["event"], "seed_captured")
+        self.assertEqual(event["ecu_key"], "KWP2000:0x010")
+
     def test_can_tx_rx_frames_share_same_ecu_profile(self):
         self.engine.ingest_can_frame(0x7E0, bytes.fromhex("02 27 01"), "TX")
         self.engine.ingest_can_frame(0x7E8, bytes.fromhex("04 67 01 12 34"), "RX")
