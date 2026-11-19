@@ -1,0 +1,10 @@
+YAMAHA R9 (2026) CAN DBC ATTRIBUTION
+
+File: yamaha_r9_2026.dbc
+Original source: Dezider Mesko, motocan repository
+Source file: https://github.com/DeziderMesko/motocan/blob/acdb1464e327363a7be52a53134f34d0ca2d4e62/analysis/r9.dbc
+Source revision: acdb1464e327363a7be52a53134f34d0ca2d4e62
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+
+The source data describes observations from one 2026 Yamaha R9. It is community reverse-engineering data, not an official Yamaha specification. Signal meanings and vehicle applicability must be independently checked. This file is provided for passive analysis only. MOTO DIAG PRO does not transmit diagnostic or actuator commands based on this DBC.

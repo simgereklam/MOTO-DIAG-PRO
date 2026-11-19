@@ -1,0 +1,31 @@
+{
+  "profile_id": "YAMAHA-R9-2026",
+  "brand": "Yamaha",
+  "model": "R9",
+  "year": 2026,
+  "market": "Not specified",
+  "bus": {
+    "protocol": "CAN 2.0",
+    "bitrate": 500000,
+    "connector": "YDT diagnostic connector",
+    "dbc": "profiles/yamaha_r9_2026.dbc"
+  },
+  "tested_scope": "Community reverse-engineering data from one 2026 Yamaha R9; not an official Yamaha specification. Passive broadcast frames only.",
+  "ecu_addressing": null,
+  "capabilities": {
+    "passive_can_decode": "available",
+    "engine_dtc": "not_documented_in_this_profile",
+    "abs_dtc": "not_documented_in_this_profile",
+    "uds_identification": "not_documented_in_this_profile",
+    "seed_key": "not_documented_in_this_profile",
+    "active_tests": "not_documented_in_this_profile",
+    "actuator_commands": "not_included"
+  },
+  "source": {
+    "repository": "https://github.com/DeziderMesko/motocan",
+    "revision": "acdb1464e327363a7be52a53134f34d0ca2d4e62",
+    "data_license": "CC BY 4.0",
+    "attribution_file": "third_party/yamaha-r9-2026/ATTRIBUTION.txt",
+    "changed": "DBC copied to profiles/ for integrated passive decoding."
+  }
+}

@@ -5,12 +5,18 @@ on:
   push:
     branches:
       - main
+      - desktop-universal-abs-foundation
     paths:
-      - SEYFI_USTA_MASAUSTU.py
-      - seyfi_voice.py
+      - SEYFI_USTA_MASAUSTE.py
+      - adaptive_ecu_learning.py
+      - diagnostic_engine.py
+      - profiles/**
+      - third_party/yamaha-cp3-can/**
+      - third_party/yamaha-r9-2026/**
+      - tests/**
       - desktop_requirements.txt
-      - scripts/prepare_desktop_assets.py
       - installer/MOTO_DIAG_PRO.iss
+      - third_party/SavvyCAN/**
       - .github/workflows/desktop-installer.yml
 
 permissions:
@@ -30,32 +36,41 @@ jobs:
           python-version: "3.12"
           architecture: x64
 
-      - name: Install CPU-only PyTorch
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
 
       - name: Install desktop dependencies
         shell: pwsh
         run: |
           python -m pip install -r desktop_requirements.txt
 
-      - name: Prepare bundled offline Turkish speech models
-        shell: pwsh
-        run: |
-          python scripts/prepare_desktop_assets.py
-
       - name: Verify Python source
         shell: pwsh
         run: |
-          python -m py_compile SEYFI_USTA_MASAUSTU.py seyfi_voice.py scripts/prepare_desktop_assets.py
+          python -m py_compile SEYFI_USTA_MASAUSTE.py diagnostic_engine.py adaptive_ecu_learning.py
+          python -m unittest discover -s tests -v
 
       - name: Build self-contained Windows application
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --collect-all torch --collect-all pocket_tts --collect-all pocket_tts_turkish --collect-all vosk --collect-all sounddevice --collect-all soundfile --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTU.py
+          pyinstaller --noconfirm --clean --onedir --windowed --name "MOTO DIAG PRO" --add-data "assets;assets" --add-data "profiles;profiles" --add-data "third_party/yamaha-cp3-can;third_party/yamaha-cp3-can" --add-data "third_party/yamaha-r9-2026;third_party/yamaha-r9-2026" --collect-all cantools --hidden-import engineio.async_drivers.threading --hidden-import can.interfaces.socketcan SEYFI_USTA_MASAUSTE.py
 
+      - name: Bundle SavvyCAN V220 (Windows x64)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $archive = Join-Path $env:RUNNER_TEMP "SavvyCAN-Windows_x64_CIBuild.zip"
+          $extract = Join-Path $env:RUNNER_TEMP "SavvyCAN-V220"
+          $target = "dist/MOTO DIAG PRO/SavvyCAN"
+          Invoke-WebRequest -Uri "https://github.com/collin80/SavvyCAN/releases/download/V220/SavvyCAN-Windows_x64_CIBuild.zip" -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $extract -Force
+          $exe = Get-ChildItem -Path $extract -Filter "SavvyCAN.exe" -Recurse | Select-Object -First 1
+          if (-not $exe) { throw "SavvyCAN.exe bulunamadı; upstream arşiv yapısı değişmiş olabilir." }
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          Copy-Item -Path (Join-Path $exe.Directory.FullName "*") -Destination $target -Recurse -Force
+          Copy-Item -Path "third_party/SavvyCAN/LICENSE.txt" -Destination (Join-Path $target "LICENSE-SavvyCAN.txt") -Force
+          if (-not (Test-Path (Join-Path $target "SavvyCAN.exe"))) { throw "SavvyCAN pakete doğru kopyalanamadı." }
+          Write-Host "SavvyCAN V220 uygulama klasörüne paketlendi."
       - name: Download Microsoft Visual C++ runtime
         shell: pwsh
         run: |

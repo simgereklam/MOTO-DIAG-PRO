@@ -1,0 +1,91 @@
+VERSION ""
+
+NS_ :
+
+BS_:
+
+BU_: ECU
+
+BO_ 636 R9_27C: 7 ECU
+ SG_ EngineSpeed : 7|16@0+ (0.390625,0) [0|25600] "rpm" Vector__XXX
+ SG_ RearWheelPulses : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ StartPulse : 24|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ TCS : 25|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ EcuGear : 29|3@1+ (1,0) [0|7] "" Vector__XXX
+ SG_ Gear : 32|3@1+ (1,0) [0|7] "" Vector__XXX
+ SG_ PWR : 38|2@1+ (1,1) [1|4] "" Vector__XXX
+ SG_ SetAfterFirstStart : 55|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 899 R9_383: 8 ECU
+ SG_ Brake : 35|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 1298 R9_512: 4 ECU
+ SG_ WaterTemp : 0|8@1+ (0.625,-30) [-30|129.375] "degC" Vector__XXX
+ SG_ AirTemp : 8|8@1+ (0.625,-30) [-30|129.375] "degC" Vector__XXX
+
+BO_ 1873 R9_751: 8 ECU
+ SG_ NeutralByte : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 1878 R9_756: 8 ECU
+ SG_ RearSpeed_Mid : 4|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ RearSpeed_Hi : 8|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ RearSpeed_Lo : 20|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ RearSpeed_Top : 28|4@1+ (1,0) [0|15] "" Vector__XXX
+
+BO_ 1880 R9_758: 8 ECU
+ SG_ ValveMeasured_Hi : 4|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ ValveMeasured_Lo : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ Grip_Lo12 : 40|12@1+ (1,0) [0|4095] "" Vector__XXX
+ SG_ Grip_Hi : 56|4@1+ (1,0) [0|15] "" Vector__XXX
+
+BO_ 1881 R9_759: 8 ECU
+ SG_ ValveCommanded_Hi : 4|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ ValveCommanded_Lo : 20|4@1+ (1,0) [0|15] "" Vector__XXX
+
+BO_ 1893 R9_765: 8 ECU
+ SG_ FrontSpeed_Top : 4|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ FrontSpeed_Hi : 20|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ FrontSpeed_Lo : 24|4@1+ (1,0) [0|15] "" Vector__XXX
+ SG_ FrontSpeed_Mid : 52|4@1+ (1,0) [0|15] "" Vector__XXX
+
+BO_ 1901 R9_76D: 8 ECU
+ SG_ CruiseResPlus : 24|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ CruiseSetMinus : 44|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 1902 R9_76E: 8 ECU
+ SG_ PWR : 8|8@1+ (1,1) [1|256] "" Vector__XXX
+ SG_ Display : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+
+CM_ "Yamaha R9 (2026), diagnostic (YDT) connector, 500 kbps. Measured, not from Yamaha. The connector only carries these frames when the listening node acknowledges them. Evidence and everything not decoded: r9-signals.md beside this file.";
+CM_ SG_ 636 EngineSpeed "Bytes 0-1 big-endian, raw*100/256. Byte 0 is whole hundreds of rpm. Checked against the engine's sound at idle and against 0x750 to 3400 rpm.";
+CM_ SG_ 636 RearWheelPulses "Rear wheel sensor pulses counted in this 10 ms frame, 0-4 at the speeds seen. One a hole of the sensor ring, 46 to a revolution: the holes counted by hand, and 11 and 10 turns by hand counted 507 and 462.";
+CM_ SG_ 636 StartPulse "Set for about half a second as the starter turns, and in the last frames before the bus goes quiet at key-off. Not set when the start button is pressed with the start blocked.";
+CM_ SG_ 636 TCS "The TCS setting shown on the dash. Four bits: the bits above it are EcuGear.";
+CM_ SG_ 636 EcuGear "The gear as the ECU has it, 1-3 seen, with the engine running; 0 in neutral and with the engine off from key-on. Unlike Gear it holds the last gear between gears, and keeps the gear the engine stopped in until key-off. The same number is in 0x765 byte 1 bits 0-2.";
+CM_ SG_ 636 PWR "The PWR setting, the number on the dash; the raw field is PWR less one, so the offset. Five dash anchors, and the five modes' values in the dash's menu. Not the ride mode: the mode's own number is not on this bus.";
+CM_ SG_ 636 SetAfterFirstStart "0 from key-on to the first start, 1 after it until key-off, 0 for a third of a second at each later start. Engine stops do not clear it. What it means is not known.";
+CM_ SG_ 899 Brake "Front or rear brake on.";
+CM_ SG_ 1878 RearSpeed_Hi "Rear wheel speed is split over four fields a DBC signal cannot join: raw = RearSpeed_Top*4096 + RearSpeed_Hi*256 + RearSpeed_Mid*16 + RearSpeed_Lo, km/h = raw/100. 697 counts per revolution a second by the wheel's own pulses, a 1.936 m wheel, which the tyre is; the dash read 11 percent above it, as speedometers do, one photo. Seen to 59 km/h; only the lowest bit of RearSpeed_Top has been seen set. Rises without the rear turning when the turning front is pushed again, so it is a processed value.";
+CM_ SG_ 1878 RearSpeed_Mid "See RearSpeed_Hi.";
+CM_ SG_ 1878 RearSpeed_Lo "See RearSpeed_Hi.";
+CM_ SG_ 1878 RearSpeed_Top "See RearSpeed_Hi.";
+CM_ SG_ 1893 FrontSpeed_Hi "Front wheel speed: raw = FrontSpeed_Top*4096 + FrontSpeed_Hi*256 + FrontSpeed_Mid*16 + FrontSpeed_Lo, km/h = raw/100, the same unit as the rear. On a stand with the rear turning alone it takes the rear's value after some seconds. Seen to 59 km/h in that copy; only the lowest bit of FrontSpeed_Top has been seen set.";
+CM_ SG_ 1893 FrontSpeed_Mid "See FrontSpeed_Hi.";
+CM_ SG_ 1893 FrontSpeed_Lo "See FrontSpeed_Hi.";
+CM_ SG_ 1893 FrontSpeed_Top "See FrontSpeed_Hi.";
+CM_ SG_ 1901 CruiseResPlus "1 while the cruise RES+ button is held. The frame comes twice a second, so a short press can be missed.";
+CM_ SG_ 1901 CruiseSetMinus "1 while the cruise SET- button is held. See CruiseResPlus.";
+CM_ SG_ 1298 AirTemp "Intake air. The dash shows 1-2 degC less than this equation gives.";
+CM_ SG_ 1873 NeutralByte "0x60 or 0x70 in neutral, 0x00 in gear, with the engine off. With the engine running in gear it can read 0x60 or 0x20; use Gear in 0x27C for the gear.";
+CM_ SG_ 1880 Grip_Lo12 "Throttle grip (APS) is split over two fields a DBC signal cannot join: raw = Grip_Hi*4096 + Grip_Lo12, percent = raw/31672*100. Reads 0 for the first twentieth of the travel.";
+CM_ SG_ 1880 Grip_Hi "See Grip_Lo12.";
+CM_ SG_ 1880 ValveMeasured_Hi "Throttle valve (TPS), measured: raw = ValveMeasured_Hi*256 + ValveMeasured_Lo, percent = raw/16/144.4*100. Zero is provisional: a warm idle reads about 8 percent.";
+CM_ SG_ 1880 ValveMeasured_Lo "See ValveMeasured_Hi.";
+CM_ SG_ 1881 ValveCommanded_Hi "Throttle valve, commanded: raw = ValveCommanded_Hi*16 + ValveCommanded_Lo, percent = raw/144.4*100. Leads the measured value by one sample.";
+CM_ SG_ 1881 ValveCommanded_Lo "See ValveCommanded_Hi.";
+CM_ SG_ 1902 PWR "The same setting as PWR in 0x27C, PWR less one in the raw byte.";
+CM_ SG_ 1902 Display "0x20 with the normal display, 0x10 with the Track display. One switch each way.";
+
+VAL_ 636 Gear 0 "N" 1 "1" 2 "2" 3 "3" 4 "4" 5 "5" 6 "6" 7 "between gears" ;
+VAL_ 1873 NeutralByte 0 "in gear" 96 "neutral" 112 "neutral" ;
+VAL_ 1902 Display 16 "track" 32 "normal" ;

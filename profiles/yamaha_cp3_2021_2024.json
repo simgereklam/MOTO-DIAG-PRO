@@ -1,0 +1,151 @@
+{
+  "profile_id": "YAMAHA-CP3-TRACER9-RN70-2022-EU",
+  "brand": "Yamaha",
+  "model": "Tracer 9 (base, CP3 890cc)",
+  "model_code": "RN70",
+  "year": 2022,
+  "market": "EU Euro 5",
+  "system_name": "B5U1",
+  "tested_engine_ecu_software": "12165003",
+  "tested_abs_ecu_software": "12165180",
+  "bus": {
+    "protocol": "CAN 2.0",
+    "bitrate": 500000,
+    "identifier_bits": 11,
+    "dbc": "profiles/yamaha_cp3_2021_2024.dbc"
+  },
+  "ecu_addressing": {
+    "engine": {
+      "request_id": "0x7E0",
+      "response_id": "0x7E8",
+      "supplier_did": "0xF18A",
+      "software_did": "0xF194"
+    },
+    "abs": {
+      "request_id": "0x7E3",
+      "response_id": "0x7EB",
+      "supplier_did": "0xF18A",
+      "software_did": "0xF194"
+    }
+  },
+  "read_only_uds": {
+    "session": [
+      "10 01"
+    ],
+    "service": "22",
+    "dids": {
+      "F190": {
+        "name": "VIN",
+        "engine": true,
+        "abs": false
+      },
+      "F18A": {
+        "name": "Supplier ID",
+        "engine": true,
+        "abs": true
+      },
+      "F18C": {
+        "name": "Serial number",
+        "engine": true,
+        "abs": true
+      },
+      "F192": {
+        "name": "Hardware number",
+        "engine": true,
+        "abs": true
+      },
+      "F194": {
+        "name": "Software number",
+        "engine": true,
+        "abs": true
+      },
+      "F195": {
+        "name": "Software version",
+        "engine": true,
+        "abs": true
+      },
+      "F197": {
+        "name": "System name",
+        "engine": true,
+        "abs": true
+      },
+      "F1A0": {
+        "name": "ECU data block",
+        "engine": true,
+        "abs": true
+      },
+      "F1A1": {
+        "name": "Ignition-on seconds counter",
+        "engine": true,
+        "abs": false
+      },
+      "F1A2": {
+        "name": "Slow counter",
+        "engine": true,
+        "abs": false
+      },
+      "F1EF": {
+        "name": "ECU data",
+        "engine": true,
+        "abs": false
+      }
+    }
+  },
+  "obd2": {
+    "request_id": "0x7DF",
+    "response_id": "0x7E8",
+    "modes": [
+      1,
+      3,
+      9
+    ],
+    "supported_pids": [
+      "01",
+      "03",
+      "04",
+      "05",
+      "06",
+      "07",
+      "0B",
+      "0C",
+      "0D",
+      "0E",
+      "0F",
+      "11",
+      "13",
+      "14",
+      "1C",
+      "20",
+      "21",
+      "33",
+      "40",
+      "41",
+      "42",
+      "45",
+      "47",
+      "49",
+      "4A",
+      "4D",
+      "5A",
+      "60",
+      "65"
+    ]
+  },
+  "capabilities": {
+    "can_passive_decode": "available",
+    "engine_uds_identification": "read_only_profiled",
+    "abs_uds_identification": "read_only_profiled",
+    "engine_obd2": "documented",
+    "abs_dtcs": "not_documented_in_this_profile",
+    "abs_active_tests": "not_documented_in_this_profile",
+    "seed_key": "not_attempted_by_source_project",
+    "actuator_commands": "not_included"
+  },
+  "tested_scope": "One 2022 Tracer 9 base model, RN70, EU Euro 5. Other years, trims and Yamaha models are not confirmed.",
+  "source": {
+    "repository": "https://github.com/bratukh/yamaha-cp3-can",
+    "data_license": "CC BY 4.0",
+    "license_file": "third_party/yamaha-cp3-can/LICENSE-DATA",
+    "changed": "DBC copied into EFE MOTO profiles; integration metadata added."
+  }
+}

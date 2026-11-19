@@ -1,4 +1,4 @@
-#define MyAppName "MOTO DIAG PRO"
+#define MyAppName "EFE MOTO MOTOSİKLET ARIZA TEŞHİSİ"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "EFE MOTO"
 #define MyAppExeName "MOTO DIAG PRO.exe"
@@ -8,7 +8,7 @@ AppId={{7A13F0D5-8D31-4C83-8E19-9B0B65D2B1A1}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\MOTO DIAG PRO
+DefaultDirName={autopf}\EFE MOTO
 DefaultGroupName={#MyAppName}
 OutputDir=..\release
 OutputBaseFilename=MOTO-DIAG-PRO-Setup-x64

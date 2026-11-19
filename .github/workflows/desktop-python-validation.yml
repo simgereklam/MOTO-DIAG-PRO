@@ -1,0 +1,25 @@
+name: Desktop Python syntax validation
+
+on:
+  push:
+    branches:
+      - desktop-universal-abs-foundation
+  pull_request:
+    branches:
+      - main
+    paths:
+      - SEYFI_USTA_MASAUSTU.py
+      - .github/workflows/desktop-python-validation.yml
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out desktop source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile the single desktop application file
+        run: python -m py_compile SEYFI_USTA_MASAUSTU.py
