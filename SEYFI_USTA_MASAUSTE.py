@@ -2749,10 +2749,13 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
     <p style="color:#aab5c2">J2534 ISO15765 kanalındaki gerçek TX/RX trafiği yerel veritabanına kaydedilir. Seed isteği ve Key gönderimi ayrı kullanıcı onayı ister. Yalnızca kimliği doğrulanmış ECU ve öğrenilmiş aday kullanılır.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
      <input id="ecu_learning_ecu" class="module-field" placeholder="ECU kimliği (otomatik bulunur)">
-     <input id="ecu_learning_level" class="module-field" type="number" min="2" max="126" step="2" value="2" placeholder="Security Key seviyesi (HEX değil, ondalık)">
+     <input id="ecu_learning_level" class="module-field" type="number" min="2" max="126" step="2" value="2" placeholder="Security Key seviyesi (ondalık)">
+     <input id="ecu_learning_part" class="module-field" placeholder="ECU parça numarası (VIN yoksa)">
+     <input id="ecu_learning_sw" class="module-field" placeholder="ECU yazılım numarası (VIN yoksa)">
     </div>
     <div class="module-actions">
      <button class="btn test-btn" onclick="ecuLearningRefresh()">ÖĞRENME DURUMUNU YENİLE</button>
+     <button class="btn test-btn" onclick="ecuLearningSaveIdentity()">ECU KİMLİĞİNİ KAYDET</button>
      <button class="btn test-btn" onclick="ecuLearningListenStart()">OTOMATİK RX DİNLE</button>
      <button class="btn test-btn" onclick="ecuLearningListenStop()">DİNLEMEYİ DURDUR</button>
      <button class="btn test-btn" onclick="ecuLearningRequestSeed()">SEED İSTE</button>
@@ -2846,6 +2849,14 @@ async function ecuLearningRefresh(){
    'Key algoritması: '+d.key_algorithm_status+'\\n'+
    'Brute force: kapalı | Onaysız Key gönderimi: kapalı | Doğrulanmamış ABS aktüatör: kapalı';
  }catch(e){out.textContent='Öğrenme durumu hatası: '+e.message;}
+}
+async function ecuLearningSaveIdentity(){
+ const ecu_key=document.getElementById('ecu_learning_ecu').value.trim();
+ const part=document.getElementById('ecu_learning_part').value.trim();
+ const sw=document.getElementById('ecu_learning_sw').value.trim();
+ if(!ecu_key||(!part&&!sw)){alert('ECU kimliği ve VIN yoksa en az parça veya yazılım numarası gerekli.');return;}
+ const out=document.getElementById('ecu_learning_status');out.textContent='ECU kimliği kaydediliyor...';
+ try{const r=await fetch('/api/ecu-learning/identity',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ecu_key:ecu_key,ecu_part_number:part,software_number:sw})});const d=await r.json();out.textContent=JSON.stringify(d,null,2);await ecuLearningRefresh();}catch(e){out.textContent='ECU kimlik kaydı hatası: '+e.message;}
 }
 async function ecuLearningRequestSeed(){
  const ecu_key=document.getElementById('ecu_learning_ecu').value.trim();
@@ -3403,6 +3414,26 @@ def _ecu_learning_physical_ids(ecu_key):
         raise ValueError('Bu işlem için doğrulanmış 11-bit 0x7E8-0x7EF ECU yanıt kimliği gerekli.')
     rx_id = int(match.group(1), 16)
     return rx_id - 8, rx_id
+
+
+@app.route('/api/ecu-learning/identity', methods=['POST'])
+def api_ecu_learning_identity():
+    payload = request.get_json(silent=True) or {}
+    if ECU_LEARNER is None:
+        return jsonify({'ok': False, 'error': 'Yerel ECU öğrenme modülü yüklenemedi.'}), 503
+    try:
+        result = ECU_LEARNER.set_ecu_identity(str(payload.get('ecu_key') or ''), {
+            'vin': payload.get('vin', ''),
+            'ecu_part_number': payload.get('ecu_part_number', ''),
+            'hardware_number': payload.get('hardware_number', ''),
+            'software_number': payload.get('software_number', ''),
+            'supplier': payload.get('supplier', ''),
+            'ecu_name': payload.get('ecu_name', '')
+        })
+        write_log('ECU KİMLİĞİ KAYDEDİLDİ', json.dumps(result, ensure_ascii=False))
+        return jsonify(result)
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
 
 
 @app.route('/api/ecu-learning/request-seed', methods=['POST'])
