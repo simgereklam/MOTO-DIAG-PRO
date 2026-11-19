@@ -160,6 +160,27 @@ class ECULearningEngine:
             return self.ingest_uds_message(can_id, direction, payload, stamp, protocol)
         return None
 
+    def ingest_kwp_frame(self, frame, direction="RX", timestamp=None):
+        """Decode a checksum-valid KWP2000 long-header frame and learn its service."""
+        raw = bytes(frame or b"")
+        direction = str(direction).upper()
+        if direction not in ("TX", "RX"):
+            raise ValueError("direction TX veya RX olmalı")
+        if len(raw) < 6 or not (raw[0] & 0x80) or raw[1] < 3:
+            return {"event": "not_a_supported_kwp_frame"}
+        if len(raw) != int(raw[1]) + 3 or (sum(raw[:-1]) & 0xFF) != raw[-1]:
+            return {"event": "invalid_kwp_frame"}
+        target, source = raw[2], raw[3]
+        ecu_address = target if direction == "TX" else source
+        payload = raw[4:-1]
+        if not payload:
+            return {"event": "empty_kwp_payload"}
+        stamp = float(timestamp if timestamp is not None else time.time())
+        with self.lock, self._db() as db:
+            db.execute("INSERT INTO frames(ts,protocol,can_id,direction,data_hex) VALUES(?,?,?,?,?)",
+                       (stamp, "KWP2000", int(ecu_address), direction, _hex(raw)))
+        return self.ingest_uds_message(ecu_address, direction, payload, stamp, "KWP2000")
+
     def ingest_uds_message(self, can_id, direction, payload, timestamp=None,
                            protocol="ISO15765"):
         direction = str(direction).upper()
