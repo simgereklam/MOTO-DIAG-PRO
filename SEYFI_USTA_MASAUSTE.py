@@ -2841,6 +2841,8 @@ async function ecuLearningRefresh(){
    'ECU PROFİLLERİ: '+profiles.length+'\\n'+
    profiles.map(x=>x.ecu_key+' | VIN: '+(x.identity?.vin||'okunmadı')).join('\\n')+'\\n\\n'+
    'SEED / KEY KAYITLARI\\n'+(d.seed_key_exchanges||[]).slice(0,12).map(x=>x.ecu_key+' | seviye '+x.security_level+' | Seed '+x.seed_hex+' | '+x.status+(x.nrc?' | NRC '+x.nrc:'')).join('\\n')+'\\n\\n'+
+   'GÖZLENEN ABS / AKTİF TEST ADAYLARI (PASİF KAYIT)\\n'+
+   (d.active_test_candidates||[]).slice(0,12).map(x=>x.ecu_key+' | servis 0x'+Number(x.service).toString(16).toUpperCase()+' | alt fonksiyon '+x.subfunction+' | rutin 0x'+Number(x.did||0).toString(16).toUpperCase()+' | DOĞRULANMADI').join('\\n')+'\\n\\n'+
    'Key algoritması: '+d.key_algorithm_status+'\\n'+
    'Brute force: kapalı | Onaysız Key gönderimi: kapalı | Doğrulanmamış ABS aktüatör: kapalı';
  }catch(e){out.textContent='Öğrenme durumu hatası: '+e.message;}
