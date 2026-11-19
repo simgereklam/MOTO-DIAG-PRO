@@ -8,6 +8,7 @@ on:
       - desktop-universal-abs-foundation
     paths:
       - SEYFI_USTA_MASAUSTE.py
+      - adaptive_ecu_learning.py
       - diagnostic_engine.py
       - profiles/**
       - third_party/yamaha-cp3-can/**
