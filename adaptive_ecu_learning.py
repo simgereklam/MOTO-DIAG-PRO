@@ -66,6 +66,7 @@ class ECULearningEngine:
         self.decoder = IsoTpDecoder()
         self.latest_seed = {}
         self.latest_key = {}
+        self.pending_seed_request = {}
         self._init_db()
 
     def _connect(self):
@@ -192,14 +193,16 @@ class ECULearningEngine:
                 result = "negative_response"
                 event.update({"event": "negative_response", "nrc": nrc})
                 if service == 0x27:
-                    level = self.latest_seed.get(ecu_key, {}).get("level")
-                    seed_row = self.latest_seed.get(ecu_key, {}).get("row_id")
-                    if seed_row:
+                    pending = self.latest_seed.get(ecu_key)
+                    seed_row = pending.get("row_id") if pending else None
+                    if seed_row and self.latest_key.get(ecu_key, {}).get("row_id") == seed_row:
                         status = "lockout_or_delay" if nrc in (0x36, 0x37) else "rejected"
                         db.execute("UPDATE seed_exchanges SET status=?,nrc=?,last_seen=? WHERE id=?",
                                    (status, nrc, stamp, seed_row))
-                    event["security_status"] = ("lockout_or_delay" if nrc in (0x36,0x37)
-                                                 else "key_rejected")
+                        event["security_status"] = ("lockout_or_delay" if nrc in (0x36,0x37)
+                                                     else "key_rejected")
+                    else:
+                        event["security_status"] = "security_request_rejected_or_unpaired"
             elif sid == 0x67 and len(data) >= 2:
                 level = data[1]
                 if level & 1:
@@ -209,27 +212,36 @@ class ECULearningEngine:
                             (ecu_key,security_level,seed_hex,status,first_seen,last_seen)
                             VALUES(?,?,?,?,?,?)""",
                             (ecu_key, level, _hex(seed), "seed_captured", stamp, stamp))
-                        self.latest_seed[ecu_key] = {"level": level, "row_id": cur.lastrowid}
+                        self.latest_seed[ecu_key] = {"level": level, "row_id": cur.lastrowid,
+                                                     "captured_at": stamp, "seed_hex": _hex(seed)}
+                        self.latest_key.pop(ecu_key, None)
                         result = "seed_response"
                         event.update({"event": "seed_captured", "security_level": level,
                                       "seed_hex": _hex(seed), "seed_length": len(seed)})
                 else:
                     pending = self.latest_seed.get(ecu_key)
-                    if pending:
+                    submitted = self.latest_key.get(ecu_key)
+                    if pending and submitted and submitted.get("row_id") == pending.get("row_id") and level == pending.get("level", 0) + 1:
                         db.execute("UPDATE seed_exchanges SET status='accepted',last_seen=? WHERE id=?",
                                    (stamp, pending["row_id"]))
                         result = "key_accepted"
                         event.update({"event": "key_accepted", "security_level": level,
                                       "ecu_security_access": "accepted"})
+                        self.latest_seed.pop(ecu_key, None)
+                        self.latest_key.pop(ecu_key, None)
                     else:
                         result = "security_positive_response_unpaired"
                         event.update({"event": result})
             elif sid == 0x27 and len(data) >= 2 and direction == "TX":
                 level = data[1]
-                if not (level & 1):
+                if level & 1:
+                    self.pending_seed_request[ecu_key] = {"level": level, "timestamp": stamp}
+                    result = "seed_request_observed"
+                    event.update({"event": result, "security_level": level})
+                else:
                     key = data[2:]
                     pending = self.latest_seed.get(ecu_key)
-                    if pending:
+                    if pending and level == pending.get("level", 0) + 1 and pending.get("row_id"):
                         db.execute("UPDATE seed_exchanges SET key_hex=?,status='key_submitted_observed',last_seen=? WHERE id=?",
                                    (_hex(key), stamp, pending["row_id"]))
                         self.latest_key[ecu_key] = {"level": level, "row_id": pending["row_id"]}
