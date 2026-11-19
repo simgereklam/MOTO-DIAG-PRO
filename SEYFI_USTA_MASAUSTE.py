@@ -559,6 +559,14 @@ def j2534_read_passive(timeout_ms=250, max_messages=16):
                             write_log("OTOMATİK ECU ÖĞRENME", details + " | " + str(event.get("ecu_key")))
                     except Exception as learn_exc:
                         write_log("ECU ÖĞRENME KAYIT HATASI", str(learn_exc))
+                elif ECU_LEARNER is not None and _j2534_state.get("protocol") == "kwp2000":
+                    try:
+                        event = ECU_LEARNER.ingest_kwp_frame(bytes(msg.Data[:size]), "RX",
+                                                            timestamp=time.time())
+                        if event and event.get("event") in ("seed_captured", "key_accepted", "negative_response"):
+                            write_log("OTOMATİK KWP ÖĞRENME", json.dumps(event, ensure_ascii=False))
+                    except Exception as learn_exc:
+                        write_log("KWP ÖĞRENME KAYIT HATASI", str(learn_exc))
             return {"ok": True, "frames": frames, "count": len(frames),
                     "note": "J2534 RX kaydi; ECU istegi gonderilmedi."}
         except Exception as exc:
