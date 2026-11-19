@@ -2744,6 +2744,23 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px"><select id="ecu_lab_j2534_protocol" class="module-field"><option value="can">CAN · ham RX</option><option value="iso15765">ISO15765 · OBD/CAN</option><option value="iso9141">ISO9141 · K-Line</option><option value="kwp2000">KWP2000 · K-Line</option></select><input id="ecu_lab_j2534_baud" class="module-field" type="number" placeholder="Baud (boş = varsayılan)"></div>
    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px"><input id="ecu_lab_j2534_target" class="module-field" value="33" placeholder="Hedef adres HEX"><input id="ecu_lab_j2534_source" class="module-field" value="F1" placeholder="Tester adres HEX"></div>
    <div class="module-actions"><button class="btn test-btn" onclick="ecuLabJ2534Open()">KANALI AÇ</button><button class="btn test-btn" onclick="ecuLabJ2534Init()">K-LINE / KWP INIT</button><button class="btn test-btn" onclick="ecuLabJ2534Read()">HAM RX OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Live()">MOTOR CANLI PID OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Close()">KANALI KAPAT</button></div><pre id="ecu_lab_j2534_status" style="color:#00ff99;white-space:pre-wrap">J2534 kanalı henüz açılmadı.</pre>
+   <div class="test-block" style="border-color:#00d9ff;margin-top:10px">
+    <div class="title">4 · OTOMATİK ECU ÖĞRENME / SEED-KEY</div>
+    <p style="color:#aab5c2">J2534 ISO15765 kanalındaki gerçek TX/RX trafiği yerel veritabanına kaydedilir. Seed isteği ve Key gönderimi ayrı kullanıcı onayı ister. Yalnızca kimliği doğrulanmış ECU ve öğrenilmiş aday kullanılır.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+     <input id="ecu_learning_ecu" class="module-field" placeholder="ECU kimliği (otomatik bulunur)">
+     <input id="ecu_learning_level" class="module-field" type="number" min="2" max="126" step="2" value="2" placeholder="Security Key seviyesi (HEX değil, ondalık)">
+    </div>
+    <div class="module-actions">
+     <button class="btn test-btn" onclick="ecuLearningRefresh()">ÖĞRENME DURUMUNU YENİLE</button>
+     <button class="btn test-btn" onclick="ecuLearningListenStart()">OTOMATİK RX DİNLE</button>
+     <button class="btn test-btn" onclick="ecuLearningListenStop()">DİNLEMEYİ DURDUR</button>
+     <button class="btn test-btn" onclick="ecuLearningRequestSeed()">SEED İSTE</button>
+     <button class="btn test-btn" onclick="ecuLearningCandidate()">KEY ADAYINI HESAPLA</button>
+     <button class="btn test-btn" onclick="ecuLearningSubmitKey()">ONAYLA · KEY GÖNDER</button>
+    </div>
+    <pre id="ecu_learning_status" style="color:#00d9ff;white-space:pre-wrap">ECU öğrenme durumu bekleniyor.</pre>
+   </div>
   </div>
   <div class="test-block"><div class="title">SON HABERLEŞME KAYITLARI</div><div class="module-actions"><button class="btn test-btn" onclick="ecuLabRefreshLog()">YENİLE</button><button class="btn test-btn" onclick="ecuLabClearLog()">BELLEK KAYDINI TEMİZLE</button></div><div id="ecu_lab_log_table" style="overflow:auto;max-height:520px;color:#ddd">Henüz kayıt yok.</div></div>
  </div>
@@ -2811,6 +2828,58 @@ function ecuLabClearLog(){if(!confirm('Bellekteki haberleşme kaydı temizlensin
 function ecuLabSerialPorts(){fetch('/api/ecu-lab/serial/ports').then(r=>r.json()).then(d=>{const sel=document.getElementById('ecu_lab_com');sel.innerHTML='';(d.ports||[]).forEach(p=>{const o=document.createElement('option');o.value=p.device;o.textContent=p.device+' · '+(p.description||'Seri port');sel.appendChild(o);});if(!d.ports||!d.ports.length){const o=document.createElement('option');o.value='';o.textContent=d.available?'COM port bulunamadı':'pyserial kurulu değil';sel.appendChild(o);}document.getElementById('ecu_lab_serial_status').textContent=d.available?'Bulunan port: '+(d.ports||[]).length:'pyserial bulunamadı. py -m pip install pyserial';}).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Port tarama hatası: '+e);}
 function ecuLabSerialStart(){const port=document.getElementById('ecu_lab_com').value,baud=document.getElementById('ecu_lab_baud').value;if(!port){alert('Önce kullanılacak COM portunu seçin.');return;}fetch('/api/ecu-lab/serial/start',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({port:port,baud:baud})}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_serial_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Başlatma hatası: '+e);}
 function ecuLabSerialStop(){fetch('/api/ecu-lab/serial/stop',{method:'POST'}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_serial_status').textContent=d.message||JSON.stringify(d)).catch(e=>document.getElementById('ecu_lab_serial_status').textContent='Durdurma hatası: '+e);}
+let ecuLearningListenTimer=null;
+async function ecuLearningRefresh(){
+ const out=document.getElementById('ecu_learning_status');
+ try{
+  const r=await fetch('/api/ecu-learning/status');const d=await r.json();
+  if(!r.ok||!d.ok)throw new Error(d.error||'Öğrenme durumu alınamadı');
+  const profiles=d.ecu_profiles||[];
+  const input=document.getElementById('ecu_learning_ecu');
+  if(input&&!input.value&&profiles.length)input.value=profiles[0].ecu_key;
+  out.textContent='KAYITLI CAN FRAME: '+(d.frame_count||0)+'\\n'+
+   'ECU PROFİLLERİ: '+profiles.length+'\\n'+
+   profiles.map(x=>x.ecu_key+' | VIN: '+(x.identity?.vin||'okunmadı')).join('\\n')+'\\n\\n'+
+   'SEED / KEY KAYITLARI\\n'+(d.seed_key_exchanges||[]).slice(0,12).map(x=>x.ecu_key+' | seviye '+x.security_level+' | Seed '+x.seed_hex+' | '+x.status+(x.nrc?' | NRC '+x.nrc:'')).join('\\n')+'\\n\\n'+
+   'Key algoritması: '+d.key_algorithm_status+'\\n'+
+   'Brute force: kapalı | Onaysız Key gönderimi: kapalı | Doğrulanmamış ABS aktüatör: kapalı';
+ }catch(e){out.textContent='Öğrenme durumu hatası: '+e.message;}
+}
+async function ecuLearningRequestSeed(){
+ const ecu_key=document.getElementById('ecu_learning_ecu').value.trim();
+ const level=Number(document.getElementById('ecu_learning_level').value)-1;
+ if(!ecu_key||!Number.isInteger(level)||level<1||level>127||level%2!==1){alert('ECU kimliğini ve tek sayı Seed seviyesini girin. Örn. Key seviyesi 2 ise Seed seviyesi 1.');return;}
+ if(!confirm(ecu_key+' ECU kimliğine 0x27 / 0x'+level.toString(16).toUpperCase().padStart(2,'0')+' Seed isteği gönderilsin mi?'))return;
+ const out=document.getElementById('ecu_learning_status');out.textContent='Seed isteği gönderiliyor...';
+ try{const r=await fetch('/api/ecu-learning/request-seed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ecu_key:ecu_key,security_level:level,confirmation:'REQUEST_SECURITY_SEED'})});const d=await r.json();out.textContent=JSON.stringify(d,null,2);await ecuLearningRefresh();}catch(e){out.textContent='Seed isteği hatası: '+e.message;}
+}
+async function ecuLearningCandidate(){
+ const ecu_key=document.getElementById('ecu_learning_ecu').value.trim();
+ const level=Number(document.getElementById('ecu_learning_level').value);
+ const out=document.getElementById('ecu_learning_status');out.textContent='Seed-Key örnekleri analiz ediliyor...';
+ try{const r=await fetch('/api/ecu-learning/candidate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ecu_key:ecu_key,security_level:level})});const d=await r.json();out.textContent=JSON.stringify(d,null,2);}catch(e){out.textContent='Key analizi hatası: '+e.message;}
+}
+async function ecuLearningSubmitKey(){
+ const ecu_key=document.getElementById('ecu_learning_ecu').value.trim();
+ const level=Number(document.getElementById('ecu_learning_level').value);
+ if(!ecu_key||!Number.isInteger(level)){alert('Önce ECU kimliği ve Key seviyesi girin.');return;}
+ if(!confirm('DİKKAT: Öğrenilmiş Key adayı '+ecu_key+' ECU’suna bir kez gönderilecek. ECU reddederse otomatik tekrar yapılmayacak. Devam edilsin mi?'))return;
+ const out=document.getElementById('ecu_learning_status');out.textContent='Key gönderiliyor; ECU cevabı bekleniyor...';
+ try{const r=await fetch('/api/ecu-learning/submit-key',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ecu_key:ecu_key,security_level:level,confirmation:'SEND_SECURITY_ACCESS_KEY'})});const d=await r.json();out.textContent=JSON.stringify(d,null,2);await ecuLearningRefresh();}catch(e){out.textContent='Key gönderim hatası: '+e.message;}
+}
+function ecuLearningListenStart(){
+ if(ecuLearningListenTimer)return;
+ const out=document.getElementById('ecu_learning_status');out.textContent='J2534 ISO15765 RX kuyruğu dinleniyor...';
+ ecuLearningListenTimer=setInterval(async()=>{
+  try{
+   const st=await (await fetch('/api/j2534/status')).json();
+   if(!st.connected||String(st.protocol).toLowerCase()!=='iso15765'){clearInterval(ecuLearningListenTimer);ecuLearningListenTimer=null;out.textContent='ISO15765 kanalı kapandı; otomatik dinleme durdu.';return;}
+   await fetch('/api/j2534/read?timeout_ms=150');
+   await ecuLearningRefresh();
+  }catch(e){out.textContent='RX dinleme hatası: '+e.message;}
+ },350);
+}
+function ecuLearningListenStop(){if(ecuLearningListenTimer){clearInterval(ecuLearningListenTimer);ecuLearningListenTimer=null;}ecuLearningRefresh();}
 function ecuLabJ2534Open(){const protocol=document.getElementById('ecu_lab_j2534_protocol').value,baud=document.getElementById('ecu_lab_j2534_baud').value;fetch('/api/j2534/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({protocol:protocol,baud:baud||null})}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=d.message+'\n'+JSON.stringify(d.status||{},null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='J2534 hata: '+e);}
 function ecuLabJ2534Init(){const p=document.getElementById('ecu_lab_j2534_protocol').value;const type=p==='iso9141'?'five_baud':(p==='kwp2000'?'fast_init':'');if(!type){alert('Önce ISO9141 veya KWP2000 kanalını açın. CAN/ISO15765 için K-Line init kullanılmaz.');return;}const payload={init_type:type,target_address:document.getElementById('ecu_lab_j2534_target').value,source_address:document.getElementById('ecu_lab_j2534_source').value};if(!confirm((type==='five_baud'?'ISO9141 5-baud init':'KWP2000 fast init')+' başlatılacak. Hedef: 0x'+payload.target_address+'. Bu işlem ECU ile haberleşme başlatır; model-özel DCT/ABS komutu değildir. Devam?'))return;fetch('/api/j2534/kline/init',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).then(d=>document.getElementById('ecu_lab_j2534_status').textContent=JSON.stringify(d,null,2)).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='K-Line init hatası: '+e);}
 function ecuLabJ2534Live(){fetch('/api/j2534/obd/live',{method:'POST'}).then(r=>r.json()).then(d=>{let lines=['KAPSAM: '+d.scope,d.note||'',...(d.values||[]).map(x=>x.name+': '+x.value+' '+x.unit),'',...(d.errors||[])];document.getElementById('ecu_lab_j2534_status').textContent=lines.join('\n')||JSON.stringify(d,null,2);}).catch(e=>document.getElementById('ecu_lab_j2534_status').textContent='Canlı PID hatası: '+e);}
