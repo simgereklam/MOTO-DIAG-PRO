@@ -591,6 +591,9 @@ def j2534_send_uds_request(tx_id, rx_id, payload, timeout_ms=2200):
                 count = ctypes.c_uint32(1)
                 rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
                 _ecu_lab_record("J2534-ISO15765", "TX", raw.hex(" ").upper(), note)
+                if rc == 0 and count.value == 1 and ECU_LEARNER is not None:
+                    ECU_LEARNER.ingest_can_frame(int(can_id), bytes(data), direction="TX",
+                                                 protocol="ISO15765")
                 return rc == 0 and count.value == 1, rc
             ok, rc = send_can(tx_id, bytes([len(payload)]) + payload, "UDS 0x%03X" % tx_id)
             if not ok:
@@ -776,6 +779,9 @@ def j2534_send_obd_pid(pid, timeout_ms=1800):
             count = ctypes.c_uint32(1)
             rc = int(write_fn(channel, ctypes.byref(msg), ctypes.byref(count), 1000))
             _ecu_lab_record("J2534-ISO15765", "TX", payload.hex(" ").upper(), "SAE J1979 Mode 01 PID %02X" % pid)
+            if ECU_LEARNER is not None:
+                ECU_LEARNER.ingest_can_frame(0x7DF, payload[4:], direction="TX",
+                                             protocol="ISO15765")
             if rc != 0 or count.value != 1:
                 return None, "Mode 01 PID yazma hatasi: " + J2534_STATUS.get(rc, str(rc))
             deadline = time.monotonic() + max(0.5, min(int(timeout_ms), 6000) / 1000.0)
@@ -3307,6 +3313,114 @@ def api_ecu_lab_log_clear():
     with _ECU_LAB_LOCK:
         _ECU_LAB_LOG.clear()
     return jsonify({'ok': True, 'message': 'Bellek kaydı temizlendi.'})
+
+@app.route('/api/ecu-learning/status', methods=['GET'])
+def api_ecu_learning_status():
+    if ECU_LEARNER is None:
+        return jsonify({'ok': False, 'error': 'Yerel ECU öğrenme modülü yüklenemedi.'}), 503
+    try:
+        state = ECU_LEARNER.snapshot()
+        state['j2534'] = j2534_status()
+        return jsonify(state)
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 500
+
+
+def _ecu_learning_physical_ids(ecu_key):
+    match = re.fullmatch(r'ISO15765:0x(7E[89A-F])', str(ecu_key or '').upper())
+    if not match:
+        raise ValueError('Bu işlem için doğrulanmış 11-bit 0x7E8-0x7EF ECU yanıt kimliği gerekli.')
+    rx_id = int(match.group(1), 16)
+    return rx_id - 8, rx_id
+
+
+@app.route('/api/ecu-learning/request-seed', methods=['POST'])
+def api_ecu_learning_request_seed():
+    payload = request.get_json(silent=True) or {}
+    if payload.get('confirmation') != 'REQUEST_SECURITY_SEED':
+        return jsonify({'ok': False, 'error': 'SecurityAccess Seed isteği için açık kullanıcı onayı gerekli. İstek gönderilmedi.'}), 409
+    if ECU_LEARNER is None or not j2534_status().get('connected') or _j2534_state.get('protocol') != 'iso15765':
+        return jsonify({'ok': False, 'error': 'J2534 ISO15765 ECU kanalı açık değil.'}), 409
+    try:
+        tx_id, rx_id = _ecu_learning_physical_ids(payload.get('ecu_key'))
+        level = int(payload.get('security_level'))
+        if level < 1 or level > 0x7F or not (level & 1):
+            raise ValueError('Seed subfunction tek sayı olmalı (0x01-0x7F).')
+        response, detail = j2534_send_uds_request(tx_id, rx_id, bytes((0x27, level)), timeout_ms=3000)
+        if response is None:
+            return jsonify({'ok': False, 'error': detail}), 504
+        if len(response) >= 3 and response[0] == 0x7F and response[1] == 0x27:
+            return jsonify({'ok': False, 'response_hex': response.hex(' ').upper(),
+                            'nrc': response[2], 'message': 'ECU Seed isteğini reddetti; tekrar deneme otomatik yapılmadı.'}), 409
+        if len(response) < 3 or response[0] != 0x67 or response[1] != level:
+            return jsonify({'ok': False, 'response_hex': response.hex(' ').upper(),
+                            'message': 'ECU yanıtı beklenen Seed yanıtı değil.'}), 502
+        state = ECU_LEARNER.snapshot()
+        return jsonify({'ok': True, 'ecu_key': payload.get('ecu_key'),
+                        'security_level': level, 'seed_hex': response[2:].hex(' ').upper(),
+                        'seed_length': len(response) - 2, 'message': 'Seed alındı ve yerel öğrenme veritabanına kaydedildi.',
+                        'learning': state['seed_key_exchanges'][:3]})
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+
+@app.route('/api/ecu-learning/candidate', methods=['POST'])
+def api_ecu_learning_candidate():
+    payload = request.get_json(silent=True) or {}
+    if ECU_LEARNER is None:
+        return jsonify({'ok': False, 'error': 'Yerel ECU öğrenme modülü yüklenemedi.'}), 503
+    try:
+        ecu_key = str(payload.get('ecu_key') or '')
+        level = int(payload.get('security_level'))
+        pending = ECU_LEARNER.pending_seed(ecu_key, level)
+        if not pending.get('ok'):
+            return jsonify(pending), 409
+        result = ECU_LEARNER.calculate_candidate_key(ecu_key, level, pending['seed_hex'])
+        return jsonify({'pending_seed': pending, **result})
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc)}), 400
+
+
+@app.route('/api/ecu-learning/submit-key', methods=['POST'])
+def api_ecu_learning_submit_key():
+    payload = request.get_json(silent=True) or {}
+    if payload.get('confirmation') != 'SEND_SECURITY_ACCESS_KEY':
+        return jsonify({'ok': False, 'error': 'Key gönderimi için açık kullanıcı onayı gerekli. ECU’ya veri gönderilmedi.'}), 409
+    if ECU_LEARNER is None or not j2534_status().get('connected') or _j2534_state.get('protocol') != 'iso15765':
+        return jsonify({'ok': False, 'error': 'J2534 ISO15765 ECU kanalı açık değil.'}), 409
+    try:
+        ecu_key = str(payload.get('ecu_key') or '')
+        level = int(payload.get('security_level'))
+        tx_id, rx_id = _ecu_learning_physical_ids(ecu_key)
+        pending = ECU_LEARNER.pending_seed(ecu_key, level)
+        if not pending.get('ok'):
+            return jsonify(pending), 409
+        candidate = ECU_LEARNER.calculate_candidate_key(ecu_key, level, pending['seed_hex'])
+        if not candidate.get('ok') or candidate.get('status') != 'candidate_key_ready':
+            return jsonify({'ok': False, 'candidate': candidate,
+                            'error': 'Doğrulanabilir tek algoritma adayı yok; Key gönderilmedi.'}), 409
+        key = bytes.fromhex(candidate['key_hex'])
+        if len(key) > 5:
+            return jsonify({'ok': False, 'error': 'Key tek ISO-TP çerçevesine sığmıyor. Bu sürümde çoklu çerçeve Key gönderimi kapalı; ECU’ya veri gönderilmedi.'}), 409
+        response, detail = j2534_send_uds_request(tx_id, rx_id, bytes((0x27, level)) + key,
+                                                  timeout_ms=3000)
+        if response is None:
+            return jsonify({'ok': False, 'key_sent': True, 'ecu_acceptance_verified': False,
+                            'error': detail, 'message': 'Key gönderildi ancak ECU yanıtı alınamadı. Aynı Seed ile tekrar denemeyin.'}), 504
+        accepted = len(response) >= 2 and response[0] == 0x67 and response[1] == level
+        rejected = len(response) >= 3 and response[0] == 0x7F and response[1] == 0x27
+        if accepted:
+            message = 'ECU Key’i kabul etti; SecurityAccess olumlu yanıtı doğrulandı.'
+        elif rejected:
+            message = 'ECU Key’i reddetti. Tekrar deneme yapılmadı; yeni Seed ve doğrulanmış algoritma gerekir.'
+        else:
+            message = 'Yanıt alındı ancak SecurityAccess kabulü doğrulanamadı.'
+        return jsonify({'ok': accepted, 'key_sent': True, 'ecu_acceptance_verified': accepted,
+                        'response_hex': response.hex(' ').upper(), 'message': message,
+                        'detail': detail, 'candidate_algorithm': candidate.get('algorithm'),
+                        'ecu_key': ecu_key, 'security_level': level}), (200 if accepted else 409)
+    except Exception as exc:
+        return jsonify({'ok': False, 'error': str(exc), 'key_sent': False}), 400
 
 @app.route('/api/ecu-lab/serial/ports', methods=['GET'])
 def api_ecu_lab_serial_ports():
