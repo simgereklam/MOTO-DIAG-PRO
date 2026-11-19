@@ -261,6 +261,27 @@ class ECULearningEngine:
                 (ecu_key, stamp, direction, service, sub, did, _hex(data), result))
         return event
 
+    def pending_seed(self, ecu_key, security_level, max_age_seconds=30):
+        """Return one fresh, unconsumed Seed for the matching physical ECU."""
+        level = int(security_level)
+        if level < 2 or level > 0x7F or (level & 1):
+            raise ValueError("Key security subfunction çift ve 0x02-0x7E aralığında olmalı")
+        seed_level = level - 1
+        with self.lock, self._db() as db:
+            row = db.execute("""SELECT id,seed_hex,status,last_seen FROM seed_exchanges
+                WHERE ecu_key=? AND security_level=? ORDER BY id DESC LIMIT 1""",
+                (str(ecu_key), seed_level)).fetchone()
+        if not row or row["status"] != "seed_captured":
+            return {"ok": False, "status": "no_unconsumed_seed",
+                    "message": "Bu ECU ve güvenlik seviyesi için kullanılmamış Seed bulunamadı."}
+        age = max(0.0, time.time() - float(row["last_seen"]))
+        if age > max(1, min(float(max_age_seconds), 120)):
+            return {"ok": False, "status": "seed_expired", "age_seconds": round(age, 2),
+                    "message": "Seed süresi doldu; yeni Seed isteği gerekli."}
+        return {"ok": True, "status": "seed_ready", "row_id": int(row["id"]),
+                "seed_hex": row["seed_hex"], "age_seconds": round(age, 2),
+                "ecu_key": str(ecu_key), "security_level": level}
+
     def set_ecu_identity(self, ecu_key, identity):
         """Attach a stable, observed ECU identity before samples may be combined."""
         if not isinstance(identity, dict):
