@@ -2754,7 +2754,7 @@ pre{color:#00ff00;margin:5px 0;font-family:'Consolas',monospace;font-size:12px;w
    <div class="module-actions"><button class="btn test-btn" onclick="ecuLabJ2534Open()">KANALI AÇ</button><button class="btn test-btn" onclick="ecuLabJ2534Init()">K-LINE / KWP INIT</button><button class="btn test-btn" onclick="ecuLabJ2534Read()">HAM RX OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Live()">MOTOR CANLI PID OKU</button><button class="btn test-btn" onclick="ecuLabJ2534Close()">KANALI KAPAT</button></div><pre id="ecu_lab_j2534_status" style="color:#00ff99;white-space:pre-wrap">J2534 kanalı henüz açılmadı.</pre>
    <div class="test-block" style="border-color:#00d9ff;margin-top:10px">
     <div class="title">4 · OTOMATİK ECU ÖĞRENME / SEED-KEY</div>
-    <p style="color:#aab5c2">J2534 ISO15765 kanalındaki gerçek TX/RX trafiği yerel veritabanına kaydedilir. Seed isteği ve Key gönderimi ayrı kullanıcı onayı ister. Yalnızca kimliği doğrulanmış ECU ve öğrenilmiş aday kullanılır.</p>
+    <p style="color:#aab5c2">J2534 ISO15765/KWP2000 kanalındaki gerçek RX trafiği ve uygulamanın TX istekleri yerel veritabanına kaydedilir. Seed isteği ve Key gönderimi ayrı kullanıcı onayı ister. Yalnızca kimliği doğrulanmış ECU ve öğrenilmiş aday kullanılır.</p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
      <input id="ecu_learning_ecu" class="module-field" placeholder="ECU kimliği (otomatik bulunur)">
      <input id="ecu_learning_level" class="module-field" type="number" min="2" max="126" step="2" value="2" placeholder="Security Key seviyesi (ondalık)">
@@ -2890,7 +2890,7 @@ async function ecuLearningSubmitKey(){
 }
 function ecuLearningListenStart(){
  if(ecuLearningListenTimer)return;
- const out=document.getElementById('ecu_learning_status');out.textContent='J2534 ISO15765 RX kuyruğu dinleniyor...';
+ const out=document.getElementById('ecu_learning_status');out.textContent='J2534 ISO15765/KWP2000 RX kuyruğu dinleniyor...';
  ecuLearningListenTimer=setInterval(async()=>{
   try{
    const st=await (await fetch('/api/j2534/status')).json();
